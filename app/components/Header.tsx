@@ -20,7 +20,7 @@ const Header: React.FC<HeaderProps> = ({ onCreateTask, onLoginClick }) => {
 
     return (
         <header className="flex flex-col sm:flex-row items-center justify-between text-white p-4 pb-0">
-            <h1 className="text-xl font-bold mb-2 sm:mb-0">Task Manager</h1>
+            <h1 className="text-xl font-bold mb-2 sm:mb-0 text-black">Task Manager</h1>
             <div className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-4">
                 <button
                     onClick={onCreateTask}

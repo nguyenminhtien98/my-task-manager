@@ -65,7 +65,7 @@ export default function Board({
       }}
       onDragCancel={() => setActiveId(null)}
     >
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 h-screen">
         {(Object.keys(columns) as TaskStatus[]).map((status) => (
           <Column
             key={status}
