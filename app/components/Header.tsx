@@ -1,76 +1,62 @@
 "use client";
-
 import React, { useEffect, useRef, useState } from 'react';
-import LoginRegisterModal from './LoginRegisterModal';
 import { useAuth } from '../context/AuthContext';
+import { HeaderProps } from '../types/taskTypes';
 
-interface HeaderProps {
-    onCreateTask: () => void;
-}
-
-const Header: React.FC<HeaderProps> = ({ onCreateTask }) => {
+const Header: React.FC<HeaderProps> = ({ onCreateTask, onLoginClick }) => {
     const { user, logout } = useAuth();
-    const [showAuth, setShowAuth] = useState(false);
     const [showMenu, setShowMenu] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
 
-    const handleUserClick = () => {
-        setShowMenu(!showMenu);
-    };
-
     useEffect(() => {
-        const handler = (e: MouseEvent) => {
+        const handleClickOutside = (e: MouseEvent) => {
             if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
                 setShowMenu(false);
             }
         };
-        document.addEventListener('mousedown', handler);
-        return () => document.removeEventListener('mousedown', handler);
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
     return (
-        <>
-            <header className="flex flex-col sm:flex-row items-center justify-between bg-blue-600 text-white p-4">
-                <h1 className="text-xl font-bold mb-2 sm:mb-0">Task Manager</h1>
-                <div className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-4">
-                    <button
-                        onClick={onCreateTask}
-                        className="bg-blue-800 hover:bg-blue-700 px-3 py-1 rounded"
-                    >
-                        Tạo Task
-                    </button>
-                    {user ? (
-                        <div ref={menuRef} className="relative">
-                            <button
-                                onClick={handleUserClick}
-                                className="bg-white text-blue-600 px-3 py-1 rounded hover:bg-gray-100"
-                            >
-                                User: {user.name}
-                            </button>
-                            {showMenu && (
-                                <div className="absolute right-0 mt-1 w-32 bg-white text-black rounded shadow-lg">
-                                    <button
-                                        onClick={() => { logout(); setShowMenu(false); }}
-                                        className="block w-full text-left px-4 py-2 hover:bg-gray-200"
-                                    >
-                                        Logout
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                    ) : (
+        <header className="flex flex-col sm:flex-row items-center justify-between text-white p-4 pb-0">
+            <h1 className="text-xl font-bold mb-2 sm:mb-0">Task Manager</h1>
+            <div className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-4">
+                <button
+                    onClick={onCreateTask}
+                    className="flex items-center bg-[#d15f63] cursor-pointer hover:bg-[#df8c8c] px-3 py-1 rounded"
+                >
+                Add Task
+                </button>
+                {user ? (
+                    <div ref={menuRef} className="relative">
                         <button
-                            onClick={() => setShowAuth(true)}
-                            className="bg-white text-blue-600 px-3 py-1 rounded hover:bg-gray-100"
+                            onClick={() => setShowMenu(!showMenu)}
+                            className="bg-gray-100 text-black cursor-pointer px-3 py-1 rounded"
                         >
-                            Login
+                            User: {user.name}
                         </button>
-                    )}
-                </div>
-            </header>
-            <LoginRegisterModal isOpen={showAuth} setIsOpen={setShowAuth} />
-        </>
-
+                        {showMenu && (
+                            <div className="absolute right-0 mt-1 w-32 bg-white text-black rounded shadow-lg">
+                                <button
+                                    onClick={() => { logout(); setShowMenu(false); }}
+                                    className="cursor-pointer block w-full text-left px-4 py-2 hover:bg-gray-200"
+                                >
+                                    Logout
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                ) : (
+                    <button
+                        onClick={onLoginClick}
+                        className="bg-gray-100 text-black cursor-pointer px-3 py-1 rounded"
+                    >
+                        Login
+                    </button>
+                )}
+            </div>
+        </header>
     );
 };
 

@@ -15,6 +15,17 @@ import Tippy from "@tippyjs/react";
 import 'tippy.js/dist/tippy.css';
 import "../globals.css";
 
+function formatDateDisplay(dateString: string): string {
+    if (!dateString) return "";
+    // Tạo đối tượng Date và format
+    const date = new Date(dateString);
+    // Lấy ngày, tháng và năm
+    const day = date.getDate().toString().padStart(2, "0");
+    const month = (date.getMonth() + 1).toString().padStart(2, "0");
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
+}
+
 const TaskCard: React.FC<TaskCardProps> = ({
     task,
     onClick,
@@ -38,7 +49,6 @@ const TaskCard: React.FC<TaskCardProps> = ({
         transition,
         opacity: isDragging ? 0.5 : 1,
     };
-    console.log("task", task)
 
     const IssueIcon = task.issueType === 'Bug'
         ? () => <IoBugOutline className="text-red-500" />
@@ -73,17 +83,25 @@ const TaskCard: React.FC<TaskCardProps> = ({
                     </Tippy>
                 </div>
             </div>
-            <div className="text-sm text-black-500 mb-1">
+            <div className="text-sm text-black-500 mb-1 overflow-hidden whitespace-nowrap text-ellipsis">
                 {task.title}
             </div>
-            <div className="flex items-center gap-[5px] text-sm text-gray-600 mb-1">
-                <LuClock4 className="text-[#ef4444]" /> {task.predictedHours != null ? `${task.predictedHours}h` : "—"}
-            </div>
-            <div className="flex items-center gap-[5px] text-sm text-gray-600 mb-1">
-                <IoCalendarNumberOutline className="text-[#ba5ad9]" /> {task.startDate ?? "—"} - {task.endDate ?? "—"}
-            </div>
+            {task.predictedHours !== 0 && (
+                <div className="flex items-center gap-[5px] text-sm text-gray-600 mb-1">
+                    <span><LuClock4 className="text-[#ef4444]" /></span>
+                    <span className="overflow-hidden whitespace-nowrap text-ellipsis">{task.predictedHours !== 0 ? `${task.predictedHours}h` : "—"}</span>
+                </div>
+            )}
+            {(task.startDate || task.endDate) && (
+                <div className="flex items-center gap-[5px] text-sm text-gray-600 mb-1">
+                    <IoCalendarNumberOutline className="text-[#ba5ad9]" /> {formatDateDisplay(task.startDate ?? "—")} - {formatDateDisplay(task.endDate ?? "—")}
+                </div>
+            )}
+
             <div className="flex items-center gap-[5px] text-sm text-gray-500">
-                <LuCircleUser className="text-[#40a8f6]" /> {task.assignee || "Chưa set"}
+                <span><LuCircleUser className="text-[#40a8f6]" /></span>
+                <span className="overflow-hidden whitespace-nowrap text-ellipsis">{task.assignee || "Chưa set"}</span>
+
             </div>
             {task.status === "completed" && task.completedBy && (
                 <div className="flex items-center gap-[5px] text-sm text-green-600">

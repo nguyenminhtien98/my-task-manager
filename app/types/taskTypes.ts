@@ -10,8 +10,8 @@ export interface Task {
   assignee?: string;
   status: TaskStatus;
   order: number;
-  startDate?: string; // dạng "yyyy-mm-dd"
-  endDate?: string; // dạng "yyyy-mm-dd"
+  startDate?: string | null; // dạng "yyyy-mm-dd"
+  endDate?: string | null; // dạng "yyyy-mm-dd"
   predictedHours?: number;
   completedBy?: string; //tên leader đã kéo task sang cột "completed"
   issueType: IssueType;
@@ -33,10 +33,24 @@ export interface TaskCardProps {
   isDraggable?: boolean;
 }
 
+// Định nghĩa props chung cho TaskModal
+export interface TaskModalProps {
+  mode: 'create' | 'detail';
+  isOpen: boolean;
+  setIsOpen: (v: boolean) => void;
+  // create mode:
+  onCreate?: (task: Task) => void;
+  nextSeq?: number;
+  // detail mode:
+  task?: Task | null;
+  onUpdate?: (task: Task) => void;
+}
+
 export interface CreateTaskModalProps {
   isOpen: boolean;
   setIsOpen: (value: boolean) => void;
-  onCreate: (task: Task) => void;
+  onCreate: (data: Task) => void  // now chỉ trả về form data
+  nextSeq: number; 
 }
 
 export interface CreateTaskFormValues {
@@ -76,8 +90,8 @@ export interface User {
 
 export interface AuthContextType {
   user: User | null;
-  login: (user: User) => void;
-  logout: () => void;
+  login: (id: string, name: string) => Promise<void>;
+  logout: () => Promise<void>;
 }
 
 export interface LoginRegisterModalProps {
@@ -100,4 +114,9 @@ export interface ColumnProps {
   currentUserName: string;
   isLeader: boolean;
   onTaskClick: (task: Task) => void;
+}
+
+export interface HeaderProps {
+  onCreateTask: () => void;
+  onLoginClick: () => void;
 }

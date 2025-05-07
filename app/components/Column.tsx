@@ -32,7 +32,7 @@ export default function Column({
       className={`min-h-[100px] p-2 rounded ${isOver ? "bg-[#f9f9f9]" : "bg-[#f9f9f9]"}`}
       style={{ border: `2px dashed ${borderColors[status]}` }}
     >
-      <h2 className="font-bold text-center mb-4">{label}</h2>
+      <h2 className="font-semibold text-center mb-4">{label}</h2>
       <SortableContext items={tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
         {tasks.map((task, index) => (
           <TaskCard

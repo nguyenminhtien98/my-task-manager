@@ -15,11 +15,11 @@ import TaskCard from "./TaskCard";
 import { Task, TaskStatus } from "../types/taskTypes";
 
 const LABELS: Record<TaskStatus, string> = {
-  list: "List Task",
-  doing: "Task Đang Làm",
-  done: "Task Đã Làm Xong",
-  completed: "Task Đã Xong (Tested)",
-  bug: "Bug",
+  list: "LIST",
+  doing: "DOING",
+  done: "DONE",
+  completed: "COMPLETED",
+  bug: "BUG",
 };
 
 interface BoardProps {
@@ -65,7 +65,7 @@ export default function Board({
       }}
       onDragCancel={() => setActiveId(null)}
     >
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
         {(Object.keys(columns) as TaskStatus[]).map((status) => (
           <Column
             key={status}

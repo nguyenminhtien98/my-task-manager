@@ -3,8 +3,10 @@ import ModalComponent from './ModalComponent';
 import { useForm } from 'react-hook-form';
 import { FormUserValues } from '../types/taskTypes';
 import { useAuth } from '../context/AuthContext';
+import { account, database } from '../appwrite';
+import toast from 'react-hot-toast';
 
-const LoginRegisterModal: React.FC<{ isOpen: boolean; setIsOpen: (v: boolean) => void }> = ({ isOpen, setIsOpen }) => {
+const LoginRegisterModal: React.FC<{ isOpen: boolean; setIsOpen: (v: boolean) => void; onLoginSuccess: () => void; }> = ({ isOpen, setIsOpen, onLoginSuccess }) => {
 	const { login, logout, user } = useAuth();
 	const [isLogin, setIsLogin] = useState(true);
 	const [showPassword, setShowPassword] = useState(false);
@@ -14,7 +16,7 @@ const LoginRegisterModal: React.FC<{ isOpen: boolean; setIsOpen: (v: boolean) =>
 		handleSubmit,
 		reset,
 		watch,
-		formState: { errors, isValid, isSubmitting, dirtyFields },
+		formState: { errors, isValid, isSubmitting },
 	} = useForm<FormUserValues>({ mode: 'onChange' });
 
 	const toggleForm = () => {
@@ -30,14 +32,47 @@ const LoginRegisterModal: React.FC<{ isOpen: boolean; setIsOpen: (v: boolean) =>
 	}, [isOpen, reset]);
 
 	const onSubmit = async (data: FormUserValues) => {
+		if (!isValid) return;
 		if (isLogin) {
-			login({ id: '1', name: 'User A', role: 'user' });
-			setIsOpen(false);
+			try {
+				await account.deleteSession('current').catch(() => { });
+				await account.createEmailPasswordSession(data.email, data.password);
+				const userInfo = await account.get();
+				await login(userInfo.$id, userInfo.name);
+				toast.success('Đăng nhập thành công!');
+				onLoginSuccess();
+				setIsOpen(false);
+				reset();
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			} catch (err: any) {
+				toast.error(err.message || 'Đăng nhập thất bại');
+			}
 		} else {
-			login({ id: Date.now().toString(), name: data.name!, role: 'user' });
-			setIsOpen(false);
+			try {
+				const user = await account.create(
+					'unique()',
+					data.email,
+					data.password,
+					data.name!
+				);
+				await database.createDocument(
+					String(process.env.NEXT_PUBLIC_DATABASE_ID),
+					String(process.env.NEXT_PUBLIC_COLLECTION_ID_PROFILE),
+					user.$id,
+					{
+						user_id: user.$id,
+						name: data.name,
+						role: 'user',
+					}
+				);
+				toast.success('Đăng ký thành công! Vui lòng đăng nhập.');
+				setIsLogin(true);
+				reset();
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			} catch (err: any) {
+				toast.error(err.message || 'Đăng ký thất bại');
+			}
 		}
-		reset();
 	};
 
 	const canSubmit = isValid && !isSubmitting;
@@ -104,7 +139,7 @@ const LoginRegisterModal: React.FC<{ isOpen: boolean; setIsOpen: (v: boolean) =>
 					</div>
 				)}
 				<div className="flex justify-between items-center">
-					<button type="button" onClick={toggleForm} className="text-blue-600 underline text-sm">
+					<button type="button" onClick={toggleForm} className="text-blue-600 underline text-sm cursor-pointer">
 						{isLogin ? 'Chưa có tài khoản? Đăng ký' : 'Đã có tài khoản? Đăng nhập'}
 					</button>
 					{user && (
@@ -114,10 +149,12 @@ const LoginRegisterModal: React.FC<{ isOpen: boolean; setIsOpen: (v: boolean) =>
 					)}
 					<button
 						type="submit"
-						disabled={!canSubmit || Object.keys(dirtyFields).length === 0}
-						className={`px-4 py-2 text-white rounded ${!canSubmit || Object.keys(dirtyFields).length === 0 ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 cursor-pointer'}`}
+						disabled={!canSubmit}
+						className={`px-4 py-2 rounded text-white ${!canSubmit ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
+							}`}
 					>
-						{isLogin ? 'Đăng nhập' : 'Đăng ký'}
+						{isLogin ? (isSubmitting ? 'Đang đăng nhập...' : 'Đăng nhập')
+							: (isSubmitting ? 'Đang đăng ký...' : 'Đăng ký')}
 					</button>
 				</div>
 			</form>
