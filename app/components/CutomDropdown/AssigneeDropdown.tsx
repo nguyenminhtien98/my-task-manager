@@ -1,11 +1,6 @@
+import { AssigneeDropdownProps } from '@/app/types/taskTypes';
 import { Listbox } from '@headlessui/react';
 import { Fragment } from 'react';
-
-interface AssigneeDropdownProps {
-  value: string;
-  options: string[];
-  onChange: (val: string) => void;
-}
 
 export default function AssigneeDropdown({ value, options, onChange }: AssigneeDropdownProps) {
   return (

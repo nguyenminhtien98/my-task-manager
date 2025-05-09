@@ -1,5 +1,4 @@
 "use client";
-
 import React, { useEffect, useState } from "react";
 import { useForm, SubmitHandler, Controller } from "react-hook-form";
 import ModalComponent from "./ModalComponent";
@@ -15,32 +14,52 @@ import PriorityDropdown from "./CutomDropdown/PriorityDropdown";
 import IssueTypeDropdown from "./CutomDropdown/IssueTypeDropdown";
 import AssigneeDropdown from "./CutomDropdown/AssigneeDropdown";
 import { useAuth } from "../context/AuthContext";
+import { useProject } from "../context/ProjectContext";
 import { database } from "../appwrite";
 import toast from "react-hot-toast";
 import { Permission, Role } from "appwrite";
 import { v4 as uuidv4 } from "uuid";
+import LeaderAssigneeOptions from "./LeaderAssigneeOptions";
 
+// Helper: Format date string cho input date
 function formatDateForInput(dateString?: string): string {
     if (!dateString) return "";
     return dateString.split("T")[0];
 }
 
-export default function TaskModal({
-    mode, // 'create' | 'detail'
+const TaskModal: React.FC<TaskModalProps> = ({
+    mode, // "create" | "detail"
     isOpen,
     setIsOpen,
     onCreate,
     onUpdate,
     nextSeq,
     task,
-}: TaskModalProps) {
+}) => {
     const { user } = useAuth();
+    const { currentProject, currentProjectRole, setCurrentProject } = useProject();
     const currentUserName = user?.name || "";
-    const isLeader = user?.role === "leader";
+    const isLeader = currentProjectRole === "leader";
+    // Nếu là leader, fetch danh sách user từ collection Profile
+    const [existingUsers, setExistingUsers] = useState<string[]>([]);
 
-    const disableDropdown =
-        mode === "detail" &&
-        (!task?.assignee || task?.assignee === currentUserName);
+    useEffect(() => {
+        if (isLeader) {
+            database
+                .listDocuments(
+                    String(process.env.NEXT_PUBLIC_DATABASE_ID),
+                    String(process.env.NEXT_PUBLIC_COLLECTION_ID_PROFILE)
+                )
+                .then((res) => {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const users = (res.documents as any[]).map((doc) => doc.name);
+                    setExistingUsers(users);
+                })
+                .catch(() => {
+                    toast.error("Không tải được danh sách người dùng");
+                });
+        }
+    }, [isLeader]);
 
     const {
         control,
@@ -81,35 +100,33 @@ export default function TaskModal({
     const isTaken = watchedAssignee.trim() !== "";
     const initialAssignee = mode === "detail" ? task?.assignee || "" : "";
 
-    // Nút "Nhận Task" hiển thị nếu ở mode detail, không phải leader, và task chưa có assignee ban đầu
+    // Nếu ở mode "detail" và task chưa được nhận, hiển thị nút "Nhận Task"
     const showReceive =
         mode === "detail" && !isLeader && initialAssignee === "" && !watchedAssignee;
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const canEditTimeFields =
-        mode === "detail" && watchedAssignee.trim() !== "" && task?.status !== "completed";
-
-    const hasChanged =
-        mode === "create"
-            ? Object.keys(dirtyFields).length > 0
-            : watchedAssignee !== initialAssignee || Object.keys(dirtyFields).length > 0;
-    const canSubmit = isValid && hasChanged;
-    const [profiles, setProfiles] = useState<{ user_id: string; name: string }[]>(
-        []
-    );
-
-    useEffect(() => {
-        if (isLeader) {
-            database
-                .listDocuments(
-                    process.env.NEXT_PUBLIC_DATABASE_ID!,
-                    process.env.NEXT_PUBLIC_COLLECTION_ID_PROFILE!
-                )
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                .then((r) => setProfiles(r.documents as any))
-                .catch(() => toast.error("Không tải được danh sách người dùng"));
+    // Hàm handleAddMember: gọi API cập nhật project để thêm member mới
+    const handleAddMember = async (newMemberName: string) => {
+        if (!currentProject || !user) return;
+        const updatedMembers = currentProject.members
+            ? [...currentProject.members, newMemberName]
+            : [newMemberName];
+        try {
+            await database.updateDocument(
+                String(process.env.NEXT_PUBLIC_DATABASE_ID),
+                String(process.env.NEXT_PUBLIC_COLLECTION_ID_PROJECTS),
+                currentProject.id,
+                { members: updatedMembers }
+            );
+            // Cập nhật context với dữ liệu project mới, thuộc tính "members" đã có
+            setCurrentProject({ ...currentProject, members: updatedMembers });
+            toast.success("Thêm thành viên thành công");
+            // Optionally cập nhật trường "assignee" trong form nếu bạn mong muốn
+            setValue("assignee", newMemberName, { shouldDirty: true });
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } catch (error: any) {
+            toast.error(error.message || "Thêm thành viên thất bại");
         }
-    }, [isLeader]);
+    };
 
     useEffect(() => {
         if (!isOpen) return;
@@ -138,13 +155,12 @@ export default function TaskModal({
         }
     }, [isOpen, mode, task, reset]);
 
-    // Xử lý khi nhấn "Nhận Task"
+    // Xử lý "Nhận Task" cho mode "detail"
     const handleReceive = async (e: React.MouseEvent) => {
         e.preventDefault();
         e.stopPropagation();
         const valid = await trigger(["startDate", "endDate", "predictedHours"]);
         if (!valid) return;
-        // Sau khi nhận, set assignee = currentUserName
         setValue("assignee", currentUserName, { shouldDirty: true });
         console.log("Giá trị assignee sau handleReceive:", watch("assignee"));
     };
@@ -160,7 +176,7 @@ export default function TaskModal({
             seq: nextSeq!,
             title: data.title,
             description: data.description,
-            assignee: isLeader ? data.assignee || "" : user!.name,
+            assignee: isLeader ? (data.assignee || currentUserName) : user!.name,
             status: "list",
             order: 0,
             startDate: data.startDate.trim() === "" ? null : data.startDate,
@@ -168,6 +184,8 @@ export default function TaskModal({
             predictedHours: data.predictedHours,
             issueType: data.issueType!,
             priority: data.priority!,
+            projectId: currentProject ? currentProject.id : "",
+            projectName: currentProject ? currentProject.name : "",
         };
         try {
             await database.createDocument(
@@ -190,10 +208,9 @@ export default function TaskModal({
         }
     };
 
-    // Submit cho mode "detail" (Update Task)
+    // Submit cho mode "detail" (Cập nhật Task)
     const onSubmitDetail: SubmitHandler<TaskDetailFormValues> = async (data) => {
         if (!task) return;
-        // Kiểm tra xem đã nhận task hay chưa dựa trên form
         const isTaskTaken = data.assignee.trim() !== "";
         const updatedFields: Partial<Task> = {
             title: task.title,
@@ -201,13 +218,9 @@ export default function TaskModal({
             assignee: task.assignee === "" ? data.assignee : task.assignee,
             issueType: task.issueType,
             priority: task.priority,
-            // Nếu đã nhận task và task chưa hoàn thành, cho phép update 3 field:
-            startDate:
-                !isTaskTaken || task.status === "completed" ? task.startDate : data.startDate,
-            endDate:
-                !isTaskTaken || task.status === "completed" ? task.endDate : data.endDate,
-            predictedHours:
-                !isTaskTaken || task.status === "completed" ? task.predictedHours : data.predictedHours,
+            startDate: !isTaskTaken || task.status === "completed" ? task.startDate : data.startDate,
+            endDate: !isTaskTaken || task.status === "completed" ? task.endDate : data.endDate,
+            predictedHours: !isTaskTaken || task.status === "completed" ? task.predictedHours : data.predictedHours,
             status: task.status,
             seq: task.seq,
         };
@@ -243,29 +256,21 @@ export default function TaskModal({
                     <label className="block text-sm font-medium">Tiêu đề</label>
                     <input
                         placeholder="Nhập tiêu đề"
-                        {...register("title", {
-                            required: "Tiêu đề không được để trống",
-                        })}
-                        disabled={mode === "detail"} // luôn disable ở mode detail
+                        {...register("title", { required: "Tiêu đề không được để trống" })}
+                        disabled={mode === "detail"}
                         className="mt-1 w-full p-2 border border-gray-300 rounded"
                     />
-                    {errors.title && (
-                        <p className="text-red-500 text-sm">{errors.title.message}</p>
-                    )}
+                    {errors.title && <p className="text-red-500 text-sm">{errors.title.message}</p>}
                 </div>
                 <div>
                     <label className="block text-sm font-medium">Nội dung chi tiết</label>
                     <textarea
                         placeholder="Mô tả chi tiết"
-                        {...register("description", {
-                            required: "Nội dung không được để trống",
-                        })}
+                        {...register("description", { required: "Nội dung không được để trống" })}
                         disabled={mode === "detail"}
                         className="mt-1 w-full p-2 border border-gray-300 rounded"
                     />
-                    {errors.description && (
-                        <p className="text-red-500 text-sm">{errors.description.message}</p>
-                    )}
+                    {errors.description && <p className="text-red-500 text-sm">{errors.description.message}</p>}
                 </div>
                 <div className="flex gap-4">
                     <div className="flex-1">
@@ -277,7 +282,7 @@ export default function TaskModal({
                                 <IssueTypeDropdown
                                     value={field.value!}
                                     onChange={(v) => field.onChange(v as IssueType)}
-                                    disabled={disableDropdown}
+                                    disabled={mode === "detail"}
                                 />
                             )}
                         />
@@ -291,7 +296,7 @@ export default function TaskModal({
                                 <PriorityDropdown
                                     value={field.value!}
                                     onChange={(v) => field.onChange(v as Priority)}
-                                    disabled={disableDropdown}
+                                    disabled={mode === "detail"}
                                 />
                             )}
                         />
@@ -302,17 +307,27 @@ export default function TaskModal({
                         <label className="mb-1 block text-sm font-medium">Người thực hiện</label>
                         {mode === "create" ? (
                             isLeader ? (
-                                <Controller
-                                    control={control}
-                                    name="assignee"
-                                    render={({ field }) => (
-                                        <AssigneeDropdown
-                                            value={field.value!}
-                                            options={profiles.map((p) => p.name)}
-                                            onChange={(v) => field.onChange(v)}
+                                currentProject && (
+                                    !currentProject.members || currentProject.members.length === 0 ? (
+                                        <LeaderAssigneeOptions
+                                            leaderName={user?.name || ""}
+                                            onMemberAdded={handleAddMember}
+                                            existingUsers={existingUsers}
                                         />
-                                    )}
-                                />
+                                    ) : (
+                                        <Controller
+                                            control={control}
+                                            name="assignee"
+                                            render={({ field }) => (
+                                                <AssigneeDropdown
+                                                    value={field.value!}
+                                                    options={[user!.name, ...currentProject.members!]}
+                                                    onChange={(v) => field.onChange(v)}
+                                                />
+                                            )}
+                                        />
+                                    )
+                                )
                             ) : (
                                 <input
                                     value={user?.name}
@@ -330,9 +345,7 @@ export default function TaskModal({
                         )}
                     </div>
                     <div>
-                        <label className="block text-sm font-medium">
-                            Giờ dự kiến (h)
-                        </label>
+                        <label className="block text-sm font-medium">Giờ dự kiến (h)</label>
                         <input
                             type="number"
                             placeholder="Số giờ"
@@ -344,13 +357,15 @@ export default function TaskModal({
                                         : false,
                                 valueAsNumber: true,
                             })}
-                            disabled={mode === "detail" ? (!isTaken || task?.status === "completed") : false}
+                            disabled={
+                                mode === "detail"
+                                    ? (!isTaken || task?.status === "completed")
+                                    : false
+                            }
                             className="mt-1 w-full p-2 border border-gray-300 rounded"
                         />
                         {errors.predictedHours && (
-                            <p className="text-red-500 text-sm">
-                                {errors.predictedHours.message}
-                            </p>
+                            <p className="text-red-500 text-sm">{errors.predictedHours.message}</p>
                         )}
                     </div>
                 </div>
@@ -366,13 +381,15 @@ export default function TaskModal({
                                         ? "Phải chọn ngày bắt đầu"
                                         : false,
                             })}
-                            disabled={mode === "detail" ? (!isTaken || task?.status === "completed") : false}
+                            disabled={
+                                mode === "detail"
+                                    ? (!isTaken || task?.status === "completed")
+                                    : false
+                            }
                             className="mt-1 w-full p-2 border border-gray-300 rounded"
                         />
                         {errors.startDate && (
-                            <p className="text-red-500 text-sm">
-                                {errors.startDate.message}
-                            </p>
+                            <p className="text-red-500 text-sm">{errors.startDate.message}</p>
                         )}
                     </div>
                     <div>
@@ -386,13 +403,15 @@ export default function TaskModal({
                                         ? "Phải chọn ngày kết thúc"
                                         : false,
                             })}
-                            disabled={mode === "detail" ? (!isTaken || task?.status === "completed") : false}
+                            disabled={
+                                mode === "detail"
+                                    ? (!isTaken || task?.status === "completed")
+                                    : false
+                            }
                             className="mt-1 w-full p-2 border border-gray-300 rounded"
                         />
                         {errors.endDate && (
-                            <p className="text-red-500 text-sm">
-                                {errors.endDate.message}
-                            </p>
+                            <p className="text-red-500 text-sm">{errors.endDate.message}</p>
                         )}
                     </div>
                 </div>
@@ -415,18 +434,23 @@ export default function TaskModal({
                             Nhận Task
                         </button>
                     ) : (
-                        ((mode === "create") || (mode === "detail" && hasChanged)) && (
+                        ((mode === "create") ||
+                            (mode === "detail" && Object.keys(dirtyFields).length > 0)) && (
                             <button
                                 type="submit"
-                                disabled={isSubmitting || !canSubmit}
-                                className={`px-4 py-2 text-white rounded ${isSubmitting || !canSubmit
-                                    ? "bg-gray-400 cursor-not-allowed"
-                                    : "bg-blue-600 hover:bg-blue-700"
+                                disabled={isSubmitting || !isValid}
+                                className={`px-4 py-2 text-white rounded ${isSubmitting || !isValid
+                                        ? "bg-gray-400 cursor-not-allowed"
+                                        : "bg-blue-600 hover:bg-blue-700 cursor-pointer"
                                     }`}
                             >
                                 {isSubmitting
-                                    ? (mode === "create" ? "Đang tạo..." : "Đang lưu...")
-                                    : (mode === "create" ? "Tạo" : "Lưu")}
+                                    ? mode === "create"
+                                        ? "Đang tạo..."
+                                        : "Đang lưu..."
+                                    : mode === "create"
+                                        ? "Tạo"
+                                        : "Lưu"}
                             </button>
                         )
                     )}
@@ -434,4 +458,6 @@ export default function TaskModal({
             </form>
         </ModalComponent>
     );
-}
+};
+
+export default TaskModal;

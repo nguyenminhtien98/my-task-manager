@@ -105,7 +105,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
             </div>
             {task.status === "completed" && task.completedBy && (
                 <div className="flex items-center gap-[5px] text-sm text-green-600">
-                    <FaRegCircleCheck /> {task.completedBy}
+                    <FaRegCircleCheck /> Leader: {task.completedBy}
                 </div>
             )}
         </div>

@@ -1,3 +1,5 @@
+import { DragEndEvent } from "@dnd-kit/core";
+
 export type TaskStatus = "list" | "doing" | "done" | "completed" | "bug";
 export type IssueType = "Bug" | "Improvement" | "Feature";
 export type Priority = "High" | "Medium" | "Low";
@@ -16,6 +18,8 @@ export interface Task {
   completedBy?: string; //tên leader đã kéo task sang cột "completed"
   issueType: IssueType;
   priority: Priority;
+  projectId?: string;
+  projectName?: string;
 }
 
 export interface ModalProps {
@@ -119,4 +123,46 @@ export interface ColumnProps {
 export interface HeaderProps {
   onCreateTask: () => void;
   onLoginClick: () => void;
+  onCreateProject?: () => void; 
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  leaderId: string;
+  members?: string[];
+  createdAt?: string;
+}
+
+export interface ProjectContextType {
+    currentProject: Project | null;
+    setCurrentProject: (project: Project | null) => void;
+    currentProjectRole: "leader" | "user" | null;
+    setCurrentProjectRole: (role: "leader" | "user" | null) => void;
+    projects: Project[];
+    setProjects: (projects: Project[]) => void;
+}
+
+export interface AssigneeDropdownProps {
+  value: string;
+  options: string[];
+  onChange: (val: string) => void;
+}
+
+export interface BoardProps {
+  tasks: Task[];
+  currentUser: string;
+  isLeader: boolean;
+  onMove: (e: DragEndEvent) => void;
+  onTaskClick: (t: Task) => void;
+}
+
+export interface LeaderAssigneeOptionsProps {
+    leaderName: string;
+    onMemberAdded: (memberName: string) => void;
+    existingUsers: string[];
+}
+
+export interface ProjectFormValues {
+    name: string;
 }
