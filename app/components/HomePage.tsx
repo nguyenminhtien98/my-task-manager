@@ -47,8 +47,8 @@ const HomePage: React.FC = () => {
     const [taskDetailOpen, setTaskDetailOpen] = useState(false);
     const [selectedTask, setSelectedTask] = useState<Task | null>(null);
     const [openCreateAfterLogin, setOpenCreateAfterLogin] = useState(false);
-    // State để mở modal tạo dự án nếu người dùng chưa chọn dự án
     const [projectModalOpen, setProjectModalOpen] = useState(false);
+    const [shouldOpenTaskAfterProjectCreation, setShouldOpenTaskAfterProjectCreation] = useState(false);
     // - isInitialLoading: dùng cho lần đầu load (show full-screen loading)
     // - isContentLoading: dùng cho các thay đổi dữ liệu sau khi load xong (hiển thị overlay lên Board)
     // - hasLoaded: flag để đánh dấu rằng đã có lần load đầu tiên thành công
@@ -58,20 +58,29 @@ const HomePage: React.FC = () => {
 
     // Fetch tasks chỉ khi user và currentProject tồn tại
     useEffect(() => {
-        if (!user || !currentProject) {
+        if (!user) {
+            setIsContentLoading(true);
+            // Sau 300ms, cập nhật state cho giao diện không đăng nhập
+            setTimeout(() => {
+                setAllTasks([defaultGuideTask]);
+                setIsContentLoading(false);
+            }, 300);
+            return;
+        }
+
+        if (!currentProject) {
             setAllTasks([defaultGuideTask]);
+            setIsContentLoading(false);
             if (!hasLoaded) {
                 setIsInitialLoading(false);
                 setHasLoaded(true);
-            } else {
-                setIsContentLoading(false);
             }
             return;
         }
-        if (hasLoaded) {
-            setIsContentLoading(true);
-        } else {
+        if (!hasLoaded) {
             setIsInitialLoading(true);
+        } else {
+            setIsContentLoading(true);
         }
         database
             .listDocuments(
@@ -102,6 +111,7 @@ const HomePage: React.FC = () => {
         if (user) {
             if (!currentProject) {
                 setProjectModalOpen(true);
+                setShouldOpenTaskAfterProjectCreation(true);
             } else {
                 setTaskModalOpen(true);
             }
@@ -113,6 +123,7 @@ const HomePage: React.FC = () => {
 
     const handleCreateProject = () => {
         setProjectModalOpen(true);
+        setShouldOpenTaskAfterProjectCreation(false);
     };
 
     // Khi click Login trên header
@@ -125,7 +136,12 @@ const HomePage: React.FC = () => {
     const onLoginSuccess = () => {
         setLoginModalOpen(false);
         if (openCreateAfterLogin) {
-            setTaskModalOpen(true);
+            if (!currentProject) {
+                setProjectModalOpen(true);
+                setShouldOpenTaskAfterProjectCreation(true);
+            } else {
+                setTaskModalOpen(true);
+            }
             setOpenCreateAfterLogin(false);
         }
     };
@@ -240,7 +256,7 @@ const HomePage: React.FC = () => {
         <>
             <Header onCreateTask={handleCreateClick} onLoginClick={handleLoginClick} onCreateProject={handleCreateProject} />
 
-            <div className="p-4">
+            <div className="p-4 p-4 relative">
                 <Board
                     tasks={allTasks}
                     currentUser={currentUserName}
@@ -258,7 +274,12 @@ const HomePage: React.FC = () => {
                 )}
             </div>
 
-            <ProjectModal isOpen={projectModalOpen} setIsOpen={setProjectModalOpen} />
+            <ProjectModal isOpen={projectModalOpen} setIsOpen={setProjectModalOpen} onProjectCreate={() => {
+                if (shouldOpenTaskAfterProjectCreation) {
+                    setTaskModalOpen(true);
+                    setShouldOpenTaskAfterProjectCreation(false);
+                }
+            }} />
 
             <LoginRegisterModal
                 isOpen={loginModalOpen}

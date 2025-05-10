@@ -39,7 +39,7 @@ export interface TaskCardProps {
 
 // Định nghĩa props chung cho TaskModal
 export interface TaskModalProps {
-  mode: 'create' | 'detail';
+  mode: "create" | "detail";
   isOpen: boolean;
   setIsOpen: (v: boolean) => void;
   // create mode:
@@ -53,8 +53,8 @@ export interface TaskModalProps {
 export interface CreateTaskModalProps {
   isOpen: boolean;
   setIsOpen: (value: boolean) => void;
-  onCreate: (data: Task) => void  // now chỉ trả về form data
-  nextSeq: number; 
+  onCreate: (data: Task) => void; // now chỉ trả về form data
+  nextSeq: number;
 }
 
 export interface CreateTaskFormValues {
@@ -123,7 +123,7 @@ export interface ColumnProps {
 export interface HeaderProps {
   onCreateTask: () => void;
   onLoginClick: () => void;
-  onCreateProject?: () => void; 
+  onCreateProject?: () => void;
 }
 
 export interface Project {
@@ -135,12 +135,12 @@ export interface Project {
 }
 
 export interface ProjectContextType {
-    currentProject: Project | null;
-    setCurrentProject: (project: Project | null) => void;
-    currentProjectRole: "leader" | "user" | null;
-    setCurrentProjectRole: (role: "leader" | "user" | null) => void;
-    projects: Project[];
-    setProjects: (projects: Project[]) => void;
+  currentProject: Project | null;
+  setCurrentProject: (project: Project | null) => void;
+  currentProjectRole: "leader" | "user" | null;
+  setCurrentProjectRole: (role: "leader" | "user" | null) => void;
+  projects: Project[];
+  setProjects: React.Dispatch<React.SetStateAction<Project[]>>;
 }
 
 export interface AssigneeDropdownProps {
@@ -158,11 +158,11 @@ export interface BoardProps {
 }
 
 export interface LeaderAssigneeOptionsProps {
-    leaderName: string;
-    onMemberAdded: (memberName: string) => void;
-    existingUsers: string[];
+  leaderName: string;
+  onMemberAdded: (memberName: string) => void;
+  existingUsers: string[];
 }
 
 export interface ProjectFormValues {
-    name: string;
+  name: string;
 }

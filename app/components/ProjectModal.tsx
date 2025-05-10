@@ -10,12 +10,13 @@ import { useAuth } from "../context/AuthContext";
 import { useProject } from "../context/ProjectContext";
 import { Project, ProjectFormValues } from "../types/Types";
 
-const ProjectModal: React.FC<{ isOpen: boolean; setIsOpen: (v: boolean) => void }> = ({
+const ProjectModal: React.FC<{ isOpen: boolean; setIsOpen: (v: boolean) => void; onProjectCreate?: () => void; }> = ({
     isOpen,
     setIsOpen,
+    onProjectCreate
 }) => {
     const { user } = useAuth();
-    const { setCurrentProject, setCurrentProjectRole } = useProject();
+    const { setCurrentProject, setCurrentProjectRole, setProjects } = useProject();
     const { register, handleSubmit, reset, watch, formState: { errors } } = useForm<ProjectFormValues>({
         mode: "onChange",
         defaultValues: {
@@ -41,7 +42,12 @@ const ProjectModal: React.FC<{ isOpen: boolean; setIsOpen: (v: boolean) => void 
             );
             setCurrentProject(newProject);
             setCurrentProjectRole("leader");
+            // Cập nhật mảng dự án trong context
+            setProjects((prevProjects) => [...prevProjects, newProject]);
             toast.success("Tạo dự án thành công!");
+            if (onProjectCreate) {
+                onProjectCreate();
+            }
             reset();
             setIsOpen(false);
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -83,8 +89,8 @@ const ProjectModal: React.FC<{ isOpen: boolean; setIsOpen: (v: boolean) => void 
                         type="submit"
                         disabled={!projectName.trim()}
                         className={`px-4 py-2 rounded text-white ${!projectName.trim()
-                                ? "bg-gray-400 cursor-not-allowed"
-                                : "bg-blue-600 hover:bg-blue-700 cursor-pointer"
+                            ? "bg-gray-400 cursor-not-allowed"
+                            : "bg-blue-600 hover:bg-blue-700 cursor-pointer"
                             }`}
                     >
                         Tạo
