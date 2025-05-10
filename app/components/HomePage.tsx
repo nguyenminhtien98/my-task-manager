@@ -64,6 +64,8 @@ const HomePage: React.FC = () => {
             setTimeout(() => {
                 setAllTasks([defaultGuideTask]);
                 setIsContentLoading(false);
+                setIsInitialLoading(false);    // Bỏ full‑screen loading
+                setHasLoaded(true);
             }, 300);
             return;
         }
