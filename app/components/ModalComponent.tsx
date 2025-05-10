@@ -1,6 +1,6 @@
 import { Dialog, Transition } from "@headlessui/react";
 import { Fragment } from "react";
-import { ModalProps } from "../types/taskTypes";
+import { ModalProps } from "../types/Types";
 
 const ModalComponent: React.FC<ModalProps> = ({ isOpen, setIsOpen, title, children }) => {
     return (

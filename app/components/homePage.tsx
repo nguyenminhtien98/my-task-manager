@@ -1,18 +1,18 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
-import Header from "../components/Header";
-import LoginRegisterModal from "../components/LoginRegisterModal";
-import TaskModal from "../components/TaskModal";
-import { Task, TaskStatus } from "../types/taskTypes";
+import Header from "./Header";
+import LoginRegisterModal from "./LoginRegisterModal";
+import TaskModal from "./TaskModal";
+import { Task, TaskStatus } from "../types/Types";
 import { useAuth } from "../context/AuthContext";
 import { DragEndEvent } from "@dnd-kit/core";
 import { database } from "../appwrite";
 import toast from "react-hot-toast";
 import { useProject } from "../context/ProjectContext";
-import ProjectModal from "../components/ProjectModal";
+import ProjectModal from "./ProjectModal";
 
-const Board = dynamic(() => import("../components/Board"), { ssr: false });
+const Board = dynamic(() => import("./Board"), { ssr: false });
 
 type ColumnsType = Record<TaskStatus, Task[]>;
 

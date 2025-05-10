@@ -4,7 +4,7 @@ import React from "react";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { useDroppable } from "@dnd-kit/core";
 import TaskCard from "./TaskCard";
-import { ColumnProps, TaskStatus } from "../types/taskTypes";
+import { ColumnProps, TaskStatus } from "../types/Types";
 
 export default function Column({
   status,

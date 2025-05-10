@@ -11,7 +11,7 @@ import {
 } from "@dnd-kit/core";
 import Column from "./Column";
 import TaskCard from "./TaskCard";
-import { BoardProps, Task, TaskStatus } from "../types/taskTypes";
+import { BoardProps, Task, TaskStatus } from "../types/Types";
 
 const LABELS: Record<TaskStatus, string> = {
     list: "LIST",

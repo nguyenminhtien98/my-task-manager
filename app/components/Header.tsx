@@ -1,7 +1,7 @@
 "use client";
 import React, { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { HeaderProps } from '../types/taskTypes';
+import { HeaderProps } from '../types/Types';
 import { useProject } from '../context/ProjectContext';
 
 const Header: React.FC<HeaderProps> = ({ onCreateTask, onLoginClick, onCreateProject }) => {

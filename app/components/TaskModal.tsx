@@ -9,7 +9,7 @@ import {
     TaskModalProps,
     IssueType,
     Priority,
-} from "../types/taskTypes";
+} from "../types/Types";
 import PriorityDropdown from "./CutomDropdown/PriorityDropdown";
 import IssueTypeDropdown from "./CutomDropdown/IssueTypeDropdown";
 import AssigneeDropdown from "./CutomDropdown/AssigneeDropdown";

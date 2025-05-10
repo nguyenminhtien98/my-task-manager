@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { LeaderAssigneeOptionsProps } from "../types/taskTypes";
+import { LeaderAssigneeOptionsProps } from "../types/Types";
 
 const LeaderAssigneeOptions: React.FC<LeaderAssigneeOptionsProps> = ({ leaderName, onMemberAdded, existingUsers }) => {
     const [choice, setChoice] = useState<"add" | "noadd" | undefined>(undefined);

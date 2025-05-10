@@ -1,4 +1,4 @@
-import { AssigneeDropdownProps } from '@/app/types/taskTypes';
+import { AssigneeDropdownProps } from '@/app/types/Types';
 import { Listbox } from '@headlessui/react';
 import { Fragment } from 'react';
 

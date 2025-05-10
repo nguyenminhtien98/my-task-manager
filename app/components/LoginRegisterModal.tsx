@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import ModalComponent from './ModalComponent';
 import { useForm } from 'react-hook-form';
-import { FormUserValues } from '../types/taskTypes';
+import { FormUserValues } from '../types/Types';
 import { useAuth } from '../context/AuthContext';
 import { account, database } from '../appwrite';
+import { Query } from "appwrite";
 import toast from 'react-hot-toast';
 
 const LoginRegisterModal: React.FC<{ isOpen: boolean; setIsOpen: (v: boolean) => void; onLoginSuccess: () => void; }> = ({ isOpen, setIsOpen, onLoginSuccess }) => {
@@ -84,8 +85,31 @@ const LoginRegisterModal: React.FC<{ isOpen: boolean; setIsOpen: (v: boolean) =>
 					<div>
 						<label className="block text-sm font-medium">Tên</label>
 						<input
-							{...register('name', { required: 'Tên không được bỏ trống' })}
+							placeholder="Nhập tên người dùng"
+							{...register('name', {
+								required: 'Tên không được bỏ trống',
+								validate: async (value?: string) => {
+									// Nếu giá trị không có (undefined hoặc rỗng) thì bạn có thể trả về lỗi hoặc true,
+									// tuy nhiên nếu có rule required thì chỉ cần trả về true trong trường hợp này
+									if (!value) return true;
+									try {
+										const res = await database.listDocuments(
+											String(process.env.NEXT_PUBLIC_DATABASE_ID),
+											String(process.env.NEXT_PUBLIC_COLLECTION_ID_PROFILE),
+											[Query.equal("name", value)]
+										);
+										if (res.documents.length > 0) {
+											return "Tên đã tồn tại trong hệ thống";
+										}
+										return true;
+									} catch (error) {
+										console.error("Error checking username uniqueness:", error);
+										return "Lỗi hệ thống, vui lòng thử lại";
+									}
+								}
+							})}
 							className="mt-1 w-full p-2 border border-gray-300 rounded"
+
 						/>
 						{errors.name && <p className="text-red-500 text-sm">{errors.name.message}</p>}
 					</div>

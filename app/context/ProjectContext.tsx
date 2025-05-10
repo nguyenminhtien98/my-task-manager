@@ -1,7 +1,7 @@
 "use client";
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { database } from "../appwrite";
-import { Project, ProjectContextType } from "../types/taskTypes";
+import { Project, ProjectContextType } from "../types/Types";
 import { useAuth } from "./AuthContext";
 
 const ProjectContext = createContext<ProjectContextType | undefined>(undefined);

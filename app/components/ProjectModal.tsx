@@ -8,7 +8,7 @@ import toast from "react-hot-toast";
 import { v4 as uuidv4 } from "uuid";
 import { useAuth } from "../context/AuthContext";
 import { useProject } from "../context/ProjectContext";
-import { Project, ProjectFormValues } from "../types/taskTypes";
+import { Project, ProjectFormValues } from "../types/Types";
 
 const ProjectModal: React.FC<{ isOpen: boolean; setIsOpen: (v: boolean) => void }> = ({
     isOpen,

@@ -3,7 +3,7 @@
 import React from "react";
 import { CSS } from "@dnd-kit/utilities";
 import { useSortable } from "@dnd-kit/sortable";
-import { TaskCardProps } from "../types/taskTypes";
+import { TaskCardProps } from "../types/Types";
 import { IoCalendarNumberOutline } from "react-icons/io5";
 import { LuClock4 } from "react-icons/lu";
 import { LuCircleUser } from "react-icons/lu";
