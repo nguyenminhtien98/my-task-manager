@@ -120,7 +120,13 @@ const HomePage: React.FC = () => {
             if (doc.projectId !== currentProject.id) return;
 
             if (res.events.some((e: string) => e.endsWith(".create"))) {
-                setAllTasks(prev => [...prev, doc]);
+                setAllTasks(prev => {
+                    // Nếu state đã chứa task với cùng id, không thêm nữa.
+                    if (prev.some(task => task.id === doc.id)) {
+                        return prev;
+                    }
+                    return [...prev, doc];
+                });
             }
             else if (res.events.some((e: string) => e.endsWith(".update"))) {
                 setAllTasks(prev => prev.map(t => t.id === doc.id ? doc : t));
@@ -131,7 +137,7 @@ const HomePage: React.FC = () => {
         });
 
         return () => unsubscribe();
-    }, [user, currentProject?.id]);
+    }, [user]);
 
     const handleCreateClick = () => {
         if (user) {
@@ -197,7 +203,7 @@ const HomePage: React.FC = () => {
         columns[t.status].push(t);
     });
     (Object.keys(columns) as TaskStatus[]).forEach((st) =>
-        columns[st].sort((a, b) => a.order - b.order)
+        columns[st].sort((a, b) => b.order - a.order)
     );
 
     // Xử lý Drag & Drop
