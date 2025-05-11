@@ -7,7 +7,7 @@ import TaskModal from "./TaskModal";
 import { Task, TaskStatus } from "../types/Types";
 import { useAuth } from "../context/AuthContext";
 import { DragEndEvent } from "@dnd-kit/core";
-import { database } from "../appwrite";
+import { database, subscribeToRealtime } from "../appwrite";
 import toast from "react-hot-toast";
 import { useProject } from "../context/ProjectContext";
 import ProjectModal from "./ProjectModal";
@@ -108,6 +108,30 @@ const HomePage: React.FC = () => {
                 }
             });
     }, [user, currentProject]);
+
+    // Lắng nghe realtime cho các thay đổi trên task
+    useEffect(() => {
+        if (!user || !currentProject) return;
+        const channel = `databases.${process.env.NEXT_PUBLIC_DATABASE_ID}.collections.${process.env.NEXT_PUBLIC_COLLECTION_ID_TASKS}.documents`;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const unsubscribe = subscribeToRealtime([channel], (res: any) => {
+            const doc = (res.payload.data as Task) || (res.payload as Task);
+
+            if (doc.projectId !== currentProject.id) return;
+
+            if (res.events.some((e: string) => e.endsWith(".create"))) {
+                setAllTasks(prev => [...prev, doc]);
+            }
+            else if (res.events.some((e: string) => e.endsWith(".update"))) {
+                setAllTasks(prev => prev.map(t => t.id === doc.id ? doc : t));
+            }
+            else if (res.events.some((e: string) => e.endsWith(".delete"))) {
+                setAllTasks(prev => prev.filter(t => t.id !== doc.id));
+            }
+        });
+
+        return () => unsubscribe();
+    }, [user, currentProject?.id]);
 
     const handleCreateClick = () => {
         if (user) {
