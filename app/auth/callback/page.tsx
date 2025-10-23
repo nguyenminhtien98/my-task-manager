@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { account, database } from "../../appwrite";
 import { useAuth } from "../../context/AuthContext";
@@ -8,7 +8,7 @@ import { Query, AppwriteException } from "appwrite";
 import toast from "react-hot-toast";
 import { DEFAULT_THEME_GRADIENT } from "../../utils/themeColors";
 
-const CallbackPage = () => {
+const CallbackContent = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { login } = useAuth();
@@ -96,5 +96,11 @@ const CallbackPage = () => {
     </div>
   );
 };
+
+const CallbackPage = () => (
+  <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-white">Đang xử lý đăng nhập...</div>}>
+    <CallbackContent />
+  </Suspense>
+);
 
 export default CallbackPage;

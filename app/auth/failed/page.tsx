@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 
-const FailedPage = () => {
+const FailedContent = () => {
   const searchParams = useSearchParams();
   const message = searchParams.get("message") ?? "Đăng nhập Google thất bại.";
   const redirect = searchParams.get("redirect") ?? "/";
@@ -23,5 +24,11 @@ const FailedPage = () => {
     </div>
   );
 };
+
+const FailedPage = () => (
+  <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-white">Đang tải...</div>}>
+    <FailedContent />
+  </Suspense>
+);
 
 export default FailedPage;

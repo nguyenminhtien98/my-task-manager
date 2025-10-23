@@ -11,8 +11,6 @@ import { FaRegCircleCheck } from "react-icons/fa6";
 import { IoBugOutline } from 'react-icons/io5';
 import { FaLightbulb, FaStar } from 'react-icons/fa';
 import { FcHighPriority, FcLowPriority, FcMediumPriority } from "react-icons/fc";
-import Tippy from "@tippyjs/react";
-import 'tippy.js/dist/tippy.css';
 import "../globals.css";
 
 function formatDateDisplay(dateString: string): string {
@@ -75,12 +73,8 @@ const TaskCard: React.FC<TaskCardProps> = ({
             <div className="flex justify-between items-center mb-1">
                 <span className="text-xs text-gray-600">TASK-{task.seq}</span>
                 <div className="flex gap-[5px]">
-                    <Tippy content={`IssueType: ${task.issueType}`} theme="custom-red">
-                        <span className="text-sm"><IssueIcon /></span>
-                    </Tippy>
-                    <Tippy content={`Priority: ${task.priority}`} theme="custom-red">
-                        <span className="text-sm"><PriorityIcon /></span>
-                    </Tippy>
+                    <span className="text-sm" data-tippy-content={`IssueType: ${task.issueType}`} data-tippy-theme="custom-red"><IssueIcon /></span>
+                    <span className="text-sm" data-tippy-content={`Priority: ${task.priority}`} data-tippy-theme="custom-red"><PriorityIcon /></span>
                 </div>
             </div>
             <div className="text-sm text-black mb-1 overflow-hidden whitespace-nowrap text-ellipsis">
