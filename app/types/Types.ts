@@ -20,6 +20,7 @@ export interface Task {
   priority: Priority;
   projectId?: string;
   projectName?: string;
+  media?: TaskMedia[];
 }
 
 export interface ModalProps {
@@ -27,6 +28,8 @@ export interface ModalProps {
   setIsOpen: (value: boolean) => void;
   title: string;
   children: React.ReactNode;
+  panelClassName?: string;
+  onClose?: () => void;
 }
 
 export interface TaskCardProps {
@@ -66,6 +69,7 @@ export interface CreateTaskFormValues {
   predictedHours: number;
   issueType: IssueType;
   priority: Priority;
+  media: TaskMedia[];
 }
 
 export interface TaskDetailModalProps {
@@ -84,6 +88,7 @@ export interface TaskDetailFormValues {
   startDate: string;
   endDate: string;
   predictedHours: number;
+  media?: TaskMedia[];
 }
 
 export interface User {
@@ -167,4 +172,11 @@ export interface LeaderAssigneeOptionsProps {
 
 export interface ProjectFormValues {
   name: string;
+}
+
+export interface TaskMedia {
+  url: string;
+  name: string;
+  type: "image" | "video" | "unknown";
+  createdAt: string;
 }

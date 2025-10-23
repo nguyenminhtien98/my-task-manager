@@ -2,10 +2,17 @@ import { Dialog, Transition } from "@headlessui/react";
 import { Fragment } from "react";
 import { ModalProps } from "../types/Types";
 
-const ModalComponent: React.FC<ModalProps> = ({ isOpen, setIsOpen, title, children }) => {
+const ModalComponent: React.FC<ModalProps> = ({
+    isOpen,
+    setIsOpen,
+    title,
+    children,
+    panelClassName,
+    onClose,
+}) => {
     return (
         <Transition appear show={isOpen} as={Fragment}>
-            <Dialog as="div" className="relative z-[999]" onClose={() => setIsOpen(false)}>
+            <Dialog as="div" className="relative z-[999]" onClose={() => (onClose ? onClose() : setIsOpen(false))}>
                 <Transition.Child
                     as={Fragment}
                     enter="ease-out duration-300" enterFrom="opacity-0"
@@ -22,10 +29,23 @@ const ModalComponent: React.FC<ModalProps> = ({ isOpen, setIsOpen, title, childr
                             enterTo="opacity-100 scale-100" leave="ease-in duration-200"
                             leaveFrom="opacity-100 scale-100" leaveTo="opacity-0 scale-95"
                         >
-                            <Dialog.Panel className="w-full sm:max-w-md md:max-w-lg transform overflow-hidden rounded-2xl bg-white p-6 text-left shadow-xl transition-all">
-                                <Dialog.Title className="text-lg font-medium leading-6 text-gray-900 mb-4">
-                                    {title}
-                                </Dialog.Title>
+                            <Dialog.Panel
+                                className={`w-full ${panelClassName ?? "sm:max-w-md md:max-w-lg"
+                                    } transform overflow-hidden rounded-2xl bg-white p-6 text-left shadow-xl transition-all`}
+                            >
+                                <div className="mb-4 flex items-center justify-between gap-4">
+                                    <Dialog.Title className="text-lg font-semibold text-gray-900">
+                                        {title}
+                                    </Dialog.Title>
+                                    <button
+                                        type="button"
+                                        onClick={() => (onClose ? onClose() : setIsOpen(false))}
+                                        className="flex h-9 w-9 items-center justify-center rounded-full bg-black/10 text-xl text-sub hover:bg-black/20"
+                                        aria-label="Đóng"
+                                    >
+                                        ×
+                                    </button>
+                                </div>
                                 {children}
                             </Dialog.Panel>
                         </Transition.Child>

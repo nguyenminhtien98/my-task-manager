@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;700&display=swap&subset=latin,vietnamese');
+@import url("https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;700&display=swap&subset=latin,vietnamese");
 @import "tailwindcss";
 
 :root {
@@ -6,13 +6,11 @@
   --foreground: #171717;
 }
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-primary: #000000;
+  --color-sub: #4b5563;
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -28,25 +26,28 @@
   body {
     background: var(--background);
     color: var(--foreground);
-    font-family: 'Fira Code', monospace;
-    
+    font-family: "Fira Code", monospace;
   }
   .nextjs-toast {
     display: none !important;
   }
 }
 
-.nextjs-toast {
-  display: none !important;
-}
-
 /* Định nghĩa theme custom-tippy */
 .tippy-box[data-theme~="custom-red"] {
   background-color: #fee2e2; /* đỏ nhạt */
-  color: black;            /* đỏ đậm cho chữ */
+  color: black; /* đỏ đậm cho chữ */
 }
 
 /* Triangle (mũi tên) */
-.tippy-box[data-theme~="custom-red"][data-placement^="top"] > .tippy-arrow::before {
+.tippy-box[data-theme~="custom-red"][data-placement^="top"]
+  > .tippy-arrow::before {
   border-top-color: #fee2e2;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }

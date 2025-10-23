@@ -71,7 +71,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
                 } ${customClass}`}
         >
             <div className="flex justify-between items-center mb-1">
-                <span className="text-xs text-gray-600">TASK-{task.seq}</span>
+                <span className="text-xs text-sub">TASK-{task.seq}</span>
                 <div className="flex gap-[5px]">
                     <span className="text-sm" data-tippy-content={`IssueType: ${task.issueType}`} data-tippy-theme="custom-red"><IssueIcon /></span>
                     <span className="text-sm" data-tippy-content={`Priority: ${task.priority}`} data-tippy-theme="custom-red"><PriorityIcon /></span>
@@ -81,18 +81,18 @@ const TaskCard: React.FC<TaskCardProps> = ({
                 {task.title}
             </div>
             {task.predictedHours !== 0 && (
-                <div className="flex items-center gap-[5px] text-sm text-gray-600 mb-1">
+                <div className="flex items-center gap-[5px] text-sm text-sub mb-1">
                     <span><LuClock4 className="text-[#ef4444]" /></span>
                     <span className="overflow-hidden whitespace-nowrap text-ellipsis">{task.predictedHours !== 0 ? `${task.predictedHours}h` : "—"}</span>
                 </div>
             )}
             {(task.startDate || task.endDate) && (
-                <div className="flex items-center gap-[5px] text-sm text-gray-600 mb-1">
+                <div className="flex items-center gap-[5px] text-sm text-sub mb-1">
                     <IoCalendarNumberOutline className="text-[#ba5ad9]" /> {formatDateDisplay(task.startDate ?? "—")} - {formatDateDisplay(task.endDate ?? "—")}
                 </div>
             )}
 
-            <div className="flex items-center gap-[5px] text-sm text-gray-600">
+            <div className="flex items-center gap-[5px] text-sm text-sub">
                 <span><LuCircleUser className="text-[#40a8f6]" /></span>
                 <span className="overflow-hidden whitespace-nowrap text-ellipsis">{task.assignee || "Chưa set"}</span>
 

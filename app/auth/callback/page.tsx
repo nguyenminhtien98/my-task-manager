@@ -91,7 +91,7 @@ const CallbackContent = () => {
     <div className="flex min-h-screen items-center justify-center bg-white p-6">
       <div className="text-center">
         <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-4 border-black border-t-transparent" />
-        <p className="text-gray-600">Đang xử lý đăng nhập Google...</p>
+        <p className="text-sub">Đang xử lý đăng nhập Google...</p>
       </div>
     </div>
   );

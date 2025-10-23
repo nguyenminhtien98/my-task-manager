@@ -1,31 +1,56 @@
 "use client";
-import React, { useEffect, useState } from "react";
-import { useForm, SubmitHandler, Controller } from "react-hook-form";
+import React, { useEffect, useState, useMemo } from "react";
+import { useForm, SubmitHandler } from "react-hook-form";
 import ModalComponent from "./ModalComponent";
 import {
     CreateTaskFormValues,
     TaskDetailFormValues,
     Task,
     TaskModalProps,
-    IssueType,
-    Priority,
+    TaskMedia,
 } from "../types/Types";
-import PriorityDropdown from "./CutomDropdown/PriorityDropdown";
-import IssueTypeDropdown from "./CutomDropdown/IssueTypeDropdown";
-import AssigneeDropdown from "./CutomDropdown/AssigneeDropdown";
 import { useAuth } from "../context/AuthContext";
 import { useProject } from "../context/ProjectContext";
 import { database } from "../appwrite";
 import toast from "react-hot-toast";
 import { Permission, Role } from "appwrite";
 import { v4 as uuidv4 } from "uuid";
-import LeaderAssigneeOptions from "./LeaderAssigneeOptions";
+import {
+    detectMediaTypeFromMime,
+    detectMediaTypeFromUrl,
+    extractMediaNameFromUrl,
+} from "../utils/media";
+import TaskDetailRightPanel from "./TaskDetailRightPanel";
+import TaskModalLeftPanel from "./TaskModalLeftPanel";
 
 // Helper: Format date string cho input date
 function formatDateForInput(dateString?: string): string {
     if (!dateString) return "";
     return dateString.split("T")[0];
 }
+
+const normalizeTaskMedia = (
+    mediaList: (TaskMedia | string | null | undefined)[] = []
+): TaskMedia[] => {
+    return mediaList
+        .filter((item): item is TaskMedia | string => Boolean(item))
+        .map((item) => {
+            if (typeof item === "string") {
+                return {
+                    url: item,
+                    name: extractMediaNameFromUrl(item),
+                    type: detectMediaTypeFromUrl(item),
+                    createdAt: new Date().toISOString(),
+                };
+            }
+            return {
+                url: item.url,
+                name: item.name ?? extractMediaNameFromUrl(item.url),
+                type: item.type ?? detectMediaTypeFromUrl(item.url),
+                createdAt: item.createdAt ?? new Date().toISOString(),
+            };
+        });
+};
 
 const TaskModal: React.FC<TaskModalProps> = ({
     mode, // "create" | "detail"
@@ -61,6 +86,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
         }
     }, [isLeader]);
 
+    const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
     const {
         control,
         register,
@@ -82,6 +108,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
                     startDate: "",
                     endDate: "",
                     predictedHours: 0,
+                    media: [],
                 }
                 : {
                     title: task?.title || "",
@@ -92,11 +119,22 @@ const TaskModal: React.FC<TaskModalProps> = ({
                     predictedHours: task?.predictedHours || 0,
                     issueType: task?.issueType || "Feature",
                     priority: task?.priority || "Medium",
+                    media: task?.media || [],
                 },
         mode: "onChange",
     });
 
     const watchedAssignee = watch("assignee");
+    const selectedFileNames = useMemo(() => selectedFiles.map(file => file.name), [selectedFiles]);
+    useEffect(() => {
+        register("media");
+    }, [register]);
+    const watchedMedia = watch("media") as (TaskMedia | string)[] | undefined;
+    const detailMedia = useMemo(() => {
+        if (mode !== "detail") return [];
+        const source = watchedMedia ?? (task?.media ?? []);
+        return normalizeTaskMedia(Array.isArray(source) ? source : []);
+    }, [mode, watchedMedia, task?.media]);
     const isTaken = watchedAssignee.trim() !== "";
     const initialAssignee = mode === "detail" ? task?.assignee || "" : "";
 
@@ -140,8 +178,12 @@ const TaskModal: React.FC<TaskModalProps> = ({
                 startDate: "",
                 endDate: "",
                 predictedHours: 0,
+                media: [],
             });
+            setSelectedFiles([]);
+            setValue("media", []);
         } else if (task) {
+            const normalized = normalizeTaskMedia(task.media ?? []);
             reset({
                 title: task.title,
                 description: task.description,
@@ -151,9 +193,12 @@ const TaskModal: React.FC<TaskModalProps> = ({
                 predictedHours: task.predictedHours,
                 issueType: task.issueType,
                 priority: task.priority,
+                media: normalized,
             });
+            setSelectedFiles([]);
+            setValue("media", normalized);
         }
-    }, [isOpen, mode, task, reset]);
+    }, [isOpen, mode, task, reset, setValue]);
 
     // Xử lý "Nhận Task" cho mode "detail"
     const handleReceive = async (e: React.MouseEvent) => {
@@ -165,10 +210,61 @@ const TaskModal: React.FC<TaskModalProps> = ({
         console.log("Giá trị assignee sau handleReceive:", watch("assignee"));
     };
 
+    const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const files = event.target.files;
+        if (!files || files.length === 0) {
+            event.target.value = "";
+            return;
+        }
+        const fileList = Array.from(files);
+        setSelectedFiles((prev) => [...prev, ...fileList]);
+        event.target.value = "";
+    };
+
+    const handleRemoveFile = (name: string) => {
+        setSelectedFiles((prev) => prev.filter(file => file.name !== name));
+    };
+
+    const uploadSelectedFiles = async (): Promise<TaskMedia[]> => {
+        if (selectedFiles.length === 0) return [];
+        const uploaded: TaskMedia[] = [];
+        for (const file of selectedFiles) {
+            const formData = new FormData();
+            formData.append("file", file);
+            const response = await fetch("/api/uploads", {
+                method: "POST",
+                body: formData,
+            });
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(errorText || "Upload ảnh thất bại");
+            }
+            const data = await response.json();
+            const type = detectMediaTypeFromMime(file.type) === "unknown"
+                ? detectMediaTypeFromUrl(data.url)
+                : detectMediaTypeFromMime(file.type);
+            uploaded.push({
+                url: data.url,
+                name: file.name,
+                type,
+                createdAt: new Date().toISOString(),
+            });
+        }
+        return uploaded;
+    };
+
     // Submit cho mode "create"
     const onSubmitCreate: SubmitHandler<CreateTaskFormValues> = async (data) => {
         if (!isValid) return;
         if (!isLeader && (!data.startDate || !data.endDate || data.predictedHours == null)) {
+            return;
+        }
+        let mediaItems: TaskMedia[] = [];
+        try {
+            mediaItems = await uploadSelectedFiles();
+        } catch (error) {
+            const message = error instanceof Error ? error.message : "Upload ảnh thất bại";
+            toast.error(message);
             return;
         }
         const newTask: Task = {
@@ -186,6 +282,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
             priority: data.priority!,
             projectId: currentProject ? currentProject.id : "",
             projectName: currentProject ? currentProject.name : "",
+            media: mediaItems,
         };
         try {
             await database.createDocument(
@@ -201,6 +298,8 @@ const TaskModal: React.FC<TaskModalProps> = ({
             );
             toast.success("Tạo Task thành công");
             onCreate!(newTask);
+            setSelectedFiles([]);
+            setValue("media", mediaItems);
             setIsOpen(false);
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (e: any) {
@@ -242,220 +341,61 @@ const TaskModal: React.FC<TaskModalProps> = ({
         }
     };
 
+
+
+    const showAttachmentSection = mode === "create";
+    const showReceiveButton = showReceive && !watchedAssignee;
+
+    const leftPanel = (
+        <TaskModalLeftPanel
+            mode={mode}
+            handleSubmit={handleSubmit}
+            onSubmitCreate={onSubmitCreate}
+            onSubmitDetail={onSubmitDetail}
+            register={register}
+            errors={errors}
+            control={control}
+            isLeader={isLeader}
+            currentProject={currentProject}
+            existingUsers={existingUsers}
+            userName={currentUserName}
+            handleAddMember={handleAddMember}
+            selectedFiles={selectedFiles}
+            selectedFileNames={selectedFileNames}
+            handleFileChange={handleFileChange}
+            handleRemoveFile={handleRemoveFile}
+            showAttachmentSection={showAttachmentSection}
+            showReceiveButton={showReceiveButton}
+            handleReceive={handleReceive}
+            isSubmitting={isSubmitting}
+            isValid={isValid}
+            dirtyFields={dirtyFields}
+            isTaken={isTaken}
+            task={task ?? null}
+        />
+    );
+
     return (
         <ModalComponent
             isOpen={isOpen}
             setIsOpen={setIsOpen}
+            onClose={() => setIsOpen(false)}
             title={mode === "create" ? `Tạo Task #${nextSeq}` : `Chi tiết Task #${task?.seq}`}
+            panelClassName={mode === "detail" ? "w-full max-w-6xl xl:max-w-7xl" : undefined}
         >
-            <form
-                onSubmit={handleSubmit(mode === "create" ? onSubmitCreate : onSubmitDetail)}
-                className="space-y-4"
-            >
-                <div>
-                    <label className="block text-sm font-semibold text-gray-600">Tiêu đề</label>
-                    <input
-                        placeholder="Nhập tiêu đề"
-                        {...register("title", { required: "Tiêu đề không được để trống" })}
-                        disabled={mode === "detail"}
-                        className="mt-1 w-full rounded border border-gray-600 bg-white p-2 text-black"
+            {mode === "detail" ? (
+                <div className="grid h-[75vh] gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,1fr)]">
+                    <div className="max-h-[75vh] overflow-y-auto pr-4 no-scrollbar">
+                        {leftPanel}
+                    </div>
+                    <TaskDetailRightPanel
+                        media={detailMedia}
+                        className="max-h-[75vh]"
                     />
-                    {errors.title && <p className="text-red-500 text-sm">{errors.title.message}</p>}
                 </div>
-                <div>
-                    <label className="block text-sm font-semibold text-gray-600">Nội dung chi tiết</label>
-                    <textarea
-                        placeholder="Mô tả chi tiết"
-                        {...register("description", { required: "Nội dung không được để trống" })}
-                        disabled={mode === "detail"}
-                        className="mt-1 w-full rounded border border-gray-600 bg-white p-2 text-black"
-                    />
-                    {errors.description && <p className="text-red-500 text-sm">{errors.description.message}</p>}
-                </div>
-                <div className="flex gap-4">
-                    <div className="flex-1">
-                        <label className="mb-1 block text-sm font-semibold text-gray-600">Issue Type</label>
-                        <Controller
-                            control={control}
-                            name="issueType"
-                            render={({ field }) => (
-                                <IssueTypeDropdown
-                                    value={field.value!}
-                                    onChange={(v) => field.onChange(v as IssueType)}
-                                    disabled={mode === "detail"}
-                                />
-                            )}
-                        />
-                    </div>
-                    <div className="flex-1">
-                        <label className="mb-1 block text-sm font-semibold text-gray-600">Priority</label>
-                        <Controller
-                            control={control}
-                            name="priority"
-                            render={({ field }) => (
-                                <PriorityDropdown
-                                    value={field.value!}
-                                    onChange={(v) => field.onChange(v as Priority)}
-                                    disabled={mode === "detail"}
-                                />
-                            )}
-                        />
-                    </div>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                        <label className="mb-1 block text-sm font-semibold text-gray-600">Người thực hiện</label>
-                        {mode === "create" ? (
-                            isLeader ? (
-                                currentProject && (
-                                    !currentProject.members || currentProject.members.length === 0 ? (
-                                        <LeaderAssigneeOptions
-                                            leaderName={user?.name || ""}
-                                            onMemberAdded={handleAddMember}
-                                            existingUsers={existingUsers}
-                                        />
-                                    ) : (
-                                        <Controller
-                                            control={control}
-                                            name="assignee"
-                                            render={({ field }) => (
-                                                <AssigneeDropdown
-                                                    value={field.value!}
-                                                    options={[user!.name, ...currentProject.members!]}
-                                                    onChange={(v) => field.onChange(v)}
-                                                />
-                                            )}
-                                        />
-                                    )
-                                )
-                            ) : (
-                                <input
-                                    value={user?.name}
-                                    disabled
-                                    className="w-full rounded border border-gray-600 bg-gray-100 p-2 text-black"
-                                />
-                            )
-                        ) : (
-                            <input
-                                {...register("assignee")}
-                                disabled
-                                placeholder="Chưa set"
-                                className="w-full rounded border border-gray-600 bg-gray-100 p-2 text-black"
-                            />
-                        )}
-                    </div>
-                    <div>
-                        <label className="block text-sm font-semibold text-gray-600">Giờ dự kiến (h)</label>
-                        <input
-                            type="number"
-                            placeholder="Số giờ"
-                            {...register("predictedHours", {
-                                required:
-                                    (mode === "create" && !isLeader) ||
-                                        (mode === "detail" && isTaken)
-                                        ? "Phải nhập giờ dự kiến"
-                                        : false,
-                                valueAsNumber: true,
-                            })}
-                            disabled={
-                                mode === "detail"
-                                    ? (!isTaken || task?.status === "completed")
-                                    : false
-                            }
-                            className="mt-1 w-full rounded border border-gray-600 bg-white p-2 text-black"
-                        />
-                        {errors.predictedHours && (
-                            <p className="text-red-500 text-sm">{errors.predictedHours.message}</p>
-                        )}
-                    </div>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                        <label className="block text-sm font-semibold text-gray-600">Ngày bắt đầu</label>
-                        <input
-                            type="date"
-                            {...register("startDate", {
-                                required:
-                                    (mode === "create" && !isLeader) ||
-                                        (mode === "detail" && isTaken)
-                                        ? "Phải chọn ngày bắt đầu"
-                                        : false,
-                            })}
-                            disabled={
-                                mode === "detail"
-                                    ? (!isTaken || task?.status === "completed")
-                                    : false
-                            }
-                            className="mt-1 w-full rounded border border-gray-600 bg-white p-2 text-black"
-                        />
-                        {errors.startDate && (
-                            <p className="text-red-500 text-sm">{errors.startDate.message}</p>
-                        )}
-                    </div>
-                    <div>
-                        <label className="block text-sm font-semibold text-gray-600">Ngày kết thúc</label>
-                        <input
-                            type="date"
-                            {...register("endDate", {
-                                required:
-                                    (mode === "create" && !isLeader) ||
-                                        (mode === "detail" && isTaken)
-                                        ? "Phải chọn ngày kết thúc"
-                                        : false,
-                            })}
-                            disabled={
-                                mode === "detail"
-                                    ? (!isTaken || task?.status === "completed")
-                                    : false
-                            }
-                            className="mt-1 w-full rounded border border-gray-600 bg-white p-2 text-black"
-                        />
-                        {errors.endDate && (
-                            <p className="text-red-500 text-sm">{errors.endDate.message}</p>
-                        )}
-                    </div>
-                </div>
-
-                <div className="flex justify-end space-x-4">
-                    <button
-                        type="button"
-                        onClick={() => setIsOpen(false)}
-                        className="cursor-pointer px-4 py-2 bg-gray-300 rounded"
-                    >
-                        {mode === "create" ? "Hủy" : "Đóng"}
-                    </button>
-
-                    {showReceive && !watchedAssignee ? (
-                        <button
-                            type="button"
-                            onClick={handleReceive}
-                            className="cursor-pointer px-4 py-2 bg-green-500 text-white rounded"
-                        >
-                            Nhận Task
-                        </button>
-                    ) : (
-                        ((mode === "create") ||
-                            (mode === "detail" && Object.keys(dirtyFields).length > 0)) && (
-                            <button
-                                type="submit"
-                                disabled={isSubmitting || !isValid}
-                                className={`px-4 py-2 text-white rounded ${isSubmitting || !isValid
-                                        ? "bg-gray-400 cursor-not-allowed"
-                                        : "bg-blue-600 hover:bg-blue-700 cursor-pointer"
-                                    }`}
-                            >
-                                {isSubmitting
-                                    ? mode === "create"
-                                        ? "Đang tạo..."
-                                        : "Đang lưu..."
-                                    : mode === "create"
-                                        ? "Tạo"
-                                        : "Lưu"}
-                            </button>
-                        )
-                    )}
-                </div>
-            </form>
+            ) : (
+                leftPanel
+            )}
         </ModalComponent>
     );
 };
