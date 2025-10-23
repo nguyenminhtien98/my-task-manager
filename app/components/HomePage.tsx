@@ -11,6 +11,7 @@ import { database, subscribeToRealtime } from "../appwrite";
 import toast from "react-hot-toast";
 import { useProject } from "../context/ProjectContext";
 import ProjectModal from "./ProjectModal";
+import { useTheme } from "../context/ThemeContext";
 
 const Board = dynamic(() => import("./Board"), { ssr: false });
 
@@ -37,6 +38,7 @@ const defaultGuideTask: Task = {
 
 const HomePage: React.FC = () => {
     const { user } = useAuth();
+    const { theme } = useTheme();
     const { currentProject, currentProjectRole } = useProject();
     const currentUserName = user?.name || "";
     const isLeader = currentProjectRole === "leader";
@@ -278,17 +280,23 @@ const HomePage: React.FC = () => {
 
     if (isInitialLoading) {
         return (
-            <div className="fixed inset-0 flex items-center justify-center bg-white z-50">
+            <div
+                className="fixed inset-0 flex min-h-screen items-center justify-center"
+                style={{ background: theme }}
+            >
                 <div className="w-12 h-12 border-4 border-black border-t-transparent rounded-full animate-spin"></div>
             </div>
         );
     }
 
     return (
-        <>
+        <div
+            className="min-h-screen transition-colors duration-500"
+            style={{ background: theme }}
+        >
             <Header onCreateTask={handleCreateClick} onLoginClick={handleLoginClick} onCreateProject={handleCreateProject} />
 
-            <div className="p-4 p-4 relative">
+            <div className="relative p-4">
                 <Board
                     tasks={allTasks}
                     currentUser={currentUserName}
@@ -334,7 +342,7 @@ const HomePage: React.FC = () => {
                 task={selectedTask}
                 onUpdate={handleUpdateTask}
             />
-        </>
+        </div>
     );
 };
 

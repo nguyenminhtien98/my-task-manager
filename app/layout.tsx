@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "./context/AuthContext";
+import { ThemeProvider } from "./context/ThemeContext";
 import { Toaster } from "react-hot-toast";
 import { ProjectProvider } from "./context/ProjectContext";
 
@@ -33,10 +34,12 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <AuthProvider>
-          <ProjectProvider>
-            <Toaster position="top-right" />
-            {children}
-          </ProjectProvider>
+          <ThemeProvider>
+            <ProjectProvider>
+              <Toaster position="top-right" />
+              {children}
+            </ProjectProvider>
+          </ThemeProvider>
         </AuthProvider>
       </body>
     </html>

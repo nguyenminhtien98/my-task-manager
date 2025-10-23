@@ -253,28 +253,28 @@ const TaskModal: React.FC<TaskModalProps> = ({
                 className="space-y-4"
             >
                 <div>
-                    <label className="block text-sm font-medium">Tiêu đề</label>
+                    <label className="block text-sm font-semibold text-gray-600">Tiêu đề</label>
                     <input
                         placeholder="Nhập tiêu đề"
                         {...register("title", { required: "Tiêu đề không được để trống" })}
                         disabled={mode === "detail"}
-                        className="mt-1 w-full p-2 border border-gray-300 rounded"
+                        className="mt-1 w-full rounded border border-gray-600 bg-white p-2 text-black"
                     />
                     {errors.title && <p className="text-red-500 text-sm">{errors.title.message}</p>}
                 </div>
                 <div>
-                    <label className="block text-sm font-medium">Nội dung chi tiết</label>
+                    <label className="block text-sm font-semibold text-gray-600">Nội dung chi tiết</label>
                     <textarea
                         placeholder="Mô tả chi tiết"
                         {...register("description", { required: "Nội dung không được để trống" })}
                         disabled={mode === "detail"}
-                        className="mt-1 w-full p-2 border border-gray-300 rounded"
+                        className="mt-1 w-full rounded border border-gray-600 bg-white p-2 text-black"
                     />
                     {errors.description && <p className="text-red-500 text-sm">{errors.description.message}</p>}
                 </div>
                 <div className="flex gap-4">
                     <div className="flex-1">
-                        <label className="mb-1 block text-sm font-medium">Issue Type</label>
+                        <label className="mb-1 block text-sm font-semibold text-gray-600">Issue Type</label>
                         <Controller
                             control={control}
                             name="issueType"
@@ -288,7 +288,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
                         />
                     </div>
                     <div className="flex-1">
-                        <label className="mb-1 block text-sm font-medium">Priority</label>
+                        <label className="mb-1 block text-sm font-semibold text-gray-600">Priority</label>
                         <Controller
                             control={control}
                             name="priority"
@@ -304,7 +304,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                        <label className="mb-1 block text-sm font-medium">Người thực hiện</label>
+                        <label className="mb-1 block text-sm font-semibold text-gray-600">Người thực hiện</label>
                         {mode === "create" ? (
                             isLeader ? (
                                 currentProject && (
@@ -332,7 +332,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
                                 <input
                                     value={user?.name}
                                     disabled
-                                    className="w-full p-2 border border-gray-300 rounded bg-gray-100"
+                                    className="w-full rounded border border-gray-600 bg-gray-100 p-2 text-black"
                                 />
                             )
                         ) : (
@@ -340,12 +340,12 @@ const TaskModal: React.FC<TaskModalProps> = ({
                                 {...register("assignee")}
                                 disabled
                                 placeholder="Chưa set"
-                                className="w-full p-2 border border-gray-300 rounded bg-gray-100"
+                                className="w-full rounded border border-gray-600 bg-gray-100 p-2 text-black"
                             />
                         )}
                     </div>
                     <div>
-                        <label className="block text-sm font-medium">Giờ dự kiến (h)</label>
+                        <label className="block text-sm font-semibold text-gray-600">Giờ dự kiến (h)</label>
                         <input
                             type="number"
                             placeholder="Số giờ"
@@ -362,7 +362,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
                                     ? (!isTaken || task?.status === "completed")
                                     : false
                             }
-                            className="mt-1 w-full p-2 border border-gray-300 rounded"
+                            className="mt-1 w-full rounded border border-gray-600 bg-white p-2 text-black"
                         />
                         {errors.predictedHours && (
                             <p className="text-red-500 text-sm">{errors.predictedHours.message}</p>
@@ -371,7 +371,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                        <label className="block text-sm font-medium">Ngày bắt đầu</label>
+                        <label className="block text-sm font-semibold text-gray-600">Ngày bắt đầu</label>
                         <input
                             type="date"
                             {...register("startDate", {
@@ -386,14 +386,14 @@ const TaskModal: React.FC<TaskModalProps> = ({
                                     ? (!isTaken || task?.status === "completed")
                                     : false
                             }
-                            className="mt-1 w-full p-2 border border-gray-300 rounded"
+                            className="mt-1 w-full rounded border border-gray-600 bg-white p-2 text-black"
                         />
                         {errors.startDate && (
                             <p className="text-red-500 text-sm">{errors.startDate.message}</p>
                         )}
                     </div>
                     <div>
-                        <label className="block text-sm font-medium">Ngày kết thúc</label>
+                        <label className="block text-sm font-semibold text-gray-600">Ngày kết thúc</label>
                         <input
                             type="date"
                             {...register("endDate", {
@@ -408,7 +408,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
                                     ? (!isTaken || task?.status === "completed")
                                     : false
                             }
-                            className="mt-1 w-full p-2 border border-gray-300 rounded"
+                            className="mt-1 w-full rounded border border-gray-600 bg-white p-2 text-black"
                         />
                         {errors.endDate && (
                             <p className="text-red-500 text-sm">{errors.endDate.message}</p>

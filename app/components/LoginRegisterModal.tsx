@@ -4,14 +4,16 @@ import { useForm } from 'react-hook-form';
 import { FormUserValues } from '../types/Types';
 import { useAuth } from '../context/AuthContext';
 import { account, database } from '../appwrite';
-import { Query } from "appwrite";
+import { OAuthProvider, Query } from "appwrite";
 import toast from 'react-hot-toast';
+import { DEFAULT_THEME_GRADIENT } from '../utils/themeColors';
 
 const LoginRegisterModal: React.FC<{ isOpen: boolean; setIsOpen: (v: boolean) => void; onLoginSuccess: () => void; }> = ({ isOpen, setIsOpen, onLoginSuccess }) => {
 	const { login, logout, user } = useAuth();
 	const [isLogin, setIsLogin] = useState(true);
 	const [showPassword, setShowPassword] = useState(false);
 	const [showConfirm, setShowConfirm] = useState(false);
+	const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 	const {
 		register,
 		handleSubmit,
@@ -31,6 +33,28 @@ const LoginRegisterModal: React.FC<{ isOpen: boolean; setIsOpen: (v: boolean) =>
 			reset();
 		}
 	}, [isOpen, reset]);
+
+	useEffect(() => {
+		if (!user || !isOpen) return;
+		onLoginSuccess();
+		setIsOpen(false);
+	}, [user, isOpen, onLoginSuccess, setIsOpen]);
+
+		const handleGoogleLogin = async () => {
+			if (typeof window === "undefined") return;
+			setIsGoogleLoading(true);
+			const origin = window.location.origin;
+			const redirectPath = window.location.pathname + window.location.search;
+			const successUrl = `${origin}/auth/callback?redirect=${encodeURIComponent(redirectPath)}`;
+			const failureUrl = `${origin}/auth/failed?redirect=${encodeURIComponent(redirectPath)}`;
+			try {
+				await account.createOAuth2Session(OAuthProvider.Google, successUrl, failureUrl);
+		} catch (error) {
+			console.error("Google login error:", error);
+			toast.error("Không mở được cửa sổ Google, thử lại sau.");
+			setIsGoogleLoading(false);
+		}
+	};
 
 	const onSubmit = async (data: FormUserValues) => {
 		if (!isValid) return;
@@ -64,6 +88,7 @@ const LoginRegisterModal: React.FC<{ isOpen: boolean; setIsOpen: (v: boolean) =>
 						user_id: user.$id,
 						name: data.name,
 						role: 'user',
+						themeColor: DEFAULT_THEME_GRADIENT,
 					}
 				);
 				toast.success('Đăng ký thành công! Vui lòng đăng nhập.');
@@ -80,7 +105,23 @@ const LoginRegisterModal: React.FC<{ isOpen: boolean; setIsOpen: (v: boolean) =>
 
 	return (
 		<ModalComponent isOpen={isOpen} setIsOpen={setIsOpen} title={isLogin ? 'Đăng nhập' : 'Đăng ký'}>
-			<form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+			<div className="space-y-4">
+				<button
+					type="button"
+					onClick={handleGoogleLogin}
+					disabled={isGoogleLoading}
+					className={`w-full flex items-center justify-center gap-2 rounded bg-red-500 px-4 py-2 text-white hover:bg-red-600 ${isGoogleLoading ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer'
+						}`}
+				>
+					{isGoogleLoading ? 'Đang mở Google...' : 'Đăng nhập với Google'}
+				</button>
+				<div className="flex items-center gap-2">
+					<span className="h-px flex-1 bg-gray-300" />
+					<span className="text-xs uppercase text-gray-500">Hoặc</span>
+					<span className="h-px flex-1 bg-gray-300" />
+				</div>
+			</div>
+			<form onSubmit={handleSubmit(onSubmit)} className="mt-4 space-y-4">
 				{!isLogin && (
 					<div>
 						<label className="block text-sm font-medium">Tên</label>

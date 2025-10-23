@@ -90,12 +90,14 @@ export interface User {
   id: string;
   name: string;
   role: "leader" | "user";
+  themeColor?: string;
 }
 
 export interface AuthContextType {
   user: User | null;
   login: (id: string, name: string) => Promise<void>;
   logout: () => Promise<void>;
+  setUser: (user: User | null) => void;
 }
 
 export interface LoginRegisterModalProps {

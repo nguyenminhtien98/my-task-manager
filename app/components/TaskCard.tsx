@@ -73,7 +73,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
                 } ${customClass}`}
         >
             <div className="flex justify-between items-center mb-1">
-                <span className="text-xs text-gray-500">TASK-{task.seq}</span>
+                <span className="text-xs text-gray-600">TASK-{task.seq}</span>
                 <div className="flex gap-[5px]">
                     <Tippy content={`IssueType: ${task.issueType}`} theme="custom-red">
                         <span className="text-sm"><IssueIcon /></span>
@@ -83,7 +83,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
                     </Tippy>
                 </div>
             </div>
-            <div className="text-sm text-black-500 mb-1 overflow-hidden whitespace-nowrap text-ellipsis">
+            <div className="text-sm text-black mb-1 overflow-hidden whitespace-nowrap text-ellipsis">
                 {task.title}
             </div>
             {task.predictedHours !== 0 && (
@@ -98,7 +98,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
                 </div>
             )}
 
-            <div className="flex items-center gap-[5px] text-sm text-gray-500">
+            <div className="flex items-center gap-[5px] text-sm text-gray-600">
                 <span><LuCircleUser className="text-[#40a8f6]" /></span>
                 <span className="overflow-hidden whitespace-nowrap text-ellipsis">{task.assignee || "Chưa set"}</span>
 
