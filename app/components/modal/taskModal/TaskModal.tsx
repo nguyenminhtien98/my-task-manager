@@ -1,29 +1,29 @@
 "use client";
 import React, { useEffect, useState, useMemo } from "react";
 import { useForm, SubmitHandler } from "react-hook-form";
-import ModalComponent from "./ModalComponent";
+import ModalComponent from "../../common/ModalComponent";
 import {
     CreateTaskFormValues,
     TaskDetailFormValues,
     Task,
     TaskModalProps,
     TaskMedia,
-} from "../types/Types";
-import { useAuth } from "../context/AuthContext";
-import { useProject } from "../context/ProjectContext";
-import { database } from "../appwrite";
+} from "../../../types/Types";
+import { useAuth } from "../../../context/AuthContext";
+import { useProject } from "../../../context/ProjectContext";
+import { database } from "../../../appwrite";
 import toast from "react-hot-toast";
 import { Permission, Role } from "appwrite";
 import { v4 as uuidv4 } from "uuid";
 import {
-    detectMediaTypeFromMime,
     detectMediaTypeFromUrl,
     extractMediaNameFromUrl,
-} from "../utils/media";
-import TaskDetailRightPanel from "./TaskDetailRightPanel";
+} from "../../../utils/media";
+import { uploadFilesToCloudinary } from "../../../utils/upload";
+import { useProjectMembers } from "../../../hooks/useProjectMembers";
 import TaskModalLeftPanel from "./TaskModalLeftPanel";
+import TaskDetailRightPanel from "./TaskDetailRightPanel";
 
-// Helper: Format date string cho input date
 function formatDateForInput(dateString?: string): string {
     if (!dateString) return "";
     return dateString.split("T")[0];
@@ -62,7 +62,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
     task,
 }) => {
     const { user } = useAuth();
-    const { currentProject, currentProjectRole, setCurrentProject } = useProject();
+    const { currentProject, currentProjectRole } = useProject();
     const currentUserName = user?.name || "";
     const isLeader = currentProjectRole === "leader";
     // Nếu là leader, fetch danh sách user từ collection Profile
@@ -124,6 +124,8 @@ const TaskModal: React.FC<TaskModalProps> = ({
         mode: "onChange",
     });
 
+    const { addMember: addProjectMember } = useProjectMembers();
+
     const watchedAssignee = watch("assignee");
     const selectedFileNames = useMemo(() => selectedFiles.map(file => file.name), [selectedFiles]);
     useEffect(() => {
@@ -142,27 +144,15 @@ const TaskModal: React.FC<TaskModalProps> = ({
     const showReceive =
         mode === "detail" && !isLeader && initialAssignee === "" && !watchedAssignee;
 
-    // Hàm handleAddMember: gọi API cập nhật project để thêm member mới
+    // Hàm handleAddMember: gọi hook để thêm member mới
     const handleAddMember = async (newMemberName: string) => {
-        if (!currentProject || !user) return;
-        const updatedMembers = currentProject.members
-            ? [...currentProject.members, newMemberName]
-            : [newMemberName];
-        try {
-            await database.updateDocument(
-                String(process.env.NEXT_PUBLIC_DATABASE_ID),
-                String(process.env.NEXT_PUBLIC_COLLECTION_ID_PROJECTS),
-                currentProject.id,
-                { members: updatedMembers }
-            );
-            // Cập nhật context với dữ liệu project mới, thuộc tính "members" đã có
-            setCurrentProject({ ...currentProject, members: updatedMembers });
-            toast.success("Thêm thành viên thành công");
-            // Optionally cập nhật trường "assignee" trong form nếu bạn mong muốn
-            setValue("assignee", newMemberName, { shouldDirty: true });
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        } catch (error: any) {
-            toast.error(error.message || "Thêm thành viên thất bại");
+        const result = await addProjectMember(newMemberName);
+        if (result.success) {
+            toast.success(result.message);
+            const canonical = result.canonicalName ?? newMemberName.trim();
+            setValue("assignee", canonical, { shouldDirty: true });
+        } else {
+            toast.error(result.message);
         }
     };
 
@@ -227,30 +217,13 @@ const TaskModal: React.FC<TaskModalProps> = ({
 
     const uploadSelectedFiles = async (): Promise<TaskMedia[]> => {
         if (selectedFiles.length === 0) return [];
-        const uploaded: TaskMedia[] = [];
-        for (const file of selectedFiles) {
-            const formData = new FormData();
-            formData.append("file", file);
-            const response = await fetch("/api/uploads", {
-                method: "POST",
-                body: formData,
-            });
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(errorText || "Upload ảnh thất bại");
-            }
-            const data = await response.json();
-            const type = detectMediaTypeFromMime(file.type) === "unknown"
-                ? detectMediaTypeFromUrl(data.url)
-                : detectMediaTypeFromMime(file.type);
-            uploaded.push({
-                url: data.url,
-                name: file.name,
-                type,
-                createdAt: new Date().toISOString(),
-            });
-        }
-        return uploaded;
+        const uploaded = await uploadFilesToCloudinary(selectedFiles);
+        return uploaded.map((item) => ({
+            url: item.url,
+            name: item.name,
+            type: item.type === "file" ? "unknown" : item.type,
+            createdAt: new Date().toISOString(),
+        }));
     };
 
     // Submit cho mode "create"
@@ -267,6 +240,8 @@ const TaskModal: React.FC<TaskModalProps> = ({
             toast.error(message);
             return;
         }
+
+        // Tạo object task để dùng nội bộ (vẫn giữ đầy đủ object media cho UI)
         const newTask: Task = {
             id: uuidv4(),
             seq: nextSeq!,
@@ -284,12 +259,18 @@ const TaskModal: React.FC<TaskModalProps> = ({
             projectName: currentProject ? currentProject.name : "",
             media: mediaItems,
         };
+
+        const payloadForAppwrite = {
+            ...newTask,
+            media: mediaItems.map((m) => m.url),
+        };
+
         try {
             await database.createDocument(
                 process.env.NEXT_PUBLIC_DATABASE_ID!,
                 process.env.NEXT_PUBLIC_COLLECTION_ID_TASKS!,
                 newTask.id,
-                newTask,
+                payloadForAppwrite,
                 [
                     Permission.read(Role.any()),
                     Permission.update(Role.user(user!.id)),
@@ -390,6 +371,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
                     </div>
                     <TaskDetailRightPanel
                         media={detailMedia}
+                        taskId={task?.id}
                         className="max-h-[75vh]"
                     />
                 </div>

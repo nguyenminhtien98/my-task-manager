@@ -29,18 +29,18 @@ export default function IssueTypeDropdown({
             <div className="relative">
                 <Listbox.Button
                     disabled={disabled}
-                    className={`w-full border border-gray-300 rounded p-2 flex items-center gap-2 ${className} ${disabled ? 'cursor-not-allowed' : ''
+                    className={`w-full border border-black text-black rounded p-2 flex items-center gap-2 ${className} ${disabled ? 'cursor-not-allowed' : ''
                         }`}
                 >
                     {selected.icon} {selected.label}
                 </Listbox.Button>
                 {!disabled && (
-                    <Listbox.Options className="absolute mt-1 bg-white border border-gray-300 rounded shadow w-full z-10">
+                    <Listbox.Options className="absolute mt-1 bg-white border border-black rounded shadow w-full z-10">
                         {issueTypes.map((p) => (
                             <Listbox.Option key={p.label} value={p.label} as={Fragment}>
                                 {({ active }) => (
                                     <li
-                                        className={`cursor-pointer p-2 flex items-center gap-2 ${active ? 'bg-blue-100' : ''
+                                        className={`cursor-pointer p-2 flex items-center gap-2 text-black ${active ? 'bg-blue-100' : ''
                                             }`}
                                     >
                                         {p.icon} {p.label}

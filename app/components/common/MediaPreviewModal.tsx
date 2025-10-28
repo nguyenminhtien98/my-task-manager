@@ -3,8 +3,8 @@
 import React, { Fragment } from "react";
 import { Dialog, Transition } from "@headlessui/react";
 import Image from "next/image";
-import { detectMediaTypeFromUrl } from "../utils/media";
-import { TaskMedia } from "../types/Types";
+import { detectMediaTypeFromUrl } from "../../utils/media";
+import { TaskMedia } from "../../types/Types";
 
 interface MediaPreviewModalProps {
   isOpen: boolean;

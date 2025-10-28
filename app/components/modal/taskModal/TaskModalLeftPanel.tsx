@@ -17,11 +17,11 @@ import {
   Project,
   IssueType,
   Priority,
-} from "../types/Types";
-import IssueTypeDropdown from "./CutomDropdown/IssueTypeDropdown";
-import PriorityDropdown from "./CutomDropdown/PriorityDropdown";
-import AssigneeDropdown from "./CutomDropdown/AssigneeDropdown";
-import LeaderAssigneeOptions from "./LeaderAssigneeOptions";
+} from "../../../types/Types";
+import IssueTypeDropdown from "../../CutomDropdown/IssueTypeDropdown";
+import PriorityDropdown from "../../CutomDropdown/PriorityDropdown";
+import AssigneeDropdown from "../../CutomDropdown/AssigneeDropdown";
+import LeaderAssigneeOptions from "../../LeaderAssigneeOptions";
 
 interface TaskModalLeftPanelProps {
   mode: "create" | "detail";
@@ -87,7 +87,7 @@ const TaskModalLeftPanel: React.FC<TaskModalLeftPanelProps> = ({
           placeholder="Nhập tiêu đề"
           {...register("title", { required: "Tiêu đề không được để trống" })}
           disabled={mode === "detail"}
-          className="mt-1 w-full rounded border border-gray-600 bg-white p-2 text-black"
+          className="mt-1 w-full rounded border border-blackbg-white p-2 text-black"
         />
         {errors.title && <p className="text-red-500 text-sm">{errors.title.message}</p>}
       </div>
@@ -98,7 +98,7 @@ const TaskModalLeftPanel: React.FC<TaskModalLeftPanelProps> = ({
           placeholder="Mô tả chi tiết"
           {...register("description", { required: "Nội dung không được để trống" })}
           disabled={mode === "detail"}
-          className="mt-1 w-full rounded border border-gray-600 bg-white p-2 text-black"
+          className="mt-1 w-full rounded border border-blackbg-white p-2 text-black"
         />
         {errors.description && <p className="text-red-500 text-sm">{errors.description.message}</p>}
       </div>
@@ -108,7 +108,7 @@ const TaskModalLeftPanel: React.FC<TaskModalLeftPanelProps> = ({
           <button
             type="button"
             onClick={() => document.getElementById("task-media-input")?.click()}
-            className="text-sm font-semibold text-black underline hover:cursor-pointer"
+            className="text-sm font-semibold text-sub underline hover:cursor-pointer"
           >
             Đính kèm hình ảnh{selectedFiles.length > 0 ? ":" : ""}
           </button>
@@ -204,7 +204,7 @@ const TaskModalLeftPanel: React.FC<TaskModalLeftPanelProps> = ({
               <input
                 value={userName}
                 disabled
-                className="w-full rounded border border-gray-600 bg-gray-100 p-2 text-black"
+                className="w-full rounded border border-blackbg-gray-100 p-2 text-black"
               />
             )
           ) : (
@@ -212,7 +212,7 @@ const TaskModalLeftPanel: React.FC<TaskModalLeftPanelProps> = ({
               {...register("assignee")}
               disabled
               placeholder="Chưa set"
-              className="w-full rounded border border-gray-600 bg-gray-100 p-2 text-black"
+              className="w-full rounded border border-blackbg-gray-100 p-2 text-black"
             />
           )}
         </div>
@@ -234,7 +234,7 @@ const TaskModalLeftPanel: React.FC<TaskModalLeftPanelProps> = ({
                 ? (!isTaken || task?.status === "completed")
                 : false
             }
-            className="mt-1 w-full rounded border border-gray-600 bg-white p-2 text-black"
+            className="mt-1 w-full rounded border border-blackbg-white p-2 text-black"
           />
           {errors.predictedHours && (
             <p className="text-red-500 text-sm">{errors.predictedHours.message}</p>
@@ -259,7 +259,7 @@ const TaskModalLeftPanel: React.FC<TaskModalLeftPanelProps> = ({
                 ? (!isTaken || task?.status === "completed")
                 : false
             }
-            className="mt-1 w-full rounded border border-gray-600 bg-white p-2 text-black"
+            className="mt-1 w-full rounded border border-blackbg-white p-2 text-black"
           />
           {errors.startDate && (
             <p className="text-red-500 text-sm">{errors.startDate.message}</p>
@@ -281,7 +281,7 @@ const TaskModalLeftPanel: React.FC<TaskModalLeftPanelProps> = ({
                 ? (!isTaken || task?.status === "completed")
                 : false
             }
-            className="mt-1 w-full rounded border border-gray-600 bg-white p-2 text-black"
+            className="mt-1 w-full rounded border border-blackbg-white p-2 text-black"
           />
           {errors.endDate && (
             <p className="text-red-500 text-sm">{errors.endDate.message}</p>

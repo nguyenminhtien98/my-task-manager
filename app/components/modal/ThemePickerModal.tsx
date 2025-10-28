@@ -1,10 +1,10 @@
 "use client";
 
 import React from "react";
-import ModalComponent from "./ModalComponent";
-import { themeColors, ThemeColorOption } from "../utils/themeColors";
+import ModalComponent from "../common/ModalComponent";
+import { themeColors, ThemeColorOption } from "../../utils/themeColors";
 import { FaCheck } from "react-icons/fa6";
-import Button from "./common/Button";
+import Button from "../common/Button";
 
 interface ThemePickerModalProps {
   isOpen: boolean;

@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { DragEndEvent } from "@dnd-kit/core";
 
 export type TaskStatus = "list" | "doing" | "done" | "completed" | "bug";
@@ -30,6 +31,9 @@ export interface ModalProps {
   children: React.ReactNode;
   panelClassName?: string;
   onClose?: () => void;
+  showBackButton?: boolean;
+  onBack?: () => void;
+  backButtonContent?: ReactNode;
 }
 
 export interface TaskCardProps {
@@ -138,6 +142,7 @@ export interface Project {
   name: string;
   leaderId: string;
   members?: string[];
+  membersJoinedAt?: Record<string, string>;
   createdAt?: string;
 }
 

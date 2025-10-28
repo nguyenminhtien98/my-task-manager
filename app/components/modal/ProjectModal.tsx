@@ -2,13 +2,13 @@
 
 import React, { useEffect } from "react";
 import { useForm } from "react-hook-form";
-import ModalComponent from "./ModalComponent";
-import { database } from "../appwrite";
+import ModalComponent from "../common/ModalComponent";
+import { database } from "../../appwrite";
 import toast from "react-hot-toast";
 import { v4 as uuidv4 } from "uuid";
-import { useAuth } from "../context/AuthContext";
-import { useProject } from "../context/ProjectContext";
-import { Project, ProjectFormValues } from "../types/Types";
+import { useAuth } from "../../context/AuthContext";
+import { useProject } from "../../context/ProjectContext";
+import { Project, ProjectFormValues } from "../../types/Types";
 
 const ProjectModal: React.FC<{ isOpen: boolean; setIsOpen: (v: boolean) => void; onProjectCreate?: () => void; }> = ({
     isOpen,
@@ -73,10 +73,11 @@ const ProjectModal: React.FC<{ isOpen: boolean; setIsOpen: (v: boolean) => void;
         <ModalComponent isOpen={isOpen} setIsOpen={setIsOpen} title="Tạo Dự Án">
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                 <div>
-                    <label className="block text-sm font-medium">Tên dự án</label>
+                    <label className="block text-sm font-medium text-sub">Tên dự án</label>
                     <input
                         {...register("name", { required: "Tên dự án là bắt buộc" })}
-                        className="mt-1 w-full p-2 border border-gray-300 rounded"
+                        className="mt-1 w-full p-2 border border-black rounded text-black"
+                        placeholder="Nhập tên dự án"
                     />
                     {errors.name && <p className="text-red-500 text-sm">{errors.name.message}</p>}
                 </div>

@@ -6,6 +6,9 @@ import { DEFAULT_THEME_GRADIENT } from "../utils/themeColors";
 export interface User {
     id: string;
     name: string;
+    email?: string;
+    avatarUrl?: string;
+    createdAt?: string;
     role?: string; // "leader" | "user"
     themeColor?: string;
 }
@@ -56,6 +59,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const u: User = {
                 id,
                 name,
+                email: profile.email,
+                avatarUrl: profile.avatarUrl,
+                createdAt: profile.$createdAt,
                 role: profile.role,
                 themeColor: profile.themeColor || DEFAULT_THEME_GRADIENT,
             };

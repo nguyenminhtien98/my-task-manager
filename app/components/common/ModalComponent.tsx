@@ -1,6 +1,8 @@
 import { Dialog, Transition } from "@headlessui/react";
 import { Fragment } from "react";
-import { ModalProps } from "../types/Types";
+import { FiArrowLeft } from "react-icons/fi";
+import { ModalProps } from "../../types/Types";
+import Button from "./Button";
 
 const ModalComponent: React.FC<ModalProps> = ({
     isOpen,
@@ -9,7 +11,11 @@ const ModalComponent: React.FC<ModalProps> = ({
     children,
     panelClassName,
     onClose,
+    showBackButton = false,
+    onBack,
+    backButtonContent,
 }) => {
+    const shouldShowBack = showBackButton && typeof onBack === "function";
     return (
         <Transition appear show={isOpen} as={Fragment}>
             <Dialog as="div" className="relative z-[999]" onClose={() => (onClose ? onClose() : setIsOpen(false))}>
@@ -34,17 +40,28 @@ const ModalComponent: React.FC<ModalProps> = ({
                                     } transform overflow-hidden rounded-2xl bg-white p-6 text-left shadow-xl transition-all`}
                             >
                                 <div className="mb-4 flex items-center justify-between gap-4">
-                                    <Dialog.Title className="text-lg font-semibold text-gray-900">
+                                    {shouldShowBack ? (
+                                        <button
+                                            type="button"
+                                            onClick={() => onBack && onBack()}
+                                            className="cursor-pointer flex h-9 w-9 items-center justify-center rounded-full bg-black/10 text-lg text-sub hover:bg-black/20"
+                                            aria-label="Quay lại"
+                                        >
+                                            {backButtonContent ?? <FiArrowLeft />}
+                                        </button>
+                                    ) : (
+                                        <span className="h-9 w-9" />
+                                    )}
+                                    <Dialog.Title className="flex-1 text-center text-lg font-semibold text-gray-900">
                                         {title}
                                     </Dialog.Title>
-                                    <button
-                                        type="button"
+                                    <Button
                                         onClick={() => (onClose ? onClose() : setIsOpen(false))}
                                         className="flex h-9 w-9 items-center justify-center rounded-full bg-black/10 text-xl text-sub hover:bg-black/20"
                                         aria-label="Đóng"
                                     >
                                         ×
-                                    </button>
+                                    </Button>
                                 </div>
                                 {children}
                             </Dialog.Panel>

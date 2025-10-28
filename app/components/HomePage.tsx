@@ -2,15 +2,15 @@
 import React, { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import Header from "./Header";
-import LoginRegisterModal from "./LoginRegisterModal";
-import TaskModal from "./TaskModal";
+import LoginRegisterModal from "./modal/LoginRegisterModal";
+import TaskModal from "./modal/taskModal/TaskModal";
 import { Task, TaskStatus } from "../types/Types";
 import { useAuth } from "../context/AuthContext";
 import { DragEndEvent } from "@dnd-kit/core";
 import { database, subscribeToRealtime } from "../appwrite";
 import toast from "react-hot-toast";
 import { useProject } from "../context/ProjectContext";
-import ProjectModal from "./ProjectModal";
+import ProjectModal from "./modal/ProjectModal";
 import { useTheme } from "../context/ThemeContext";
 
 const Board = dynamic(() => import("./Board"), { ssr: false });

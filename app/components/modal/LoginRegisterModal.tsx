@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import ModalComponent from './ModalComponent';
+import ModalComponent from '../common/ModalComponent';
 import { useForm } from 'react-hook-form';
-import { FormUserValues } from '../types/Types';
-import { useAuth } from '../context/AuthContext';
-import { account, database } from '../appwrite';
+import { FormUserValues } from '../../types/Types';
+import { useAuth } from '../../context/AuthContext';
+import { account, database } from '../../appwrite';
 import { OAuthProvider, Query } from "appwrite";
 import toast from 'react-hot-toast';
-import { DEFAULT_THEME_GRADIENT } from '../utils/themeColors';
+import { DEFAULT_THEME_GRADIENT } from '../../utils/themeColors';
 
 const LoginRegisterModal: React.FC<{ isOpen: boolean; setIsOpen: (v: boolean) => void; onLoginSuccess: () => void; }> = ({ isOpen, setIsOpen, onLoginSuccess }) => {
 	const { login, logout, user } = useAuth();
@@ -40,15 +40,15 @@ const LoginRegisterModal: React.FC<{ isOpen: boolean; setIsOpen: (v: boolean) =>
 		setIsOpen(false);
 	}, [user, isOpen, onLoginSuccess, setIsOpen]);
 
-		const handleGoogleLogin = async () => {
-			if (typeof window === "undefined") return;
-			setIsGoogleLoading(true);
-			const origin = window.location.origin;
-			const redirectPath = window.location.pathname + window.location.search;
-			const successUrl = `${origin}/auth/callback?redirect=${encodeURIComponent(redirectPath)}`;
-			const failureUrl = `${origin}/auth/failed?redirect=${encodeURIComponent(redirectPath)}`;
-			try {
-				await account.createOAuth2Session(OAuthProvider.Google, successUrl, failureUrl);
+	const handleGoogleLogin = async () => {
+		if (typeof window === "undefined") return;
+		setIsGoogleLoading(true);
+		const origin = window.location.origin;
+		const redirectPath = window.location.pathname + window.location.search;
+		const successUrl = `${origin}/auth/callback?redirect=${encodeURIComponent(redirectPath)}`;
+		const failureUrl = `${origin}/auth/failed?redirect=${encodeURIComponent(redirectPath)}`;
+		try {
+			await account.createOAuth2Session(OAuthProvider.Google, successUrl, failureUrl);
 		} catch (error) {
 			console.error("Google login error:", error);
 			toast.error("Không mở được cửa sổ Google, thử lại sau.");
@@ -87,6 +87,7 @@ const LoginRegisterModal: React.FC<{ isOpen: boolean; setIsOpen: (v: boolean) =>
 					{
 						user_id: user.$id,
 						name: data.name,
+						email: data.email,
 						role: 'user',
 						themeColor: DEFAULT_THEME_GRADIENT,
 					}
@@ -124,7 +125,7 @@ const LoginRegisterModal: React.FC<{ isOpen: boolean; setIsOpen: (v: boolean) =>
 			<form onSubmit={handleSubmit(onSubmit)} className="mt-4 space-y-4">
 				{!isLogin && (
 					<div>
-						<label className="block text-sm font-medium">Tên</label>
+						<label className="block text-sm font-medium text-sub">Tên</label>
 						<input
 							placeholder="Nhập tên người dùng"
 							{...register('name', {
@@ -149,14 +150,14 @@ const LoginRegisterModal: React.FC<{ isOpen: boolean; setIsOpen: (v: boolean) =>
 									}
 								}
 							})}
-							className="mt-1 w-full p-2 border border-gray-300 rounded"
+							className="mt-1 w-full p-2 border border-black rounded text-black"
 
 						/>
 						{errors.name && <p className="text-red-500 text-sm">{errors.name.message}</p>}
 					</div>
 				)}
 				<div>
-					<label className="block text-sm font-medium">Email</label>
+					<label className="block text-sm font-medium text-sub">Email</label>
 					<input
 						type="email"
 						placeholder="you@example.com"
@@ -164,18 +165,18 @@ const LoginRegisterModal: React.FC<{ isOpen: boolean; setIsOpen: (v: boolean) =>
 							required: 'Email không được bỏ trống',
 							pattern: { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: 'Email không hợp lệ' },
 						})}
-						className="mt-1 w-full p-2 border border-gray-300 rounded"
+						className="mt-1 w-full p-2 border border-black rounded text-black"
 					/>
 					{errors.email && <p className="text-red-500 text-sm">{errors.email.message}</p>}
 				</div>
 				<div>
-					<label className="block text-sm font-medium">Mật khẩu</label>
+					<label className="block text-sm font-medium text-sub">Mật khẩu</label>
 					<div className="relative">
 						<input
 							placeholder="Ít nhất 6 ký tự"
 							type={showPassword ? 'text' : 'password'}
 							{...register('password', { required: 'Mật khẩu không được bỏ trống', minLength: { value: 6, message: 'Ít nhất 6 ký tự' } })}
-							className="mt-1 w-full p-2 border border-gray-300 rounded pr-10"
+							className="mt-1 w-full p-2 border border-black rounded text-black pr-10"
 						/>
 						<span onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-3 cursor-pointer">
 							{showPassword ? '🙈' : '👁️'}
@@ -185,7 +186,7 @@ const LoginRegisterModal: React.FC<{ isOpen: boolean; setIsOpen: (v: boolean) =>
 				</div>
 				{!isLogin && (
 					<div>
-						<label className="block text-sm font-medium">Nhập lại mật khẩu</label>
+						<label className="block text-sm font-medium text-sub">Nhập lại mật khẩu</label>
 						<div className="relative">
 							<input
 								placeholder="Nhập lại mật khẩu"
@@ -194,7 +195,7 @@ const LoginRegisterModal: React.FC<{ isOpen: boolean; setIsOpen: (v: boolean) =>
 									required: 'Vui lòng xác nhận mật khẩu',
 									validate: (v) => v === watch('password') || 'Không khớp mật khẩu',
 								})}
-								className="mt-1 w-full p-2 border border-gray-300 rounded pr-10"
+								className="mt-1 w-full p-2 border border-black rounded text-black pr-10"
 							/>
 							<span onClick={() => setShowConfirm(!showConfirm)} className="absolute right-3 top-3 cursor-pointer">
 								{showConfirm ? '🙈' : '👁️'}

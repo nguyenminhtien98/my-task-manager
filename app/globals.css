@@ -33,6 +33,12 @@
   }
 }
 
+input,
+textarea,
+select {
+  outline: none;
+}
+
 /* Định nghĩa theme custom-tippy */
 .tippy-box[data-theme~="custom-red"] {
   background-color: #fee2e2; /* đỏ nhạt */

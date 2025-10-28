@@ -56,6 +56,7 @@ const CallbackContent = () => {
               {
                 user_id: accountInfo.$id,
                 name: finalName,
+                email: accountInfo.email,
                 role: "user",
                 themeColor: DEFAULT_THEME_GRADIENT,
               }

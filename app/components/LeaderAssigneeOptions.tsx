@@ -34,7 +34,7 @@ const LeaderAssigneeOptions: React.FC<LeaderAssigneeOptionsProps> = ({ leaderNam
                                 setError("");
                             }}
                         />
-                        <span className="ml-1">Thêm thành viên</span>
+                        <span className="ml-1 text-black cursor-pointer">Thêm thành viên</span>
                     </label>
                     <label className="inline-flex items-center">
                         <input
@@ -44,7 +44,7 @@ const LeaderAssigneeOptions: React.FC<LeaderAssigneeOptionsProps> = ({ leaderNam
                             checked={choice === "noadd"}
                             onChange={() => setChoice("noadd")}
                         />
-                        <span className="ml-1">Không thêm</span>
+                        <span className="ml-1 text-black cursor-pointer">Không thêm</span>
                     </label>
                 </div>
             )}
@@ -57,13 +57,13 @@ const LeaderAssigneeOptions: React.FC<LeaderAssigneeOptionsProps> = ({ leaderNam
                             placeholder="Nhập tên thành viên"
                             value={newMember}
                             onChange={(e) => setNewMember(e.target.value)}
-                            className="w-[75%] p-2 border border-gray-300 rounded"
+                            className="w-[75%] p-2 border text-black border-black rounded"
                         />
                         <button
                             type="button"
                             disabled={newMember.trim() === ""}
                             onClick={handleAddClick}
-                            className="px-2 cursor-pointer py-2 bg-blue-600 text-white rounded"
+                            className="px-2 cursor-pointer py-2 bg-black text-white rounded"
                         >
                             Thêm
                         </button>
@@ -77,7 +77,7 @@ const LeaderAssigneeOptions: React.FC<LeaderAssigneeOptionsProps> = ({ leaderNam
                         type="text"
                         value={leaderName}
                         disabled
-                        className="w-full p-2 border border-gray-300 rounded bg-gray-100"
+                        className="w-full p-2 border border-black text-black rounded bg-gray-100"
                     />
                 </div>
             )}

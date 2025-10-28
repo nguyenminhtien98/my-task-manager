@@ -1,28 +1,34 @@
 "use client";
 
-import React, { type CSSProperties } from "react";
+import React, { type CSSProperties, type ReactNode } from "react";
 import Image from "next/image";
+import Tooltip from "./Tooltip";
 
 interface AvatarUserProps {
   name: string;
   avatarUrl?: string | null;
   size?: number;
   className?: string;
+  wrapperClassName?: string;
+  wrapperStyle?: CSSProperties;
   onClick?: () => void;
   title?: string;
+  style?: CSSProperties;
+  showTooltip?: boolean;
+  children?: ReactNode;
 }
 
 const COLOR_PALETTE = [
-  { background: "#1F2937", color: "#F9FAFB" }, // Gray 800 / Gray 50
-  { background: "#10B981", color: "#FFFFFF" }, // Emerald 500
-  { background: "#6366F1", color: "#FFFFFF" }, // Indigo 500
-  { background: "#EF4444", color: "#FFFFFF" }, // Red 500
-  { background: "#F97316", color: "#FFFFFF" }, // Orange 500
-  { background: "#14B8A6", color: "#FFFFFF" }, // Teal 500
-  { background: "#8B5CF6", color: "#FFFFFF" }, // Violet 500
-  { background: "#F59E0B", color: "#111827" }, // Amber 500 / Gray 900
-  { background: "#EC4899", color: "#FFFFFF" }, // Pink 500
-  { background: "#0EA5E9", color: "#FFFFFF" }, // Sky 500
+  { background: "#1F2937", color: "#F9FAFB" },
+  { background: "#10B981", color: "#FFFFFF" },
+  { background: "#6366F1", color: "#FFFFFF" },
+  { background: "#EF4444", color: "#FFFFFF" },
+  { background: "#F97316", color: "#FFFFFF" },
+  { background: "#14B8A6", color: "#FFFFFF" },
+  { background: "#8B5CF6", color: "#FFFFFF" },
+  { background: "#F59E0B", color: "#111827" },
+  { background: "#EC4899", color: "#FFFFFF" },
+  { background: "#0EA5E9", color: "#FFFFFF" },
 ];
 
 const getInitial = (name?: string) => {
@@ -46,92 +52,86 @@ const AvatarUser: React.FC<AvatarUserProps> = ({
   avatarUrl,
   size = 40,
   className,
+  wrapperClassName,
+  wrapperStyle,
   onClick,
   title,
+  style,
+  showTooltip = true,
+  children,
 }) => {
   const initial = getInitial(name);
   const palette = getPaletteForInitial(initial);
   const fontSize = Math.max(Math.round(size * 0.4), 12);
-  const commonStyle: CSSProperties = { width: size, height: size };
-  const finalTitle = title ?? name;
-  const interactiveClasses = onClick
-    ? "cursor-pointer focus:outline-none"
-    : "";
 
-  if (avatarUrl) {
+  const dimensions: CSSProperties = { width: size, height: size };
+  const elementStyle: CSSProperties = { ...dimensions, ...style };
+
+  const finalTitle = title ?? name;
+
+  const sharedClasses = [
+    "relative",
+    "inline-flex items-center justify-center",
+    "overflow-hidden rounded-full",
+    "font-semibold uppercase",
+    "cursor-pointer",
+    className,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const dynamicStyle: CSSProperties = {
+    ...elementStyle,
+    fontSize,
+    backgroundColor: avatarUrl ? undefined : palette.background,
+    color: avatarUrl ? undefined : palette.color,
+  };
+
+  const content = avatarUrl ? (
+    <Image
+      src={avatarUrl}
+      alt={name}
+      width={size}
+      height={size}
+      className="h-full w-full object-cover"
+    />
+  ) : (
+    initial
+  );
+
+  const AvatarElement = onClick ? 'button' : 'span';
+
+  const avatarNode = (
+    <AvatarElement
+      type={onClick ? 'button' : undefined}
+      onClick={onClick}
+      className={sharedClasses}
+      style={dynamicStyle}
+    >
+      {content}
+      {children}
+    </AvatarElement>
+  );
+
+  if (!showTooltip) {
     return (
-      <>
-        {onClick ? (
-          <button
-            type="button"
-            onClick={onClick}
-            title={finalTitle}
-            className={`relative overflow-hidden rounded-full ${interactiveClasses}${className ? ` ${className}` : ""
-              }`}
-            style={commonStyle}
-          >
-            <Image
-              src={avatarUrl}
-              alt={name}
-              width={size}
-              height={size}
-              className="h-full w-full rounded-full object-cover"
-            />
-          </button>
-        ) : (
-          <div
-            className={`relative overflow-hidden rounded-full${className ? ` ${className}` : ""
-              }`}
-            style={commonStyle}
-            title={finalTitle}
-          >
-            <Image
-              src={avatarUrl}
-              alt={name}
-              width={size}
-              height={size}
-              className="h-full w-full rounded-full object-cover"
-            />
-          </div>
-        )}
-      </>
+      <span
+        className={`inline-flex${wrapperClassName ? ` ${wrapperClassName}` : ""}`}
+        style={wrapperStyle}
+      >
+        {avatarNode}
+      </span>
     );
   }
 
   return (
-    <>
-      {onClick ? (
-        <button
-          type="button"
-          onClick={onClick}
-          title={finalTitle}
-          className={`flex items-center justify-center rounded-full font-semibold uppercase ${interactiveClasses}${className ? ` ${className}` : ""
-            }`}
-          style={{
-            ...commonStyle,
-            backgroundColor: palette.background,
-            color: palette.color,
-            fontSize,
-          }}
-        >
-          {initial}
-        </button>
-      ) : (
-        <div
-          className={`flex items-center justify-center rounded-full font-semibold uppercase${className ? ` ${className}` : ""
-            }`}
-          style={{
-            ...commonStyle,
-            backgroundColor: palette.background,
-            color: palette.color,
-            fontSize,
-          }}
-          title={finalTitle}
-        >
-          {initial}
-        </div>
-      )}
-    </>
+    <Tooltip
+      content={finalTitle}
+      className={wrapperClassName}
+      style={wrapperStyle}
+    >
+      {avatarNode}
+    </Tooltip>
   );
 };
 
