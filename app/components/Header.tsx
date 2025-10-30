@@ -99,7 +99,7 @@ const Header: React.FC<HeaderProps> = ({
     if (!user || !currentProject) return;
     setIsSavingTheme(true);
     try {
-      const updated = await database.updateDocument(
+      await database.updateDocument(
         String(process.env.NEXT_PUBLIC_DATABASE_ID),
         String(process.env.NEXT_PUBLIC_COLLECTION_ID_PROJECTS),
         currentProject.$id,
@@ -107,7 +107,7 @@ const Header: React.FC<HeaderProps> = ({
       );
       // Update current project in context so UI reflects new theme immediately
       setCurrentProject({
-        ...(currentProject as any),
+        ...currentProject,
         themeColor: pendingTheme,
       });
       setTheme(pendingTheme);
