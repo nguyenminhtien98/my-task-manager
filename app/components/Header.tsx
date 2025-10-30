@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { useAuth } from "../context/AuthContext";
 import { useProject } from "../context/ProjectContext";
 import { HeaderProps } from "../types/Types";
@@ -19,13 +18,14 @@ import {
   EnrichedProjectMember,
 } from "../hooks/useProjectMembers";
 import ProjectMembersModal from "./modal/projectMemberModal";
+import ProjectManagerModal from "./modal/projectModal/ProjectManagerModal";
 
 const Header: React.FC<HeaderProps> = ({
   onCreateTask,
   onLoginClick,
   onCreateProject,
 }) => {
-  const { user, logout, setUser } = useAuth();
+  const { user, logout } = useAuth();
   const { projects, currentProject, setCurrentProject, setCurrentProjectRole } =
     useProject();
   const [showMenu, setShowMenu] = useState(false);
@@ -38,7 +38,7 @@ const Header: React.FC<HeaderProps> = ({
   const [isSavingTheme, setIsSavingTheme] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const filterRef = useRef<HTMLDivElement>(null);
-  const router = useRouter();
+  const [isProjectManagerOpen, setIsProjectManagerOpen] = useState(false);
   const { setTheme, resetTheme } = useTheme();
   const { members: projectMembers, isLoading: isMembersLoading } =
     useProjectMembers();
@@ -71,11 +71,13 @@ const Header: React.FC<HeaderProps> = ({
   }, []);
 
   useEffect(() => {
-    setPendingTheme(user?.themeColor || DEFAULT_THEME_GRADIENT);
-  }, [user?.themeColor]);
+    const projectTheme = currentProject?.themeColor;
+    const fallback = DEFAULT_THEME_GRADIENT;
+    setPendingTheme(projectTheme || fallback);
+  }, [currentProject?.themeColor]);
 
   const handleOpenThemeModal = () => {
-    const current = user?.themeColor || DEFAULT_THEME_GRADIENT;
+    const current = currentProject?.themeColor || DEFAULT_THEME_GRADIENT;
     setPendingTheme(current);
     setTheme(current);
     setThemeModalOpen(true);
@@ -85,7 +87,7 @@ const Header: React.FC<HeaderProps> = ({
   const handleCloseThemeModal = () => {
     setThemeModalOpen(false);
     resetTheme();
-    setPendingTheme(user?.themeColor || DEFAULT_THEME_GRADIENT);
+    setPendingTheme(currentProject?.themeColor || DEFAULT_THEME_GRADIENT);
   };
 
   const handleSelectTheme = (gradient: string) => {
@@ -94,22 +96,26 @@ const Header: React.FC<HeaderProps> = ({
   };
 
   const handleSaveTheme = async () => {
-    if (!user) return;
+    if (!user || !currentProject) return;
     setIsSavingTheme(true);
     try {
-      await database.updateDocument(
+      const updated = await database.updateDocument(
         String(process.env.NEXT_PUBLIC_DATABASE_ID),
-        String(process.env.NEXT_PUBLIC_COLLECTION_ID_PROFILE),
-        user.id,
+        String(process.env.NEXT_PUBLIC_COLLECTION_ID_PROJECTS),
+        currentProject.$id,
         { themeColor: pendingTheme }
       );
-      const updatedUser = { ...user, themeColor: pendingTheme };
-      setUser(updatedUser);
-      toast.success("Đã cập nhật màu nền.");
+      // Update current project in context so UI reflects new theme immediately
+      setCurrentProject({
+        ...(currentProject as any),
+        themeColor: pendingTheme,
+      });
+      setTheme(pendingTheme);
+      toast.success("Đã cập nhật màu nền dự án.");
       setThemeModalOpen(false);
     } catch (error) {
       console.error("Failed to update theme color:", error);
-      toast.error("Cập nhật màu nền thất bại.");
+      toast.error("Cập nhật màu nền dự án thất bại.");
       resetTheme();
     } finally {
       setIsSavingTheme(false);
@@ -149,9 +155,9 @@ const Header: React.FC<HeaderProps> = ({
           {user && currentProject && (
             <div className="flex items-center">
               {isMembersLoading ? (
-                <span className="text-xs text-black/70">
-                  Đang tải thành viên...
-                </span>
+                <div className="flex items-center justify-center w-[34px] h-[34px]">
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                </div>
               ) : (
                 <div className="flex items-center">
                   {visibleMembers.map((member, index) => (
@@ -214,6 +220,7 @@ const Header: React.FC<HeaderProps> = ({
                           setCurrentProjectRole(
                             proj.leader.$id === user?.id ? "leader" : "user"
                           );
+                          setTheme(proj.themeColor || DEFAULT_THEME_GRADIENT);
                           setShowProjectFilter(false);
                         }}
                         className="w-full justify-start px-4 py-2 text-left text-[#111827] hover:bg-gray-200"
@@ -274,7 +281,7 @@ const Header: React.FC<HeaderProps> = ({
                   <Button
                     variant="ghost"
                     onClick={() => {
-                      router.push("/project");
+                      setIsProjectManagerOpen(true);
                       setShowMenu(false);
                     }}
                     className="w-full justify-start px-4 py-2 text-left text-[#111827]"
@@ -331,6 +338,11 @@ const Header: React.FC<HeaderProps> = ({
       <EditProfileModal
         isOpen={isEditProfileModalOpen}
         onClose={() => setIsEditProfileModalOpen(false)}
+      />
+
+      <ProjectManagerModal
+        isOpen={isProjectManagerOpen}
+        setIsOpen={setIsProjectManagerOpen}
       />
     </>
   );

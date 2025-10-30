@@ -107,7 +107,6 @@ export interface User {
   id: string;
   name: string;
   role: "leader" | "user";
-  themeColor?: string;
 }
 
 export interface AuthContextType {
@@ -115,6 +114,7 @@ export interface AuthContextType {
   login: (id: string, name: string) => Promise<void>;
   logout: () => Promise<void>;
   setUser: (user: User | null) => void;
+  isAuthHydrated?: boolean;
 }
 
 export interface LoginRegisterModalProps {
@@ -151,7 +151,6 @@ export interface Profile {
   name: string;
   email: string;
   role: "user" | "leader";
-  themeColor?: string;
   avatarUrl?: string | null;
 }
 
@@ -160,6 +159,7 @@ export interface Project {
   name: string;
   leader: Profile;
   $createdAt?: string;
+  themeColor?: string;
 }
 
 export interface ProjectContextType {
@@ -169,6 +169,9 @@ export interface ProjectContextType {
   setCurrentProjectRole: (role: "leader" | "user" | null) => void;
   projects: Project[];
   setProjects: React.Dispatch<React.SetStateAction<Project[]>>;
+  isProjectsHydrated?: boolean;
+  isTasksHydrated?: boolean;
+  setTasksHydrated?: (ready: boolean) => void;
 }
 
 export interface AssigneeDropdownProps {

@@ -48,6 +48,9 @@ const UserSearchInput: React.FC<UserSearchInputProps> = ({
         onClick={handleAddUserClick}
         disabled={isAddButtonDisabled}
         className="flex-shrink-0"
+        backgroundColor="#111827"
+        textColor="#ffffff"
+        hoverClassName="hover:bg-black"
       >
         Thêm
       </Button>

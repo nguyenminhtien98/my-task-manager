@@ -24,6 +24,8 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({
   >(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const { user } = useAuth();
+  const [isProjectsHydrated, setIsProjectsHydrated] = useState(false);
+  const [isTasksHydrated, setIsTasksHydrated] = useState(false);
 
   const setCurrentProject = (project: Project | null) => {
     setCurrentProjectState(project);
@@ -40,6 +42,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({
       setProjects([]);
       setCurrentProject(null);
       setCurrentProjectRole(null);
+      setIsProjectsHydrated(true);
       return;
     }
 
@@ -113,6 +116,8 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({
         }
       } catch (error) {
         console.error("Failed to fetch projects:", error);
+      } finally {
+        setIsProjectsHydrated(true);
       }
     };
 
@@ -128,6 +133,9 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({
         setCurrentProjectRole,
         projects,
         setProjects,
+        isProjectsHydrated,
+        isTasksHydrated,
+        setTasksHydrated: setIsTasksHydrated,
       }}
     >
       {children}

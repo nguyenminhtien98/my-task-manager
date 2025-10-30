@@ -39,7 +39,7 @@ const defaultGuideTask: Task = {
 const HomePage: React.FC = () => {
   const { user } = useAuth();
   const { theme } = useTheme();
-  const { currentProject, currentProjectRole } = useProject();
+  const { currentProject, currentProjectRole, setTasksHydrated } = useProject();
   const currentUserName = user?.name || "";
   const isLeader = currentProjectRole === "leader";
 
@@ -54,35 +54,25 @@ const HomePage: React.FC = () => {
     shouldOpenTaskAfterProjectCreation,
     setShouldOpenTaskAfterProjectCreation,
   ] = useState(false);
-  const [isInitialLoading, setIsInitialLoading] = useState<boolean>(true);
-  const [isContentLoading, setIsContentLoading] = useState<boolean>(false);
   const [hasLoaded, setHasLoaded] = useState<boolean>(false);
 
   useEffect(() => {
     if (!user) {
-      setIsContentLoading(true);
       setTimeout(() => {
         setAllTasks([defaultGuideTask]);
-        setIsContentLoading(false);
-        setIsInitialLoading(false);
         setHasLoaded(true);
+        if (setTasksHydrated) setTasksHydrated(true);
       }, 300);
       return;
     }
 
     if (!currentProject) {
       setAllTasks([defaultGuideTask]);
-      setIsContentLoading(false);
       if (!hasLoaded) {
-        setIsInitialLoading(false);
         setHasLoaded(true);
+        if (setTasksHydrated) setTasksHydrated(true);
       }
       return;
-    }
-    if (!hasLoaded) {
-      setIsInitialLoading(true);
-    } else {
-      setIsContentLoading(true);
     }
     database
       .listDocuments(
@@ -107,13 +97,11 @@ const HomePage: React.FC = () => {
       })
       .finally(() => {
         if (!hasLoaded) {
-          setIsInitialLoading(false);
           setHasLoaded(true);
-        } else {
-          setIsContentLoading(false);
+          if (setTasksHydrated) setTasksHydrated(true);
         }
       });
-  }, [user, currentProject, hasLoaded]);
+  }, [user, currentProject, hasLoaded, setTasksHydrated]);
 
   useEffect(() => {
     if (!user || !currentProject) return;
@@ -287,16 +275,7 @@ const HomePage: React.FC = () => {
     }
   };
 
-  if (isInitialLoading) {
-    return (
-      <div
-        className="fixed inset-0 flex min-h-screen items-center justify-center"
-        style={{ background: theme }}
-      >
-        <div className="w-12 h-12 border-4 border-black border-t-transparent rounded-full animate-spin"></div>
-      </div>
-    );
-  }
+  // Initial loading splash moved to AppBootstrap; render page directly here
 
   return (
     <div
@@ -320,11 +299,7 @@ const HomePage: React.FC = () => {
             setTaskDetailOpen(true);
           }}
         />
-        {isContentLoading && (
-          <div className="absolute inset-0 bg-white bg-opacity-70 flex items-center justify-center z-10">
-            <div className="w-12 h-12 border-4 border-black border-t-transparent rounded-full animate-spin"></div>
-          </div>
-        )}
+        {/* Removed inner loading overlay per requirement */}
       </div>
 
       <ProjectModal

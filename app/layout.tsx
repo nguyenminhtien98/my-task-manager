@@ -5,17 +5,18 @@ import { AuthProvider } from "./context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
 import { Toaster } from "react-hot-toast";
 import { ProjectProvider } from "./context/ProjectContext";
+import AppBootstrap from "./AppBootstrap";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
-  preload: true
+  preload: true,
 });
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
-  preload: true
+  preload: true,
 });
 
 export const metadata: Metadata = {
@@ -34,12 +35,14 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <AuthProvider>
-          <ThemeProvider>
-            <ProjectProvider>
-              <Toaster position="top-right" />
-              {children}
-            </ProjectProvider>
-          </ThemeProvider>
+          <ProjectProvider>
+            <ThemeProvider>
+              <AppBootstrap>
+                <Toaster position="top-right" />
+                {children}
+              </AppBootstrap>
+            </ThemeProvider>
+          </ProjectProvider>
         </AuthProvider>
       </body>
     </html>

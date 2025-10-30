@@ -58,7 +58,7 @@ const ProjectMembersModal: React.FC<ProjectMembersModalProps> = ({
 
   useEffect(() => {
     if (!isOpen) {
-      setView("list");
+      // Modal đóng: không cần đổi view để tránh nháy, chỉ reset dữ liệu nội bộ
       setActiveMember(null);
       setStats(defaultStats);
       setIsProcessing(false);
@@ -116,13 +116,17 @@ const ProjectMembersModal: React.FC<ProjectMembersModalProps> = ({
       setStats((prev) => ({ ...prev, loading: true, error: undefined }));
 
       try {
-        const assigneeName = activeMember.name.trim();
+        const assigneeId = activeMember.$id?.trim();
+        if (!assigneeId) {
+          setStats({ total: 0, done: 0, loading: false });
+          return;
+        }
         const res = await database.listDocuments(
           String(databaseId),
           String(tasksCollectionId),
           [
             Query.equal("projectId", projectId),
-            Query.equal("assignee", assigneeName),
+            Query.equal("assignee", assigneeId),
             Query.limit(200),
           ]
         );

@@ -8,7 +8,7 @@ import React, {
   useState,
   ReactNode,
 } from "react";
-import { useAuth } from "./AuthContext";
+import { useProject } from "./ProjectContext";
 import { DEFAULT_THEME_GRADIENT } from "../utils/themeColors";
 
 interface ThemeContextType {
@@ -19,8 +19,10 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
-export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const { user } = useAuth();
+export const ThemeProvider: React.FC<{ children: ReactNode }> = ({
+  children,
+}) => {
+  const { currentProject } = useProject();
   const [theme, setThemeState] = useState<string>(DEFAULT_THEME_GRADIENT);
 
   const applyTheme = useCallback((gradient: string) => {
@@ -28,16 +30,12 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   }, []);
 
   const resetTheme = useCallback(() => {
-    applyTheme(user?.themeColor || DEFAULT_THEME_GRADIENT);
-  }, [applyTheme, user?.themeColor]);
+    applyTheme(currentProject?.themeColor || DEFAULT_THEME_GRADIENT);
+  }, [applyTheme, currentProject?.themeColor]);
 
   useEffect(() => {
-    if (user?.themeColor) {
-      applyTheme(user.themeColor);
-    } else {
-      applyTheme(DEFAULT_THEME_GRADIENT);
-    }
-  }, [applyTheme, user?.themeColor]);
+    applyTheme(currentProject?.themeColor || DEFAULT_THEME_GRADIENT);
+  }, [applyTheme, currentProject?.themeColor]);
 
   const value: ThemeContextType = {
     theme,
@@ -45,7 +43,9 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     resetTheme,
   };
 
-  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
+  return (
+    <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
+  );
 };
 
 export const useTheme = () => {

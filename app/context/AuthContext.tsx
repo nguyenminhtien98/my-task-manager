@@ -8,7 +8,6 @@ import React, {
   useEffect,
 } from "react";
 import { account, database } from "../appwrite";
-import { DEFAULT_THEME_GRADIENT } from "../utils/themeColors";
 
 export interface User {
   id: string;
@@ -17,7 +16,6 @@ export interface User {
   avatarUrl?: string;
   createdAt?: string;
   role?: string; // "leader" | "user"
-  themeColor?: string;
 }
 
 export interface AuthContextType {
@@ -25,6 +23,7 @@ export interface AuthContextType {
   login: (id: string, name: string) => Promise<void>;
   logout: () => Promise<void>;
   setUser: (user: User | null) => void;
+  isAuthHydrated: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -38,14 +37,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
     if (!stored) return null;
     try {
       const parsed = JSON.parse(stored) as User;
-      return {
-        ...parsed,
-        themeColor: parsed.themeColor || DEFAULT_THEME_GRADIENT,
-      };
+      return parsed;
     } catch {
       return null;
     }
   });
+  const [isAuthHydrated, setIsAuthHydrated] = useState(false);
 
   const persistUser = useCallback((value: User | null) => {
     setUserState(value);
@@ -72,7 +69,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
           avatarUrl: profile.avatarUrl,
           createdAt: profile.$createdAt,
           role: profile.role,
-          themeColor: profile.themeColor || DEFAULT_THEME_GRADIENT,
         };
         persistUser(u);
       } catch (err) {
@@ -111,6 +107,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
         if (!cancelled) {
           persistUser(null);
         }
+      } finally {
+        if (!cancelled) setIsAuthHydrated(true);
       }
     };
 
@@ -121,7 +119,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
   }, [login, persistUser, user]);
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, setUser: persistUser }}>
+    <AuthContext.Provider
+      value={{ user, login, logout, setUser: persistUser, isAuthHydrated }}
+    >
       {children}
     </AuthContext.Provider>
   );

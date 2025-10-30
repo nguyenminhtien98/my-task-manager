@@ -122,7 +122,7 @@ const ProjectModal: React.FC<{
             className={`px-4 py-2 rounded text-white ${
               !projectName.trim()
                 ? "bg-gray-400 cursor-not-allowed"
-                : "bg-blue-600 hover:bg-blue-700 cursor-pointer"
+                : "bg-black hover:bg-black/90 cursor-pointer"
             }`}
           >
             Tạo

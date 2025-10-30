@@ -46,7 +46,7 @@ const EditProfileView: React.FC<EditProfileViewProps> = ({
   };
 
   const handleNameEditKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
+    if (e.key === "Enter") {
       e.preventDefault();
       setIsEditingName(false);
     }
@@ -61,6 +61,7 @@ const EditProfileView: React.FC<EditProfileViewProps> = ({
             name={user.name}
             avatarUrl={tempAvatarUrl || user.avatarUrl}
             size={90}
+            showTooltip={false}
           >
             <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/60 backdrop-blur-sm opacity-0 transition-opacity group-hover:opacity-100">
               <span className="text-sm font-semibold text-white">Thay đổi</span>
@@ -86,7 +87,7 @@ const EditProfileView: React.FC<EditProfileViewProps> = ({
               {editedName}
             </span>
           )}
-          
+
           {isEditingName ? (
             <button
               type="button"
@@ -105,7 +106,9 @@ const EditProfileView: React.FC<EditProfileViewProps> = ({
             </button>
           )}
         </div>
-        <div className="text-base text-gray-800">{user.email || "(Chưa có email)"}</div>
+        <div className="text-base text-gray-800">
+          {user.email || "(Chưa có email)"}
+        </div>
         <div className="text-sm text-gray-500">
           Ngày tạo: {formatVietnameseDateTime(user.createdAt)}
         </div>
@@ -125,7 +128,9 @@ const EditProfileView: React.FC<EditProfileViewProps> = ({
           variant="solid"
           className="bg-black text-white"
           onClick={handleSaveClick}
-          disabled={isSaving || (user.name === editedName && !pendingAvatarFile)}
+          disabled={
+            isSaving || (user.name === editedName && !pendingAvatarFile)
+          }
         >
           {isSaving ? "Đang lưu..." : "Lưu"}
         </Button>
