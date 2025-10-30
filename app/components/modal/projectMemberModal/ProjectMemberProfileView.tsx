@@ -4,6 +4,7 @@ import React from "react";
 import AvatarUser from "../../common/AvatarUser";
 import { ProjectMemberProfile } from "../../../hooks/useProjectMembers";
 import Button from "../../common/Button";
+import { formatVietnameseDateTime } from "@/app/utils/date";
 
 interface TaskStats {
   total: number;
@@ -19,17 +20,6 @@ interface ProjectMemberProfileViewProps {
   onRemove: () => void;
   isRemoving: boolean;
 }
-
-const formatDate = (value?: string) => {
-  if (!value) return "Không xác định";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Không xác định";
-  return date.toLocaleDateString("vi-VN", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
-};
 
 const ProjectMemberProfileView: React.FC<ProjectMemberProfileViewProps> = ({
   member,
@@ -52,7 +42,8 @@ const ProjectMemberProfileView: React.FC<ProjectMemberProfileViewProps> = ({
         <div className="space-y-2">
           <p className="text-base font-semibold text-gray-900">{member.name}</p>
           <p className="text-sm text-gray-600">
-            Tham gia dự án: {formatDate(member.joinedAt)}
+            Tham gia dự án:{" "}
+            {formatVietnameseDateTime(member.joinedAt, { hideTime: true })}
           </p>
         </div>
       </div>

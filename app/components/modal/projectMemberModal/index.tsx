@@ -9,14 +9,14 @@ import ProjectMemberListView from "./ProjectMemberListView";
 import ProjectMemberProfileView from "./ProjectMemberProfileView";
 import {
   useProjectMembers,
-  type ProjectMemberProfile,
+  type EnrichedProjectMember,
 } from "../../../hooks/useProjectMembers";
 import { useProject } from "../../../context/ProjectContext";
 
 interface ProjectMembersModalProps {
   isOpen: boolean;
   onClose: () => void;
-  initialMember?: ProjectMemberProfile | null;
+  initialMember?: EnrichedProjectMember | null;
 }
 
 interface TaskStats {
@@ -43,26 +43,17 @@ const ProjectMembersModal: React.FC<ProjectMembersModalProps> = ({
   } = useProjectMembers();
 
   const [view, setView] = useState<"list" | "profile">("list");
-  const [activeMember, setActiveMember] = useState<ProjectMemberProfile | null>(null);
+  const [activeMember, setActiveMember] =
+    useState<EnrichedProjectMember | null>(null);
   const [stats, setStats] = useState<TaskStats>(defaultStats);
-  const [isRemoving, setIsRemoving] = useState(false);
-  const [pendingMemberName, setPendingMemberName] = useState("");
-  const [isAddingMember, setIsAddingMember] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
 
-  const projectId = currentProject?.id;
+  const projectId = currentProject?.$id;
   const isLeader = currentProjectRole === "leader";
 
-  const combinedMembers = useMemo(() => {
-    if (!leader) return allMembers;
-    return [
-      leader,
-      ...allMembers.filter((member) => member.id !== leader.id && !member.isLeader),
-    ];
-  }, [allMembers, leader]);
-
   const nonLeaderMembers = useMemo(
-    () => combinedMembers.filter((member) => !member.isLeader),
-    [combinedMembers]
+    () => allMembers.filter((member) => !member.isLeader),
+    [allMembers]
   );
 
   useEffect(() => {
@@ -70,9 +61,7 @@ const ProjectMembersModal: React.FC<ProjectMembersModalProps> = ({
       setView("list");
       setActiveMember(null);
       setStats(defaultStats);
-      setIsRemoving(false);
-      setPendingMemberName("");
-      setIsAddingMember(false);
+      setIsProcessing(false);
       return;
     }
 
@@ -87,15 +76,7 @@ const ProjectMembersModal: React.FC<ProjectMembersModalProps> = ({
 
   useEffect(() => {
     if (!activeMember) return;
-    const match = combinedMembers.find((member) => {
-      if (member.id && activeMember.id) {
-        return member.id === activeMember.id;
-      }
-      return (
-        member.name.trim().toLowerCase() ===
-        activeMember.name.trim().toLowerCase()
-      );
-    });
+    const match = allMembers.find((member) => member.$id === activeMember.$id);
 
     if (!match) {
       setActiveMember(null);
@@ -106,7 +87,7 @@ const ProjectMembersModal: React.FC<ProjectMembersModalProps> = ({
     if (match !== activeMember) {
       setActiveMember(match);
     }
-  }, [combinedMembers, activeMember]);
+  }, [allMembers, activeMember]);
 
   useEffect(() => {
     let cancelled = false;
@@ -152,7 +133,9 @@ const ProjectMembersModal: React.FC<ProjectMembersModalProps> = ({
         const total = documents.length;
         const done = documents.filter((doc) => {
           const status =
-            typeof doc.status === "string" ? doc.status.trim().toLowerCase() : "";
+            typeof doc.status === "string"
+              ? doc.status.trim().toLowerCase()
+              : "";
           return status === "completed";
         }).length;
 
@@ -176,7 +159,7 @@ const ProjectMembersModal: React.FC<ProjectMembersModalProps> = ({
     };
   }, [isOpen, view, activeMember, projectId]);
 
-  const handleMemberSelect = (member: ProjectMemberProfile) => {
+  const handleMemberSelect = (member: EnrichedProjectMember) => {
     setActiveMember(member);
     setView("profile");
   };
@@ -185,33 +168,29 @@ const ProjectMembersModal: React.FC<ProjectMembersModalProps> = ({
     setView("list");
     setActiveMember(null);
     setStats(defaultStats);
-    setIsRemoving(false);
+    setIsProcessing(false);
   };
 
-  const handleAddMember = async () => {
-    const trimmed = pendingMemberName.trim();
-    if (!trimmed) {
-      toast.error("Vui lòng nhập tên thành viên");
-      return;
-    }
-
-    setIsAddingMember(true);
-    const result = await addMember(trimmed);
-    setIsAddingMember(false);
+  const handleAddMember = async (userId: string) => {
+    setIsProcessing(true);
+    const result = await addMember(userId);
+    setIsProcessing(false);
 
     if (result.success) {
       toast.success(result.message);
-      setPendingMemberName("");
     } else {
       toast.error(result.message);
     }
   };
 
   const handleRemove = async () => {
-    if (!activeMember) return;
-    setIsRemoving(true);
-    const result = await removeMember(activeMember.name);
-    setIsRemoving(false);
+    if (!activeMember || !activeMember.membershipId) {
+      toast.error("Không thể xóa thành viên này.");
+      return;
+    }
+    setIsProcessing(true);
+    const result = await removeMember(activeMember.membershipId);
+    setIsProcessing(false);
     if (result.success) {
       toast.success(result.message);
       handleBack();
@@ -238,10 +217,7 @@ const ProjectMembersModal: React.FC<ProjectMembersModalProps> = ({
           members={nonLeaderMembers}
           isLeader={isLeader}
           isMembersLoading={isMembersLoading}
-          pendingMemberName={pendingMemberName}
-          onPendingMemberNameChange={setPendingMemberName}
           onAddMember={handleAddMember}
-          isAddingMember={isAddingMember}
           onMemberClick={handleMemberSelect}
         />
       ) : activeMember ? (
@@ -250,10 +226,12 @@ const ProjectMembersModal: React.FC<ProjectMembersModalProps> = ({
           stats={stats}
           canRemove={Boolean(isLeader && !activeMember.isLeader)}
           onRemove={handleRemove}
-          isRemoving={isRemoving}
+          isRemoving={isProcessing}
         />
       ) : (
-        <div className="text-sm text-gray-600">Không tìm thấy thông tin thành viên.</div>
+        <div className="text-sm text-gray-600">
+          Không tìm thấy thông tin thành viên.
+        </div>
       )}
     </ModalComponent>
   );

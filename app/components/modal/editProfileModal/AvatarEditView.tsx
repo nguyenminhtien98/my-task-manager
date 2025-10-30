@@ -1,7 +1,11 @@
 "use client";
 
 import React, { useState, useRef } from "react";
-import ReactCrop, { type Crop, centerCrop, makeAspectCrop } from "react-image-crop";
+import ReactCrop, {
+  type Crop,
+  centerCrop,
+  makeAspectCrop,
+} from "react-image-crop";
 import "react-image-crop/dist/ReactCrop.css";
 
 import Button from "../../common/Button";
@@ -15,7 +19,6 @@ interface AvatarEditViewProps {
   isSaving?: boolean;
 }
 
-// Function to generate a centered, aspect-ratio crop
 function centerAspectCrop(
   mediaWidth: number,
   mediaHeight: number,

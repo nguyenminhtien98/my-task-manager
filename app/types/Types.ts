@@ -5,18 +5,26 @@ export type TaskStatus = "list" | "doing" | "done" | "completed" | "bug";
 export type IssueType = "Bug" | "Improvement" | "Feature";
 export type Priority = "High" | "Medium" | "Low";
 
+export interface BasicProfile {
+  $id: string;
+  name: string;
+  email?: string;
+  avatarUrl?: string | null;
+  [key: string]: unknown;
+}
+
 export interface Task {
   seq: number;
   id: string;
   title: string;
   description: string;
-  assignee?: string;
+  assignee?: string | BasicProfile;
   status: TaskStatus;
   order: number;
-  startDate?: string | null; // dạng "yyyy-mm-dd"
-  endDate?: string | null; // dạng "yyyy-mm-dd"
+  startDate?: string | null;
+  endDate?: string | null;
   predictedHours?: number;
-  completedBy?: string; //tên leader đã kéo task sang cột "completed"
+  completedBy?: string;
   issueType: IssueType;
   priority: Priority;
   projectId?: string;
@@ -67,7 +75,7 @@ export interface CreateTaskModalProps {
 export interface CreateTaskFormValues {
   title: string;
   description: string;
-  assignee: string;
+  assignee: string | BasicProfile;
   startDate: string;
   endDate: string;
   predictedHours: number;
@@ -88,7 +96,7 @@ export interface TaskDetailModalProps {
 export interface TaskDetailFormValues {
   title: string;
   description: string;
-  assignee: string;
+  assignee: string | BasicProfile;
   startDate: string;
   endDate: string;
   predictedHours: number;
@@ -137,13 +145,21 @@ export interface HeaderProps {
   onCreateProject?: () => void;
 }
 
-export interface Project {
-  id: string;
+export interface Profile {
+  $id: string;
+  user_id: string;
   name: string;
-  leaderId: string;
-  members?: string[];
-  membersJoinedAt?: Record<string, string>;
-  createdAt?: string;
+  email: string;
+  role: "user" | "leader";
+  themeColor?: string;
+  avatarUrl?: string | null;
+}
+
+export interface Project {
+  $id: string;
+  name: string;
+  leader: Profile;
+  $createdAt?: string;
 }
 
 export interface ProjectContextType {
@@ -177,6 +193,7 @@ export interface LeaderAssigneeOptionsProps {
 
 export interface ProjectFormValues {
   name: string;
+  leader: string;
 }
 
 export interface TaskMedia {

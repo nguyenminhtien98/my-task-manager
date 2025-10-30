@@ -2,19 +2,16 @@
 
 import React from "react";
 import AvatarUser from "../../common/AvatarUser";
-import Button from "../../common/Button";
-import { ProjectMemberProfile } from "../../../hooks/useProjectMembers";
+import { EnrichedProjectMember } from "../../../hooks/useProjectMembers";
+import UserSearchInput from "./UserSearchInput";
 
 interface ProjectMemberListViewProps {
-  leader: ProjectMemberProfile | null;
-  members: ProjectMemberProfile[];
+  leader: EnrichedProjectMember | null;
+  members: EnrichedProjectMember[];
   isLeader: boolean;
   isMembersLoading: boolean;
-  pendingMemberName: string;
-  onPendingMemberNameChange: (value: string) => void;
-  onAddMember: () => void;
-  isAddingMember: boolean;
-  onMemberClick: (member: ProjectMemberProfile) => void;
+  onAddMember: (userId: string) => Promise<void>;
+  onMemberClick: (member: EnrichedProjectMember) => void;
 }
 
 const ProjectMemberListView: React.FC<ProjectMemberListViewProps> = ({
@@ -22,46 +19,32 @@ const ProjectMemberListView: React.FC<ProjectMemberListViewProps> = ({
   members,
   isLeader,
   isMembersLoading,
-  pendingMemberName,
-  onPendingMemberNameChange,
   onAddMember,
-  isAddingMember,
   onMemberClick,
 }) => {
-  const handleSubmit = () => {
-    onAddMember();
-  };
+  const existingMemberIds = React.useMemo(
+    () => members.map((m) => m.$id),
+    [members]
+  );
 
   return (
     <div className="space-y-5">
-      <div className="space-y-2">
-        <label className="text-sm font-medium text-gray-700">Thêm thành viên</label>
-        <div className="flex items-center gap-2">
-          <input
-            type="text"
-            value={pendingMemberName}
-            onChange={(event) => onPendingMemberNameChange(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                handleSubmit();
-              }
-            }}
-            placeholder="Nhập tên thành viên"
-            className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 placeholder:text-gray-400 focus:border-black focus:outline-none focus:ring-1 focus:ring-black"
+      {isLeader && (
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-gray-700">
+            Thêm thành viên
+          </label>
+          <UserSearchInput
+            onAddMember={onAddMember}
+            existingMemberIds={existingMemberIds}
           />
-          <Button
-            onClick={handleSubmit}
-            disabled={isAddingMember || pendingMemberName.trim().length === 0}
-            className="rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-black/80 disabled:cursor-not-allowed disabled:bg-black/50"
-          >
-            {isAddingMember ? "Đang thêm..." : "Thêm"}
-          </Button>
         </div>
-      </div>
+      )}
 
       <div className="space-y-2">
-        <label className="text-sm font-medium text-gray-700">Thành viên leader của dự án</label>
+        <label className="text-sm font-medium text-gray-700">
+          Thành viên leader của dự án
+        </label>
         <div className="flex items-center gap-2">
           {leader ? (
             <button
@@ -84,7 +67,9 @@ const ProjectMemberListView: React.FC<ProjectMemberListViewProps> = ({
       </div>
 
       <div className="space-y-2">
-        <label className="text-sm font-medium text-gray-700">Thành viên của dự án</label>
+        <label className="text-sm font-medium text-gray-700">
+          Thành viên của dự án
+        </label>
         {isMembersLoading ? (
           <div className="rounded border border-dashed border-gray-300 px-3 py-3 text-sm text-gray-500">
             Đang tải thành viên...
@@ -93,7 +78,7 @@ const ProjectMemberListView: React.FC<ProjectMemberListViewProps> = ({
           <div className="flex flex-wrap gap-3">
             {members.map((member, index) => (
               <button
-                key={member.id || `${member.name}-${index}`}
+                key={member.$id || `${member.name}-${index}`}
                 type="button"
                 onClick={() => onMemberClick(member)}
                 className="inline-flex focus:outline-none"

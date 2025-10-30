@@ -7,20 +7,38 @@ import MediaPreviewModal from "../../common/MediaPreviewModal";
 import CommentSection from "../../comments/CommentSection";
 import { TaskMedia } from "../../../types/Types";
 import { detectMediaTypeFromUrl } from "../../../utils/media";
+import { useAuth } from "../../../context/AuthContext";
+import { useProject } from "../../../context/ProjectContext";
 
 interface TaskDetailRightPanelProps {
   media: TaskMedia[];
   className?: string;
   taskId?: string;
+  assignee?: string | { $id: string; name: string };
 }
 
-const TaskDetailRightPanel: React.FC<TaskDetailRightPanelProps> = ({ media, className, taskId }) => {
+const TaskDetailRightPanel: React.FC<TaskDetailRightPanelProps> = ({
+  media,
+  className,
+  taskId,
+  assignee,
+}) => {
   const [previewMedia, setPreviewMedia] = useState<TaskMedia | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [isAttachmentListOpen, setIsAttachmentListOpen] = useState(false);
+  const { user } = useAuth();
+  const { currentProject } = useProject();
+  const leaderId = currentProject?.leader?.$id;
+  const canComment =
+    user &&
+    (user.id === (typeof assignee === "object" ? assignee?.$id : assignee) ||
+      user.id === leaderId);
 
   const primaryMedia = media[0];
-  const extraMedia = useMemo(() => (media.length > 1 ? media.slice(1) : []), [media]);
+  const extraMedia = useMemo(
+    () => (media.length > 1 ? media.slice(1) : []),
+    [media]
+  );
 
   const openPreview = (item: TaskMedia) => {
     setPreviewMedia({
@@ -66,10 +84,14 @@ const TaskDetailRightPanel: React.FC<TaskDetailRightPanelProps> = ({ media, clas
 
   return (
     <div
-      className={`flex h-full flex-col overflow-hidden rounded-lg border bg-black/60 text-white ${className ?? ""}`}
+      className={`flex h-full flex-col overflow-hidden rounded-lg border bg-black/60 text-white ${
+        className ?? ""
+      }`}
     >
       <div className="flex flex-1 flex-col overflow-y-auto no-scrollbar">
-        {primaryMedia && <div className="pb-2">{renderTaskAttachment(primaryMedia)}</div>}
+        {primaryMedia && (
+          <div className="pb-2">{renderTaskAttachment(primaryMedia)}</div>
+        )}
 
         {primaryMedia && extraMedia.length > 0 && (
           <div className="space-y-2 px-4 pb-4">
@@ -83,7 +105,8 @@ const TaskDetailRightPanel: React.FC<TaskDetailRightPanelProps> = ({ media, clas
             {isAttachmentListOpen && (
               <div className="flex flex-col gap-1 pt-1">
                 {extraMedia.map((item) => {
-                  const resolvedType = item.type ?? detectMediaTypeFromUrl(item.url);
+                  const resolvedType =
+                    item.type ?? detectMediaTypeFromUrl(item.url);
                   return (
                     <button
                       key={item.url}
@@ -94,7 +117,10 @@ const TaskDetailRightPanel: React.FC<TaskDetailRightPanelProps> = ({ media, clas
                       <div className="relative flex h-13 items-center justify-center overflow-hidden rounded bg-gray-800">
                         {resolvedType === "video" ? (
                           <>
-                            <video src={item.url} className="h-full w-full object-cover" />
+                            <video
+                              src={item.url}
+                              className="h-full w-full object-cover"
+                            />
                             <span className="absolute inset-0 flex items-center justify-center bg-black/30 text-white">
                               <FiPlay size={22} />
                             </span>
@@ -122,13 +148,19 @@ const TaskDetailRightPanel: React.FC<TaskDetailRightPanelProps> = ({ media, clas
         )}
 
         {!primaryMedia && (
-          <div className="px-4 py-2 text-sm font-semibold text-white">Nhận xét</div>
+          <div className="px-4 py-2 text-sm font-semibold text-white">
+            Nhận xét
+          </div>
         )}
 
-        <CommentSection taskId={taskId} />
+        {canComment && <CommentSection taskId={taskId} />}
       </div>
 
-      <MediaPreviewModal isOpen={isPreviewOpen} onClose={closePreview} media={previewMedia} />
+      <MediaPreviewModal
+        isOpen={isPreviewOpen}
+        onClose={closePreview}
+        media={previewMedia}
+      />
     </div>
   );
 };

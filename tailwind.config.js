@@ -12,8 +12,8 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        primary: "#000000",  // Bỏ DEFAULT nếu chỉ có 1 màu
-        sub: "#4b5563",      // Bỏ DEFAULT nếu chỉ có 1 màu
+        primary: "#000000",
+        sub: "#4b5563",
       },
       fontFamily: {
         mono: ["Menlo", "Monaco", "Courier New", "monospace"],
