@@ -1,6 +1,6 @@
 "use client";
 
-export type MediaType = "image" | "video" | "unknown";
+export type MediaType = "image" | "video" | "file";
 
 const IMAGE_EXTENSIONS = ["jpg", "jpeg", "png", "gif", "bmp", "webp", "svg", "heic", "heif"];
 const VIDEO_EXTENSIONS = [
@@ -20,26 +20,26 @@ export const detectMediaTypeFromUrl = (url: string): MediaType => {
     const parsed = new URL(url);
     const pathname = parsed.pathname || "";
     const extMatch = pathname.split(".").pop();
-    if (!extMatch) return "unknown";
+    if (!extMatch) return "file";
     const ext = extMatch.toLowerCase();
     if (IMAGE_EXTENSIONS.includes(ext)) return "image";
     if (VIDEO_EXTENSIONS.includes(ext)) return "video";
-    return "unknown";
+    return "file";
   } catch {
     const extMatch = url.split(".").pop();
-    if (!extMatch) return "unknown";
+    if (!extMatch) return "file";
     const ext = extMatch.toLowerCase();
     if (IMAGE_EXTENSIONS.includes(ext)) return "image";
     if (VIDEO_EXTENSIONS.includes(ext)) return "video";
-    return "unknown";
+    return "file";
   }
 };
 
 export const detectMediaTypeFromMime = (mime?: string | null): MediaType => {
-  if (!mime) return "unknown";
+  if (!mime) return "file";
   if (mime.startsWith("image/")) return "image";
   if (mime.startsWith("video/")) return "video";
-  return "unknown";
+  return "file";
 };
 
 export const extractMediaNameFromUrl = (url: string, fallback = "Tệp đính kèm"): string => {

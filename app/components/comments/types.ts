@@ -1,6 +1,6 @@
 "use client";
 
-import { TaskMedia } from "../../types/Types";
+import { TaskAttachment } from "../../types/Types";
 
 export interface CommentAttachment {
   url: string;
@@ -36,6 +36,7 @@ export interface CommentFetcherResult {
 
 export interface CommentSectionProps {
   taskId?: string;
+  canComment?: boolean;
 }
 
-export type { TaskMedia };
+export type { TaskAttachment };

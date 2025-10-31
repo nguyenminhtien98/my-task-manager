@@ -7,7 +7,7 @@ import {
   TaskDetailFormValues,
   Task,
   TaskModalProps,
-  TaskMedia,
+  TaskAttachment,
 } from "../../../types/Types";
 import { useAuth } from "../../../context/AuthContext";
 import { useProject } from "../../../context/ProjectContext";
@@ -28,11 +28,11 @@ function formatDateForInput(dateString?: string): string {
   return dateString.split("T")[0];
 }
 
-const normalizeTaskMedia = (
-  mediaList: (TaskMedia | string | null | undefined)[] = []
-): TaskMedia[] => {
-  return mediaList
-    .filter((item): item is TaskMedia | string => Boolean(item))
+const normalizeAttachments = (
+  attachmentList: (TaskAttachment | string | null | undefined)[] = []
+): TaskAttachment[] =>
+  attachmentList
+    .filter((item): item is TaskAttachment | string => Boolean(item))
     .map((item) => {
       if (typeof item === "string") {
         return {
@@ -42,14 +42,17 @@ const normalizeTaskMedia = (
           createdAt: new Date().toISOString(),
         };
       }
+      const resolvedType =
+        item.type === "image" || item.type === "video" || item.type === "file"
+          ? item.type
+          : detectMediaTypeFromUrl(item.url);
       return {
         url: item.url,
         name: item.name ?? extractMediaNameFromUrl(item.url),
-        type: item.type ?? detectMediaTypeFromUrl(item.url),
+        type: resolvedType,
         createdAt: item.createdAt ?? new Date().toISOString(),
       };
     });
-};
 
 const getAssigneeId = (a: string | { $id: string; name: string }) =>
   typeof a === "string" ? a : a?.$id || "";
@@ -68,6 +71,10 @@ const TaskModal: React.FC<TaskModalProps> = ({
   const currentUserName = user?.name || "";
   const isLeader = currentProjectRole === "leader";
   const [existingUsers, setExistingUsers] = useState<string[]>([]);
+  const initialAttachments = useMemo(
+    () => normalizeAttachments(task?.attachedFile ?? []),
+    [task?.attachedFile]
+  );
 
   useEffect(() => {
     if (isLeader) {
@@ -112,7 +119,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
             startDate: "",
             endDate: "",
             predictedHours: 0,
-            media: [],
+            attachments: [] as TaskAttachment[],
           }
         : {
             title: task?.title || "",
@@ -123,7 +130,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
             predictedHours: task?.predictedHours || 0,
             issueType: task?.issueType || "Feature",
             priority: task?.priority || "Medium",
-            media: task?.media || [],
+            attachments: initialAttachments,
           },
     mode: "onChange",
   });
@@ -138,14 +145,16 @@ const TaskModal: React.FC<TaskModalProps> = ({
     [selectedFiles]
   );
   useEffect(() => {
-    register("media");
+    register("attachments");
   }, [register]);
-  const watchedMedia = watch("media") as (TaskMedia | string)[] | undefined;
-  const detailMedia = useMemo(() => {
+  const watchedAttachments = watch("attachments") as
+    | TaskAttachment[]
+    | undefined;
+  const detailAttachments = useMemo(() => {
     if (mode !== "detail") return [];
-    const source = watchedMedia ?? task?.media ?? [];
-    return normalizeTaskMedia(Array.isArray(source) ? source : []);
-  }, [mode, watchedMedia, task?.media]);
+    const source = watchedAttachments ?? task?.attachedFile ?? [];
+    return normalizeAttachments(Array.isArray(source) ? source : []);
+  }, [mode, watchedAttachments, task?.attachedFile]);
   const hasAssigneeDetail = React.useMemo(() => {
     const a = task?.assignee;
     if (!a) return false;
@@ -182,12 +191,12 @@ const TaskModal: React.FC<TaskModalProps> = ({
         startDate: "",
         endDate: "",
         predictedHours: 0,
-        media: [],
+        attachments: [] as TaskAttachment[],
       });
       setSelectedFiles([]);
-      setValue("media", []);
+      setValue("attachments", []);
     } else if (task) {
-      const normalized = normalizeTaskMedia(task.media ?? []);
+      const normalized = normalizeAttachments(task.attachedFile ?? []);
       reset({
         title: task.title,
         description: task.description,
@@ -197,10 +206,10 @@ const TaskModal: React.FC<TaskModalProps> = ({
         predictedHours: task.predictedHours,
         issueType: task.issueType,
         priority: task.priority,
-        media: normalized,
+        attachments: normalized,
       });
       setSelectedFiles([]);
-      setValue("media", normalized);
+      setValue("attachments", normalized);
     }
   }, [isOpen, mode, task, reset, setValue]);
 
@@ -250,22 +259,22 @@ const TaskModal: React.FC<TaskModalProps> = ({
     setSelectedFiles((prev) => prev.filter((file) => file.name !== name));
   };
 
-  const uploadSelectedFiles = async (): Promise<TaskMedia[]> => {
+  const uploadSelectedFiles = async (): Promise<TaskAttachment[]> => {
     if (selectedFiles.length === 0) return [];
     const uploaded = await uploadFilesToCloudinary(selectedFiles);
     return uploaded.map((item) => ({
       url: item.url,
       name: item.name,
-      type: item.type === "file" ? "unknown" : item.type,
+      type: item.type,
       createdAt: new Date().toISOString(),
     }));
   };
 
   const onSubmitCreate: SubmitHandler<CreateTaskFormValues> = async (data) => {
     if (!isValid) return;
-    let mediaItems: TaskMedia[] = [];
+    let attachments: TaskAttachment[] = [];
     try {
-      mediaItems = await uploadSelectedFiles();
+      attachments = await uploadSelectedFiles();
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Upload ảnh thất bại";
@@ -287,7 +296,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
       projectId: currentProject ? currentProject.$id : "",
       projectName: currentProject ? currentProject.name : "",
       completedBy: user!.id,
-      media: mediaItems,
+      attachedFile: attachments,
     };
 
     const attributeId =
@@ -320,7 +329,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
     const payloadForAppwrite = {
       ...baseTaskFields,
       id: attributeId,
-      attachedFile: mediaItems.map((m) => m.url),
+      attachedFile: attachments.map((m) => m.url),
       media: undefined,
       ...(assigneeProfile ? { assignee: assigneeProfile.$id } : {}),
       completedBy: user!.id,
@@ -347,7 +356,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
       };
       onCreate!(newTask);
       setSelectedFiles([]);
-      setValue("media", mediaItems);
+      setValue("attachments", attachments);
       setIsOpen(false);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (e: any) {
@@ -413,13 +422,17 @@ const TaskModal: React.FC<TaskModalProps> = ({
 
   const showAttachmentSection = mode === "create";
   const showReceiveButton = showReceive && !watchedAssigneeId;
+  const submitHandler = handleSubmit((values, event) => {
+    if (mode === "create") {
+      return onSubmitCreate(values as CreateTaskFormValues, event);
+    }
+    return onSubmitDetail(values as TaskDetailFormValues, event);
+  });
 
   const leftPanel = (
     <TaskModalLeftPanel
       mode={mode}
-      handleSubmit={handleSubmit}
-      onSubmitCreate={onSubmitCreate}
-      onSubmitDetail={onSubmitDetail}
+      onSubmit={submitHandler}
       register={register}
       errors={errors}
       control={control}
@@ -463,15 +476,15 @@ const TaskModal: React.FC<TaskModalProps> = ({
     >
       {mode === "detail" && task?.id !== "guideTask" ? (
         <div className="grid h-[75vh] gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,1fr)]">
-          <div className="max-h-[75vh] overflow-y-auto pr-4 no-scrollbar">
-            {leftPanel}
-          </div>
-          <TaskDetailRightPanel
-            media={detailMedia}
-            taskId={task?.id}
-            assignee={task?.assignee}
-            className="max-h-[75vh]"
-          />
+      <div className="max-h-[75vh] overflow-y-auto pr-4 no-scrollbar">
+        {leftPanel}
+      </div>
+      <TaskDetailRightPanel
+        attachments={detailAttachments}
+        taskId={task?.id}
+        assignee={task?.assignee}
+        className="max-h-[75vh]"
+      />
         </div>
       ) : (
         leftPanel

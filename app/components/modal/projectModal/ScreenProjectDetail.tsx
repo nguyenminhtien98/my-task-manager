@@ -1,21 +1,32 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import toast from "react-hot-toast";
 import { Project, BasicProfile, Task } from "@/app/types/Types";
 import { database } from "@/app/appwrite";
 import { Query } from "appwrite";
 import { formatVietnameseDateTime } from "@/app/utils/date";
 import HoverPopover from "@/app/components/common/HoverPopover";
+import Button from "@/app/components/common/Button";
 import { useAuth } from "@/app/context/AuthContext";
+import { useProject } from "@/app/context/ProjectContext";
 
 interface ScreenProjectDetailProps {
   project: Project;
+  onDeleted?: () => void;
 }
 
 const ScreenProjectDetail: React.FC<ScreenProjectDetailProps> = ({
   project,
+  onDeleted,
 }) => {
   const { user } = useAuth();
+  const {
+    currentProject,
+    setCurrentProject,
+    setCurrentProjectRole,
+    setProjects,
+  } = useProject();
   const [members, setMembers] = useState<BasicProfile[]>([]);
   const [loading, setLoading] = useState(false);
   const [myTaskCounts, setMyTaskCounts] = useState<Record<string, number>>({});
@@ -25,6 +36,7 @@ const ScreenProjectDetail: React.FC<ScreenProjectDetailProps> = ({
   const [selectedUserCounts, setSelectedUserCounts] = useState<
     Record<string, number>
   >({});
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     const fetchMembers = async () => {
@@ -111,6 +123,106 @@ const ScreenProjectDetail: React.FC<ScreenProjectDetailProps> = ({
     fetchSelectedUserTasks();
   }, [project.$id, selectedUserForLeader]);
 
+  const handleDeleteProject = async () => {
+    if (!isLeader || isDeleting) return;
+
+    const confirmed = window.confirm(
+      "Bạn có chắc chắn muốn xóa dự án này? Hành động này không thể hoàn tác."
+    );
+    if (!confirmed) return;
+
+    const databaseId = process.env.NEXT_PUBLIC_DATABASE_ID;
+    const projectsCollectionId =
+      process.env.NEXT_PUBLIC_COLLECTION_ID_PROJECTS;
+    const membershipsCollectionId =
+      process.env.NEXT_PUBLIC_COLLECTION_ID_PROJECT_MEMBERSHIPS;
+    const tasksCollectionId =
+      process.env.NEXT_PUBLIC_COLLECTION_ID_TASKS;
+
+    if (!databaseId || !projectsCollectionId) {
+      toast.error("Thiếu cấu hình Appwrite để xóa dự án.");
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      if (membershipsCollectionId) {
+        const memberships = await database.listDocuments(
+          String(databaseId),
+          String(membershipsCollectionId),
+          [Query.equal("project", project.$id), Query.limit(200)]
+        );
+        await Promise.all(
+          memberships.documents.map((membership) =>
+            database
+              .deleteDocument(
+                String(databaseId),
+                String(membershipsCollectionId),
+                membership.$id
+              )
+              .catch((err) => {
+                console.error(
+                  "Failed to delete project membership:",
+                  err
+                );
+              })
+          )
+        );
+      }
+
+      if (tasksCollectionId) {
+        const tasks = await database.listDocuments(
+          String(databaseId),
+          String(tasksCollectionId),
+          [Query.equal("projectId", project.$id), Query.limit(200)]
+        );
+        await Promise.all(
+          tasks.documents.map((task) =>
+            database
+              .deleteDocument(
+                String(databaseId),
+                String(tasksCollectionId),
+                task.$id
+              )
+              .catch((err) => {
+                console.error("Failed to delete project task:", err);
+              })
+          )
+        );
+      }
+
+      await database.deleteDocument(
+        String(databaseId),
+        String(projectsCollectionId),
+        project.$id
+      );
+
+      setProjects((prev) => {
+        const updated = prev.filter((p) => p.$id !== project.$id);
+        if (currentProject?.$id === project.$id) {
+          const nextProject = updated[0] ?? null;
+          setCurrentProject(nextProject ?? null);
+          setCurrentProjectRole(
+            nextProject
+              ? nextProject.leader.$id === user?.id
+                ? "leader"
+                : "user"
+              : null
+          );
+        }
+        return updated;
+      });
+
+      toast.success("Đã xóa dự án.");
+      onDeleted?.();
+    } catch (error) {
+      console.error("Failed to delete project:", error);
+      toast.error("Xóa dự án thất bại.");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="space-y-2 rounded-lg bg-black/5 p-4">
@@ -133,55 +245,73 @@ const ScreenProjectDetail: React.FC<ScreenProjectDetailProps> = ({
             </div>
           </div>
           <div className="sm:col-span-2">
-            <div className="text-sm text-sub">Thành viên</div>
-            <HoverPopover
-              isOpen={isPopoverOpen}
-              onOpenChange={setIsPopoverOpen}
-              align="left"
-              trigger={
-                <button
-                  type="button"
-                  className="cursor-pointer font-medium text-blue-700 hover:underline"
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:items-start sm:gap-4">
+              <div>
+                <div className="text-sm text-sub">Thành viên</div>
+                <HoverPopover
+                  isOpen={isPopoverOpen}
+                  onOpenChange={setIsPopoverOpen}
+                  align="left"
+                  trigger={
+                    <button
+                      type="button"
+                      className="cursor-pointer font-medium text-blue-700 hover:underline"
+                    >
+                      {members.length} người
+                    </button>
+                  }
                 >
-                  {members.length} người
-                </button>
-              }
-            >
-              <div className="max-h-56 overflow-auto">
-                {loading ? (
-                  <div className="px-2 py-1 text-xs text-sub">Đang tải...</div>
-                ) : members.length === 0 ? (
-                  <div className="px-2 py-1 text-xs text-sub">
-                    Không có thành viên
+                  <div className="max-h-56 overflow-auto">
+                    {loading ? (
+                      <div className="px-2 py-1 text-xs text-sub">
+                        Đang tải...
+                      </div>
+                    ) : members.length === 0 ? (
+                      <div className="px-2 py-1 text-xs text-sub">
+                        Không có thành viên
+                      </div>
+                    ) : (
+                      <ul className="divide-y divide-black/5">
+                        {members.map((m) => (
+                          <li key={m.$id}>
+                            <button
+                              type="button"
+                              className={`${
+                                isLeader && "cursor-pointer"
+                              } w-full px-2 py-2 text-left text-sm whitespace-nowrap overflow-hidden text-ellipsis ${
+                                selectedUserForLeader?.$id === m.$id
+                                  ? "bg-gray-200 text-[#111827]"
+                                  : "hover:underline"
+                              }`}
+                              onClick={() => {
+                                if (isLeader) {
+                                  setSelectedUserForLeader(m);
+                                  setIsPopoverOpen(false);
+                                }
+                              }}
+                            >
+                              {m.name}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
-                ) : (
-                  <ul className="divide-y divide-black/5">
-                    {members.map((m) => (
-                      <li key={m.$id}>
-                        <button
-                          type="button"
-                          className={`${
-                            isLeader && "cursor-pointer"
-                          } w-full px-2 py-2 text-left text-sm whitespace-nowrap overflow-hidden text-ellipsis ${
-                            selectedUserForLeader?.$id === m.$id
-                              ? "bg-gray-200 text-[#111827]"
-                              : "hover:underline"
-                          }`}
-                          onClick={() => {
-                            if (isLeader) {
-                              setSelectedUserForLeader(m);
-                              setIsPopoverOpen(false);
-                            }
-                          }}
-                        >
-                          {m.name}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                </HoverPopover>
               </div>
-            </HoverPopover>
+              {isLeader && (
+                <div className="sm:justify-self-end">
+                  <Button
+                    className="bg-red-600 text-white font-semibold"
+                    hoverClassName="hover:bg-red-700"
+                    disabled={isDeleting}
+                    onClick={handleDeleteProject}
+                  >
+                    {isDeleting ? "Đang xóa..." : "Xóa dự án"}
+                  </Button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

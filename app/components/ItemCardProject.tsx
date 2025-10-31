@@ -16,7 +16,7 @@ const ItemCardProject: React.FC<ItemCardProjectProps> = ({ data, onClick }) => {
     <button
       type="button"
       onClick={() => onClick?.(data)}
-      className="group block w-[130px] transform rounded-lg border border-black/10 bg-transparent text-left transition-all hover:-translate-y-[2px] hover:shadow-md focus:outline-none"
+      className="group block w-[130px] transform rounded-lg border border-black/10 bg-transparent text-left transition-all hover:-translate-y-[2px] focus:outline-none"
       style={{ cursor: "pointer" }}
     >
       <div className="relative h-16 w-full overflow-hidden rounded-t-lg">

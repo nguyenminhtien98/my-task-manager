@@ -5,23 +5,24 @@ import Image from "next/image";
 import { v4 as uuidv4 } from "uuid";
 import AvatarUser from "../common/AvatarUser";
 import { formatVietnameseDateTime } from "../../utils/date";
-import { CommentAttachment, PendingAttachment, TaskComment, TaskMedia } from "./types";
+import { CommentAttachment, PendingAttachment, TaskComment, TaskAttachment } from "./types";
 import PendingAttachmentPreview from "./PendingAttachmentPreview";
 import { FiImage, FiPaperclip, FiPlay, FiX } from "react-icons/fi";
 import { useAuth } from "../../context/AuthContext";
-import { useUpdateComment } from "../../hooks/useUpdateComment";
+import type { UpdateCommentParams } from "@/app/hooks/useComment";
 
 const EDIT_EVENT_NAME = "comment-edit-start";
 
 interface CommentItemProps {
   comment: TaskComment;
-  onPreview: (media: TaskMedia) => void;
-  onUpdated: (comment: TaskComment) => void;
+  onPreview: (media: TaskAttachment) => void;
+  onUpdateComment: (params: UpdateCommentParams) => Promise<TaskComment | null>;
+  onDeleteComment: (commentId: string) => Promise<boolean>;
 }
 
-const renderAttachment = (attachment: CommentAttachment, onPreview: (media: TaskMedia) => void) => {
+const renderAttachment = (attachment: CommentAttachment, onPreview: (media: TaskAttachment) => void) => {
   if (attachment.type === "image" || attachment.type === "video") {
-    const mediaItem: TaskMedia = {
+    const mediaItem: TaskAttachment = {
       url: attachment.url,
       name: attachment.name,
       type: attachment.type,
@@ -68,7 +69,12 @@ const renderAttachment = (attachment: CommentAttachment, onPreview: (media: Task
   );
 };
 
-const CommentItem: React.FC<CommentItemProps> = ({ comment, onPreview, onUpdated }) => {
+const CommentItem: React.FC<CommentItemProps> = ({
+  comment,
+  onPreview,
+  onUpdateComment,
+  onDeleteComment,
+}) => {
   const { user } = useAuth();
   const isOwner = user?.id === comment.user.id;
   const [isEditing, setIsEditing] = useState(false);
@@ -78,7 +84,8 @@ const CommentItem: React.FC<CommentItemProps> = ({ comment, onPreview, onUpdated
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const { isUpdating, updateComment } = useUpdateComment();
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const clearPendingAttachments = useCallback(() => {
     setPendingAttachments((prev) => {
@@ -179,23 +186,23 @@ const CommentItem: React.FC<CommentItemProps> = ({ comment, onPreview, onUpdated
   const canSubmitEdit = hasChanges && hasContentOrAttachments && !isUpdating;
 
   const handleSubmitEdit = async () => {
-    if (!canSubmitEdit) return;
-
-    const result = await updateComment({
+    if (!canSubmitEdit || isUpdating) return;
+    setIsUpdating(true);
+    const result = await onUpdateComment({
       comment,
       content: editContent,
       retainedAttachments: editAttachments,
       newAttachments: pendingAttachments,
     });
+    setIsUpdating(false);
 
     if (!result) {
       return;
     }
 
-    onUpdated(result.comment);
     clearPendingAttachments();
-    setEditAttachments(result.comment.attachments);
-    setEditContent(result.comment.content);
+    setEditAttachments(result.attachments);
+    setEditContent(result.content);
     setIsEditing(false);
   };
 
@@ -204,6 +211,19 @@ const CommentItem: React.FC<CommentItemProps> = ({ comment, onPreview, onUpdated
     requestAnimationFrame(() => {
       textareaRef.current?.focus();
     });
+  };
+
+  const handleDeleteComment = async () => {
+    if (!isOwner || isEditing || isDeleting) return;
+    const confirmed = window.confirm("Bạn có chắc muốn xóa bình luận này?");
+    if (!confirmed) return;
+    setIsDeleting(true);
+    const success = await onDeleteComment(comment.id);
+    setIsDeleting(false);
+    if (success) {
+      clearPendingAttachments();
+      setIsEditing(false);
+    }
   };
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -251,7 +271,7 @@ const CommentItem: React.FC<CommentItemProps> = ({ comment, onPreview, onUpdated
 
   const renderEditableAttachment = (attachment: CommentAttachment) => {
     if (attachment.type === "image" || attachment.type === "video") {
-      const mediaItem: TaskMedia = {
+      const mediaItem: TaskAttachment = {
         url: attachment.url,
         name: attachment.name,
         type: attachment.type,
@@ -443,9 +463,11 @@ const CommentItem: React.FC<CommentItemProps> = ({ comment, onPreview, onUpdated
                   />
                   <button
                     type="button"
-                    className="cursor-pointer hover:underline"
+                    onClick={handleDeleteComment}
+                    disabled={isDeleting}
+                    className={`cursor-pointer hover:underline ${isDeleting ? "opacity-60" : ""}`}
                   >
-                    Xóa
+                    {isDeleting ? "Đang xóa..." : "Xóa"}
                   </button>
                 </div>
               )}

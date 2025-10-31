@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import React from "react";
@@ -7,10 +6,9 @@ import {
   Controller,
   FieldErrors,
   FieldNamesMarkedBoolean,
-  SubmitHandler,
-  UseFormHandleSubmit,
   UseFormRegister,
 } from "react-hook-form";
+import type { BaseSyntheticEvent } from "react";
 import {
   CreateTaskFormValues,
   TaskDetailFormValues,
@@ -27,11 +25,7 @@ import Button from "../../common/Button";
 
 interface TaskModalLeftPanelProps {
   mode: "create" | "detail";
-  handleSubmit: UseFormHandleSubmit<
-    CreateTaskFormValues & Partial<TaskDetailFormValues>
-  >;
-  onSubmitCreate: SubmitHandler<CreateTaskFormValues>;
-  onSubmitDetail: SubmitHandler<TaskDetailFormValues>;
+  onSubmit: (event?: BaseSyntheticEvent) => void | Promise<void>;
   register: UseFormRegister<
     CreateTaskFormValues & Partial<TaskDetailFormValues>
   >;
@@ -64,9 +58,7 @@ interface TaskModalLeftPanelProps {
 
 const TaskModalLeftPanel: React.FC<TaskModalLeftPanelProps> = ({
   mode,
-  handleSubmit,
-  onSubmitCreate,
-  onSubmitDetail,
+  onSubmit,
   register,
   errors,
   control,
@@ -110,12 +102,7 @@ const TaskModalLeftPanel: React.FC<TaskModalLeftPanelProps> = ({
   }, [task?.assignee]);
 
   return (
-    <form
-      onSubmit={handleSubmit(
-        mode === "create" ? onSubmitCreate : onSubmitDetail
-      )}
-      className="space-y-4"
-    >
+    <form onSubmit={onSubmit} className="space-y-4">
       <div>
         <label className="block text-sm font-semibold text-sub">Tiêu đề</label>
         <input

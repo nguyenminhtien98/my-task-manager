@@ -6,15 +6,17 @@ import { FiImage, FiPaperclip } from "react-icons/fi";
 import { v4 as uuidv4 } from "uuid";
 import { useAuth } from "../../context/AuthContext";
 import PendingAttachmentPreview from "./PendingAttachmentPreview";
-import { PendingAttachment, TaskComment } from "./types";
-import { useCreateComment } from "../../hooks/useCreateComment";
+import { PendingAttachment } from "./types";
+import type { TaskComment } from "./types";
+import type { CreateCommentParams } from "@/app/hooks/useComment";
 
 interface CommentFormProps {
   taskId: string;
-  onCommentCreated: (comment: TaskComment) => void;
+  onSubmit: (params: CreateCommentParams) => Promise<TaskComment | null>;
+  isSubmitting: boolean;
 }
 
-const CommentForm: React.FC<CommentFormProps> = ({ taskId, onCommentCreated }) => {
+const CommentForm: React.FC<CommentFormProps> = ({ taskId, onSubmit, isSubmitting }) => {
   const { user } = useAuth();
   const [commentText, setCommentText] = useState("");
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
@@ -24,7 +26,6 @@ const CommentForm: React.FC<CommentFormProps> = ({ taskId, onCommentCreated }) =
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const pendingAttachmentsRef = useRef<PendingAttachment[]>([]);
-  const { isSubmitting, createComment } = useCreateComment();
 
   useEffect(() => {
     const el = textareaRef.current;
@@ -114,7 +115,7 @@ const CommentForm: React.FC<CommentFormProps> = ({ taskId, onCommentCreated }) =
       return;
     }
 
-    const result = await createComment({
+    const result = await onSubmit({
       taskId,
       userId: user.id,
       userName: user.name,
@@ -125,8 +126,6 @@ const CommentForm: React.FC<CommentFormProps> = ({ taskId, onCommentCreated }) =
     if (!result) {
       return;
     }
-
-    onCommentCreated(result.comment);
 
     pendingAttachments.forEach((attachment) => {
       if (attachment.previewUrl) {

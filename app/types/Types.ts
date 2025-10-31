@@ -29,7 +29,7 @@ export interface Task {
   priority: Priority;
   projectId?: string;
   projectName?: string;
-  media?: TaskMedia[];
+  attachedFile?: (TaskAttachment | string)[];
 }
 
 export interface ModalProps {
@@ -81,7 +81,7 @@ export interface CreateTaskFormValues {
   predictedHours: number;
   issueType: IssueType;
   priority: Priority;
-  media: TaskMedia[];
+  attachments: TaskAttachment[];
 }
 
 export interface TaskDetailModalProps {
@@ -100,7 +100,7 @@ export interface TaskDetailFormValues {
   startDate: string;
   endDate: string;
   predictedHours: number;
-  media?: TaskMedia[];
+  attachments?: TaskAttachment[];
 }
 
 export interface User {
@@ -199,9 +199,9 @@ export interface ProjectFormValues {
   leader: string;
 }
 
-export interface TaskMedia {
+export interface TaskAttachment {
   url: string;
   name: string;
-  type: "image" | "video" | "unknown";
+  type: "image" | "video" | "file";
   createdAt: string;
 }

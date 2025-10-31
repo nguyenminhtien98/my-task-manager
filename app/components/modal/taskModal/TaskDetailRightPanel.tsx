@@ -5,42 +5,58 @@ import Image from "next/image";
 import { FiPlay } from "react-icons/fi";
 import MediaPreviewModal from "../../common/MediaPreviewModal";
 import CommentSection from "../../comments/CommentSection";
-import { TaskMedia } from "../../../types/Types";
+import { TaskAttachment } from "../../../types/Types";
 import { detectMediaTypeFromUrl } from "../../../utils/media";
 import { useAuth } from "../../../context/AuthContext";
 import { useProject } from "../../../context/ProjectContext";
 
 interface TaskDetailRightPanelProps {
-  media: TaskMedia[];
+  attachments: TaskAttachment[];
   className?: string;
   taskId?: string;
   assignee?: string | { $id: string; name: string };
 }
 
 const TaskDetailRightPanel: React.FC<TaskDetailRightPanelProps> = ({
-  media,
+  attachments,
   className,
   taskId,
   assignee,
 }) => {
-  const [previewMedia, setPreviewMedia] = useState<TaskMedia | null>(null);
+  const [previewMedia, setPreviewMedia] = useState<TaskAttachment | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
-  const [isAttachmentListOpen, setIsAttachmentListOpen] = useState(false);
   const { user } = useAuth();
   const { currentProject } = useProject();
   const leaderId = currentProject?.leader?.$id;
   const canComment =
-    user &&
+    !!user &&
     (user.id === (typeof assignee === "object" ? assignee?.$id : assignee) ||
       user.id === leaderId);
 
-  const primaryMedia = media[0];
-  const extraMedia = useMemo(
-    () => (media.length > 1 ? media.slice(1) : []),
-    [media]
+  const visualAttachments = useMemo(
+    () =>
+      attachments.filter(
+        (item) => item.type === "image" || item.type === "video"
+      ),
+    [attachments]
   );
 
-  const openPreview = (item: TaskMedia) => {
+  const fileAttachments = useMemo(
+    () => attachments.filter((item) => item.type === "file"),
+    [attachments]
+  );
+
+  const primaryVisual = visualAttachments[0] ?? null;
+  const secondaryVisual = useMemo(
+    () => (visualAttachments.length > 1 ? visualAttachments.slice(1) : []),
+    [visualAttachments]
+  );
+
+  const openPreview = (item: TaskAttachment) => {
+    if (item.type === "file") {
+      window.open(item.url, "_blank", "noopener,noreferrer");
+      return;
+    }
     setPreviewMedia({
       ...item,
       type: item.type ?? detectMediaTypeFromUrl(item.url),
@@ -53,107 +69,113 @@ const TaskDetailRightPanel: React.FC<TaskDetailRightPanelProps> = ({
     setIsPreviewOpen(false);
   };
 
-  const renderTaskAttachment = (item: TaskMedia, height = "h-56") => {
+  const renderPreview = (item: TaskAttachment, height = "h-44") => {
     const resolvedType = item.type ?? detectMediaTypeFromUrl(item.url);
+    if (resolvedType === "file") {
+      return (
+        <div
+          className={`flex ${height} w-full items-center justify-center rounded-lg bg-black/50`}
+        >
+          <span className="text-sm font-semibold text-white">
+            Tệp đính kèm
+          </span>
+        </div>
+      );
+    }
+
+    if (resolvedType === "video") {
+      return (
+        <div className={`relative flex ${height} w-full items-center justify-center overflow-hidden rounded-lg bg-black/60`}>
+          <video src={item.url} className="h-full w-full object-contain" />
+          <span className="absolute inset-0 flex items-center justify-center bg-black/30 text-white">
+            <FiPlay size={28} />
+          </span>
+        </div>
+      );
+    }
+
     return (
-      <button
-        type="button"
-        onClick={() => openPreview(item)}
-        className={`group relative flex ${height} w-full items-center justify-center overflow-hidden rounded-lg bg-gray-800`}
+      <div
+        className={`relative flex ${height} w-full items-center justify-center overflow-hidden rounded-lg bg-black/60`}
       >
-        {resolvedType === "video" ? (
-          <>
-            <video src={item.url} className="h-full w-full object-contain" />
-            <span className="absolute inset-0 flex items-center justify-center bg-black/30 text-white">
-              <FiPlay size={28} />
-            </span>
-          </>
-        ) : (
-          <Image
-            src={item.url}
-            alt={item.name}
-            className="h-full w-full object-contain"
-            width={800}
-            height={600}
-            unoptimized
-          />
-        )}
-      </button>
+        <Image
+          src={item.url}
+          alt={item.name}
+          className="h-full w-full object-contain"
+          width={800}
+          height={600}
+          unoptimized
+        />
+      </div>
     );
   };
 
   return (
     <div
-      className={`flex h-full flex-col overflow-hidden rounded-lg border bg-black/60 text-white ${
-        className ?? ""
-      }`}
+      className={`flex h-full flex-col overflow-hidden rounded-lg border bg-black/60 text-white ${className ?? ""
+        }`}
     >
       <div className="flex flex-1 flex-col overflow-y-auto no-scrollbar">
-        {primaryMedia && (
-          <div className="pb-2">{renderTaskAttachment(primaryMedia)}</div>
+        {primaryVisual && (
+          <button
+            type="button"
+            onClick={() => openPreview(primaryVisual)}
+            className="mb-3 block w-full text-left"
+          >
+            {renderPreview(primaryVisual, "h-64")}
+          </button>
         )}
 
-        {primaryMedia && extraMedia.length > 0 && (
-          <div className="space-y-2 px-4 pb-4">
-            <button
-              type="button"
-              className="text-sm font-semibold text-white underline cursor-pointer text-left w-full"
-              onClick={() => setIsAttachmentListOpen(!isAttachmentListOpen)}
-            >
-              Các tệp đính kèm
-            </button>
-            {isAttachmentListOpen && (
-              <div className="flex flex-col gap-1 pt-1">
-                {extraMedia.map((item) => {
-                  const resolvedType =
-                    item.type ?? detectMediaTypeFromUrl(item.url);
-                  return (
-                    <button
-                      key={item.url}
-                      type="button"
-                      onClick={() => openPreview(item)}
-                      className="cursor-pointer grid grid-cols-[15%_1fr] items-center gap-3 rounded-lg bg-black/55 p-1 text-left text-sm text-gray-200 hover:bg-black/70"
-                    >
-                      <div className="relative flex h-13 items-center justify-center overflow-hidden rounded bg-gray-800">
-                        {resolvedType === "video" ? (
-                          <>
-                            <video
-                              src={item.url}
-                              className="h-full w-full object-cover"
-                            />
-                            <span className="absolute inset-0 flex items-center justify-center bg-black/30 text-white">
-                              <FiPlay size={22} />
-                            </span>
-                          </>
-                        ) : (
-                          <Image
-                            src={item.url}
-                            alt={item.name}
-                            width={300}
-                            height={200}
-                            unoptimized
-                            className="h-full w-full object-cover"
-                          />
-                        )}
-                      </div>
-                      <div className="space-y-1 text-sm">
-                        <p className="font-medium text-white">{item.name}</p>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+        {secondaryVisual.length > 0 && (
+          <div className="space-y-3 px-4 pb-4">
+            <div className="text-sm font-semibold text-white">
+              Tệp đính kèm
+            </div>
+            <div className="grid gap-3">
+              {secondaryVisual.map((item) => (
+                <button
+                  key={item.url}
+                  type="button"
+                  onClick={() => openPreview(item)}
+                  className="flex flex-col items-start gap-2 rounded-lg bg-black/55 p-3 text-left hover:bg-black/70"
+                >
+                  <div className="flex w-full items-center justify-center overflow-hidden rounded-lg bg-black/40">
+                    {renderPreview(item, "h-32")}
+                  </div>
+                  <span className="text-sm font-medium text-blue-300 underline">
+                    {item.name}
+                  </span>
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
-        {!primaryMedia && (
+        {fileAttachments.length > 0 && (
+          <div className="space-y-2 px-4 py-4">
+            <div className="text-sm font-semibold text-white">Tệp đính kèm</div>
+            <div className="space-y-2 rounded-lg bg-black/55 px-3 py-3">
+              {fileAttachments.map((item) => (
+                <button
+                  key={item.url}
+                  type="button"
+                  onClick={() => openPreview(item)}
+                  className="cursor-pointer block text-left text-sm font-medium text-blue-300 underline hover:text-blue-200"
+                >
+                  {item.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {attachments.length === 0 && (
           <div className="px-4 py-2 text-sm font-semibold text-white">
             Nhận xét
           </div>
         )}
 
-        {canComment && <CommentSection taskId={taskId} />}
+        <CommentSection taskId={taskId} canComment={canComment} />
       </div>
 
       <MediaPreviewModal

@@ -4,12 +4,12 @@ import React, { Fragment } from "react";
 import { Dialog, Transition } from "@headlessui/react";
 import Image from "next/image";
 import { detectMediaTypeFromUrl } from "../../utils/media";
-import { TaskMedia } from "../../types/Types";
+import { TaskAttachment } from "../../types/Types";
 
 interface MediaPreviewModalProps {
   isOpen: boolean;
   onClose: () => void;
-  media?: TaskMedia | null;
+  media?: TaskAttachment | null;
 }
 
 const MediaPreviewModal: React.FC<MediaPreviewModalProps> = ({ isOpen, onClose, media }) => {

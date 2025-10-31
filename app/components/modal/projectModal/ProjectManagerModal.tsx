@@ -59,7 +59,13 @@ const ProjectManagerModal: React.FC<ProjectManagerModalProps> = ({
         />
       )}
       {screen === "detail" && selected && (
-        <ScreenProjectDetail project={selected} />
+        <ScreenProjectDetail
+          project={selected}
+          onDeleted={() => {
+            setSelected(null);
+            setScreen("list");
+          }}
+        />
       )}
     </ModalComponent>
   );

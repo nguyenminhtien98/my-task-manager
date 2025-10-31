@@ -2,16 +2,24 @@
 
 import React from "react";
 import CommentItem from "./CommentItem";
-import { TaskComment, TaskMedia } from "./types";
+import { TaskComment, TaskAttachment } from "./types";
+import type { UpdateCommentParams } from "@/app/hooks/useComment";
 
 interface CommentListProps {
   comments: TaskComment[];
   isLoading: boolean;
-  onPreview: (media: TaskMedia) => void;
-  onCommentUpdated: (comment: TaskComment) => void;
+  onPreview: (media: TaskAttachment) => void;
+  onUpdateComment: (params: UpdateCommentParams) => Promise<TaskComment | null>;
+  onDeleteComment: (commentId: string) => Promise<boolean>;
 }
 
-const CommentList: React.FC<CommentListProps> = ({ comments, isLoading, onPreview, onCommentUpdated }) => {
+const CommentList: React.FC<CommentListProps> = ({
+  comments,
+  isLoading,
+  onPreview,
+  onUpdateComment,
+  onDeleteComment,
+}) => {
   if (isLoading) {
     return <div className="text-sm text-white">Đang tải bình luận...</div>;
   }
@@ -27,7 +35,8 @@ const CommentList: React.FC<CommentListProps> = ({ comments, isLoading, onPrevie
           key={comment.id}
           comment={comment}
           onPreview={onPreview}
-          onUpdated={onCommentUpdated}
+          onUpdateComment={onUpdateComment}
+          onDeleteComment={onDeleteComment}
         />
       ))}
     </div>
