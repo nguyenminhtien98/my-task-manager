@@ -8,7 +8,7 @@ import { formatVietnameseDateTime } from "@/app/utils/date";
 import HoverPopover from "@/app/components/common/HoverPopover";
 import Button from "@/app/components/common/Button";
 import { useAuth } from "@/app/context/AuthContext";
-import { useProject } from "@/app/context/ProjectContext";
+// import { useProject } from "@/app/context/ProjectContext";
 import { useProjectOperations } from "@/app/hooks/useProjectOperations";
 
 interface ScreenProjectDetailProps {
@@ -21,7 +21,7 @@ const ScreenProjectDetail: React.FC<ScreenProjectDetailProps> = ({
   onDeleted,
 }) => {
   const { user } = useAuth();
-  const { currentProject } = useProject();
+  // const { currentProject } = useProject();
   const { deleteProject } = useProjectOperations();
   const [members, setMembers] = useState<BasicProfile[]>([]);
   const [loading, setLoading] = useState(false);
@@ -191,13 +191,11 @@ const ScreenProjectDetail: React.FC<ScreenProjectDetailProps> = ({
                           <li key={m.$id}>
                             <button
                               type="button"
-                              className={`${
-                                isLeader && "cursor-pointer"
-                              } w-full px-2 py-2 text-left text-sm whitespace-nowrap overflow-hidden text-ellipsis ${
-                                selectedUserForLeader?.$id === m.$id
+                              className={`${isLeader && "cursor-pointer"
+                                } w-full px-2 py-2 text-left text-sm whitespace-nowrap overflow-hidden text-ellipsis ${selectedUserForLeader?.$id === m.$id
                                   ? "bg-gray-200 text-[#111827]"
                                   : "hover:underline"
-                              }`}
+                                }`}
                               onClick={() => {
                                 if (isLeader) {
                                   setSelectedUserForLeader(m);

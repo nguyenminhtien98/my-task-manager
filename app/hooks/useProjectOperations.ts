@@ -24,7 +24,7 @@ export const useProjectOperations = () => {
     currentProject,
     setCurrentProject,
     setCurrentProjectRole,
-    projects,
+    // projects,
     setProjects,
   } = useProject();
   const [members, setMembers] = useState<ProjectMemberProfile[]>([]);
@@ -167,7 +167,7 @@ export const useProjectOperations = () => {
 
         // Only add if user is leader or member of this project
         // Check if user is leader
-        const isLeader = newProject.leader?.$id === user.id;
+        // const isLeader = newProject.leader?.$id === user.id;
         // For member check, we need to verify membership, but for now we'll add it
         // The ProjectContext will filter properly on next fetch
 
