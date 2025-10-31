@@ -8,9 +8,9 @@ import ModalComponent from "../../common/ModalComponent";
 import ProjectMemberListView from "./ProjectMemberListView";
 import ProjectMemberProfileView from "./ProjectMemberProfileView";
 import {
-  useProjectMembers,
+  useProjectOperations,
   type EnrichedProjectMember,
-} from "../../../hooks/useProjectMembers";
+} from "../../../hooks/useProjectOperations";
 import { useProject } from "../../../context/ProjectContext";
 
 interface ProjectMembersModalProps {
@@ -40,7 +40,7 @@ const ProjectMembersModal: React.FC<ProjectMembersModalProps> = ({
     addMember,
     removeMember,
     isLoading: isMembersLoading,
-  } = useProjectMembers();
+  } = useProjectOperations();
 
   const [view, setView] = useState<"list" | "profile">("list");
   const [activeMember, setActiveMember] =

@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import dynamic from "next/dynamic";
 import Header from "./Header";
 import LoginRegisterModal from "./modal/LoginRegisterModal";
@@ -12,6 +12,8 @@ import toast from "react-hot-toast";
 import { useProject } from "../context/ProjectContext";
 import ProjectModal from "./modal/ProjectModal";
 import { useTheme } from "../context/ThemeContext";
+import { useProjectOperations } from "../hooks/useProjectOperations";
+import { useTask } from "../hooks/useTask";
 
 const Board = dynamic(() => import("./Board"), { ssr: false });
 
@@ -36,10 +38,37 @@ const defaultGuideTask: Task = {
   priority: "High",
 };
 
+type RawTaskDocument = Record<string, unknown> & {
+  $id?: string;
+  assignee?: unknown;
+  completedBy?: unknown;
+  attachedFile?: unknown;
+  projectId?: string;
+};
+
+const mapTaskDocument = (raw: RawTaskDocument): Task => {
+  const id = typeof raw.$id === "string" ? raw.$id : (raw.id as string);
+  const assignee = raw.assignee as string | BasicProfile | undefined;
+  const completedBy =
+    typeof raw.completedBy === "string" ? raw.completedBy : undefined;
+  const attachedFile = Array.isArray(raw.attachedFile)
+    ? (raw.attachedFile as Task["attachedFile"])
+    : undefined;
+
+  return {
+    ...(raw as unknown as Task),
+    id,
+    assignee,
+    completedBy,
+    attachedFile,
+  };
+};
+
 const HomePage: React.FC = () => {
   const { user } = useAuth();
   const { theme } = useTheme();
   const { currentProject, currentProjectRole, setTasksHydrated } = useProject();
+  const { members } = useProjectOperations();
   const currentUserName = user?.name || "";
   const isLeader = currentProjectRole === "leader";
 
@@ -55,6 +84,125 @@ const HomePage: React.FC = () => {
     setShouldOpenTaskAfterProjectCreation,
   ] = useState(false);
   const [hasLoaded, setHasLoaded] = useState<boolean>(false);
+  const { moveTask } = useTask();
+
+  const memberMap = React.useMemo(() => {
+    const map = new Map<string, BasicProfile>();
+    members.forEach((member) => {
+      map.set(member.$id, {
+        $id: member.$id,
+        name: member.name,
+        email: member.email,
+        avatarUrl: member.avatarUrl,
+      });
+    });
+    if (currentProject?.leader) {
+      map.set(currentProject.leader.$id, {
+        $id: currentProject.leader.$id,
+        name: currentProject.leader.name,
+        email: currentProject.leader.email,
+        avatarUrl: currentProject.leader.avatarUrl ?? undefined,
+      });
+    }
+    return map;
+  }, [members, currentProject?.leader]);
+
+  const enrichTaskAssignee = React.useCallback(
+    (task: Task): Task => {
+      if (task.assignee && typeof task.assignee === "string") {
+        const profile = memberMap.get(task.assignee);
+        if (profile) {
+          return {
+            ...task,
+            assignee: profile,
+          };
+        }
+      }
+      return task;
+    },
+    [memberMap]
+  );
+
+  const preserveAssignee = useCallback(
+    (incoming: Task, fallback?: string | BasicProfile) => {
+      const fallbackProfile =
+        typeof fallback === "object"
+          ? fallback
+          : typeof fallback === "string"
+          ? memberMap.get(fallback)
+          : undefined;
+
+      if (incoming.assignee && typeof incoming.assignee === "object") {
+        const currentProfile = incoming.assignee as BasicProfile;
+        const hasName =
+          typeof currentProfile.name === "string" &&
+          currentProfile.name.trim().length > 0;
+        if (hasName) {
+          return incoming;
+        }
+
+        const mergedProfile =
+          (currentProfile.$id && memberMap.get(currentProfile.$id)) ||
+          fallbackProfile;
+        if (mergedProfile) {
+          return {
+            ...incoming,
+            assignee: mergedProfile,
+          };
+        }
+
+        return incoming;
+      }
+
+      if (incoming.assignee == null) {
+        if (fallbackProfile) {
+          return { ...incoming, assignee: fallbackProfile };
+        }
+        if (typeof fallback === "string") {
+          return { ...incoming, assignee: fallback };
+        }
+        return incoming;
+      }
+
+      if (
+        typeof incoming.assignee === "string" &&
+        memberMap.has(incoming.assignee)
+      ) {
+        return {
+          ...incoming,
+          assignee: memberMap.get(incoming.assignee),
+        } as Task;
+      }
+
+      if (fallbackProfile) {
+        return { ...incoming, assignee: fallbackProfile };
+      }
+
+      return incoming;
+    },
+    [memberMap]
+  );
+
+  const dedupeTasks = useCallback((list: Task[]) => {
+    const seen = new Set<string>();
+    const output: Task[] = [];
+    for (let i = list.length - 1; i >= 0; i -= 1) {
+      const task = list[i];
+      if (!task?.id) continue;
+      if (seen.has(task.id)) continue;
+      seen.add(task.id);
+      output.unshift(task);
+    }
+    return output;
+  }, []);
+
+  const applyTasks = useCallback(
+    (updater: (prev: Task[]) => Task[]) => {
+      setAllTasks((prev) => dedupeTasks(updater(prev)));
+    },
+    [dedupeTasks]
+  );
+
 
   useEffect(() => {
     if (!user) {
@@ -80,17 +228,13 @@ const HomePage: React.FC = () => {
         String(process.env.NEXT_PUBLIC_COLLECTION_ID_TASKS)
       )
       .then((res) => {
-        const mapped = (res.documents as unknown as Task[]).map(
-          (dUnknown: unknown) => {
-            const d = dUnknown as Record<string, unknown> & { $id?: string };
-            return {
-              ...(d as unknown as Task),
-              id: d.$id || (d as unknown as Task).id,
-            } as Task;
-          }
-        );
-        const tasks = mapped.filter((t) => t.projectId === currentProject.$id);
-        setAllTasks(tasks);
+        const mapped = res.documents
+          .map((doc) => mapTaskDocument(doc as RawTaskDocument))
+          .filter((t) => t.projectId === currentProject.$id)
+          .map((task) =>
+            preserveAssignee(enrichTaskAssignee(task), task.assignee)
+          );
+        setAllTasks(dedupeTasks(mapped));
       })
       .catch((err) => {
         console.error("Lấy tasks thất bại:", err);
@@ -101,43 +245,80 @@ const HomePage: React.FC = () => {
           if (setTasksHydrated) setTasksHydrated(true);
         }
       });
-  }, [user, currentProject, hasLoaded, setTasksHydrated]);
+  }, [
+    user,
+    currentProject,
+    hasLoaded,
+    setTasksHydrated,
+    enrichTaskAssignee,
+    preserveAssignee,
+    dedupeTasks,
+  ]);
 
   useEffect(() => {
     if (!user || !currentProject) return;
     const channel = `databases.${process.env.NEXT_PUBLIC_DATABASE_ID}.collections.${process.env.NEXT_PUBLIC_COLLECTION_ID_TASKS}.documents`;
     const unsubscribe = subscribeToRealtime([channel], (res: unknown) => {
       const payload = res as {
-        payload: { data?: unknown; $id?: string };
+        payload: RawTaskDocument;
         events: string[];
       };
-      const rawUnknown = payload.payload.data ?? (payload as unknown);
-      const raw = rawUnknown as Record<string, unknown> & { $id?: string };
-      const doc: Task = {
-        ...(raw as unknown as Task),
-        id: raw.$id || (raw as unknown as Task).id,
-        assignee: raw.assignee as string | BasicProfile,
-        completedBy: raw.completedBy as string,
-      };
 
-      if (doc.projectId !== currentProject.$id) return;
+      const { payload: raw, events } = payload;
+      if (!events?.length || !raw) return;
 
-      if (payload.events.some((e: string) => e.endsWith(".create"))) {
-        setAllTasks((prev) => {
-          if (prev.some((task) => task.id === doc.id)) {
+      const documentId = raw.$id;
+
+      if (events.some((e: string) => e.endsWith(".delete"))) {
+        if (documentId) {
+          applyTasks((prev) => prev.filter((t) => t.id !== documentId));
+        }
+        return;
+      }
+
+      const mapped = enrichTaskAssignee(mapTaskDocument(raw));
+      if (mapped.projectId !== currentProject.$id) return;
+
+      if (events.some((e: string) => e.endsWith(".create"))) {
+        applyTasks((prev) => {
+          if (prev.some((task) => task.id === mapped.id)) {
             return prev;
           }
-          return [...prev, doc];
+          return [...prev, preserveAssignee(mapped, mapped.assignee)];
         });
-      } else if (payload.events.some((e: string) => e.endsWith(".update"))) {
-        setAllTasks((prev) => prev.map((t) => (t.id === doc.id ? doc : t)));
-      } else if (payload.events.some((e: string) => e.endsWith(".delete"))) {
-        setAllTasks((prev) => prev.filter((t) => t.id !== doc.id));
+      } else if (events.some((e: string) => e.endsWith(".update"))) {
+        applyTasks((prev) =>
+          prev.map((t) =>
+            t.id === mapped.id
+              ? preserveAssignee(mapped, t.assignee)
+              : t
+          )
+        );
+        setSelectedTask((task) =>
+          task && task.id === mapped.id
+            ? preserveAssignee(mapped, task.assignee)
+            : task
+        );
       }
     });
 
     return () => unsubscribe();
-  }, [user, currentProject]);
+  }, [user, currentProject, enrichTaskAssignee, preserveAssignee, applyTasks]);
+
+  useEffect(() => {
+    setAllTasks((prev) =>
+      dedupeTasks(
+        prev.map((task) =>
+          preserveAssignee(enrichTaskAssignee(task), task.assignee)
+        )
+      )
+    );
+    setSelectedTask((task) =>
+      task
+        ? preserveAssignee(enrichTaskAssignee(task), task.assignee)
+        : task
+    );
+  }, [enrichTaskAssignee, preserveAssignee, dedupeTasks]);
 
   const handleCreateClick = () => {
     if (user) {
@@ -176,23 +357,35 @@ const HomePage: React.FC = () => {
     }
   };
 
+  const boardTasks = useMemo(() => dedupeTasks(allTasks), [
+    allTasks,
+    dedupeTasks,
+  ]);
+
+
   const handleCreateTask = (task: Task) => {
     if (currentProject) {
-      const newTask = {
-        ...task,
-        projectId: currentProject.$id,
-        projectName: currentProject.name,
-      };
-      setAllTasks((prev) => [...prev, newTask]);
+      const enrichedTask = preserveAssignee(
+        enrichTaskAssignee({
+          ...task,
+          projectId: currentProject.$id,
+          projectName: currentProject.name,
+        }),
+        task.assignee
+      );
+      applyTasks((prev) => [...prev, enrichedTask]);
     }
   };
 
   const handleUpdateTask = (updated: Task) => {
-    setAllTasks((prev) =>
-      prev.map((t) => (t.id === updated.id ? { ...t, ...updated } : t))
+    const previous = allTasks.find((t) => t.id === updated.id);
+    const enriched = enrichTaskAssignee(updated);
+    const ensured = preserveAssignee(enriched, previous?.assignee ?? updated.assignee);
+    applyTasks((prev) =>
+      prev.map((t) => (t.id === ensured.id ? { ...t, ...ensured } : t))
     );
     setSelectedTask((task) =>
-      task && task.id === updated.id ? { ...task, ...updated } : task
+      task && task.id === ensured.id ? { ...task, ...ensured } : task
     );
   };
 
@@ -210,20 +403,29 @@ const HomePage: React.FC = () => {
     columns[st].sort((a, b) => b.order - a.order)
   );
 
-  const handleDragEnd = async (event: DragEndEvent) => {
+  const handleDragEnd = async (
+    event: DragEndEvent,
+    fallbackStatus: TaskStatus | null = null
+  ) => {
     const { active, over } = event;
-    if (!over) return;
-
     const sourceStatus = active.data.current?.status as TaskStatus;
     if (!sourceStatus || sourceStatus === "completed") return;
 
-    let targetStatus: TaskStatus;
-    if (over.data.current && over.data.current.status) {
+    let targetStatus: TaskStatus | null = null;
+    if (over?.data?.current && over.data.current.status) {
       targetStatus = over.data.current.status as TaskStatus;
-    } else {
+    } else if (over) {
       const raw = over.id as string;
-      targetStatus = raw as TaskStatus;
+      if (["list", "doing", "done", "completed", "bug"].includes(raw)) {
+        targetStatus = raw as TaskStatus;
+      }
     }
+
+    if (!targetStatus && fallbackStatus) {
+      targetStatus = fallbackStatus;
+    }
+
+    if (!targetStatus) return;
 
     if (!isLeader) {
       const allowed: TaskStatus[] = ["doing", "done"];
@@ -236,43 +438,53 @@ const HomePage: React.FC = () => {
         return;
     }
 
+    const currentTask = allTasks.find((t) => t.id === active.id);
+    if (!currentTask) return;
+
     const tasksInTarget = allTasks.filter(
       (t) => t.status === targetStatus && t.id !== active.id
     );
     const targetOrder = tasksInTarget.length;
 
-    const updatedTask = allTasks.find((t) => t.id === active.id);
-    if (!updatedTask) return;
-    const newTask = {
-      ...updatedTask,
+    const newCompletedBy =
+      isLeader && targetStatus === "completed" ? currentUserName : undefined;
+
+    const optimisticTask: Task = preserveAssignee(
+      enrichTaskAssignee({
+        ...currentTask,
+        status: targetStatus,
+        order: targetOrder,
+        completedBy: newCompletedBy,
+      }),
+      currentTask.assignee
+    );
+
+    applyTasks((prev) =>
+      prev.map((t) => (t.id === optimisticTask.id ? optimisticTask : t))
+    );
+
+    const result = await moveTask({
+      task: currentTask,
       status: targetStatus,
       order: targetOrder,
-      ...(isLeader && targetStatus === "completed"
-        ? { completedBy: currentUserName }
-        : {}),
-    };
+      completedBy: newCompletedBy,
+    });
 
-    setAllTasks((prev) => prev.map((t) => (t.id === newTask.id ? newTask : t)));
-
-    try {
-      await database.updateDocument(
-        String(process.env.NEXT_PUBLIC_DATABASE_ID),
-        String(process.env.NEXT_PUBLIC_COLLECTION_ID_TASKS),
-        newTask.id,
-        {
-          status: newTask.status,
-          order: newTask.order,
-          ...(newTask.completedBy ? { completedBy: newTask.completedBy } : {}),
-        }
+    if (!result.success || !result.task) {
+      applyTasks((prev) =>
+        prev.map((t) => (t.id === currentTask.id ? currentTask : t))
       );
-    } catch (error: unknown) {
-      console.error("Lỗi cập nhật status task:", error);
-      const message =
-        typeof error === "object" && error && "message" in error
-          ? String((error as { message?: unknown }).message)
-          : "Cập nhật trạng thái thất bại";
-      toast.error(message);
+      if (result.message) toast.error(result.message);
+      return;
     }
+
+    const enrichedResult = preserveAssignee(
+      enrichTaskAssignee(result.task),
+      currentTask.assignee
+    );
+    applyTasks((prev) =>
+      prev.map((t) => (t.id === enrichedResult.id ? enrichedResult : t))
+    );
   };
 
   // Initial loading splash moved to AppBootstrap; render page directly here
@@ -290,7 +502,7 @@ const HomePage: React.FC = () => {
 
       <div className="relative p-4">
         <Board
-          tasks={allTasks}
+          tasks={boardTasks}
           currentUser={currentUserName}
           isLeader={isLeader}
           onMove={handleDragEnd}

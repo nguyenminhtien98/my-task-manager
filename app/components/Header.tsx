@@ -14,9 +14,9 @@ import { DEFAULT_THEME_GRADIENT } from "../utils/themeColors";
 import toast from "react-hot-toast";
 import Button from "./common/Button";
 import {
-  useProjectMembers,
+  useProjectOperations,
   EnrichedProjectMember,
-} from "../hooks/useProjectMembers";
+} from "../hooks/useProjectOperations";
 import ProjectMembersModal from "./modal/projectMemberModal";
 import ProjectManagerModal from "./modal/projectModal/ProjectManagerModal";
 
@@ -41,7 +41,7 @@ const Header: React.FC<HeaderProps> = ({
   const [isProjectManagerOpen, setIsProjectManagerOpen] = useState(false);
   const { setTheme, resetTheme } = useTheme();
   const { members: projectMembers, isLoading: isMembersLoading } =
-    useProjectMembers();
+    useProjectOperations();
   const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
   const [modalInitialMember, setModalInitialMember] =
     useState<EnrichedProjectMember | null>(null);
@@ -165,18 +165,16 @@ const Header: React.FC<HeaderProps> = ({
                       key={member.$id || `${member.name}-${index}`}
                       type="button"
                       onClick={() => handleHeaderMemberClick(member)}
-                      className={`inline-flex focus:outline-none ${
-                        index > 0 ? "-ml-1" : ""
-                      }`}
+                      className={`inline-flex focus:outline-none ${index > 0 ? "-ml-1" : ""
+                        }`}
                       style={{ zIndex: visibleMembers.length - index }}
                     >
                       <AvatarUser
                         name={member.name}
                         avatarUrl={member.avatarUrl}
                         size={34}
-                        className={`${
-                          member.isLeader ? "border border-black" : ""
-                        } shadow`}
+                        className={`${member.isLeader ? "border border-black" : ""
+                          } shadow`}
                         title={
                           member.isLeader
                             ? `Leader: ${member.name}`
@@ -186,9 +184,8 @@ const Header: React.FC<HeaderProps> = ({
                     </button>
                   ))}
                   <div
-                    className={`${
-                      visibleMembers.length > 0 ? "-ml-1" : ""
-                    } flex h-[34px] w-[34px] cursor-pointer items-center justify-center rounded-full border border-dashed border-black bg-white/80 text-xs font-semibold text-black shadow transition hover:bg-white`}
+                    className={`${visibleMembers.length > 0 ? "-ml-1" : ""
+                      } flex h-[34px] w-[34px] cursor-pointer items-center justify-center rounded-full border border-dashed border-black bg-white/80 text-xs font-semibold text-black shadow transition hover:bg-white`}
                     title="Thêm thành viên"
                     onClick={openMembersModal}
                   >
@@ -262,9 +259,8 @@ const Header: React.FC<HeaderProps> = ({
                 size={36}
                 showTooltip={false}
                 onClick={() => setShowMenu((prev) => !prev)}
-                title={`${
-                  currentProject?.leader.$id === user.id ? "Leader" : "User"
-                }: ${user.name}`}
+                title={`${currentProject?.leader.$id === user.id ? "Leader" : "User"
+                  }: ${user.name}`}
               />
               {showMenu && (
                 <div className="absolute right-0 top-full mt-2 w-48 rounded bg-white text-black shadow-lg z-[60]">
@@ -303,7 +299,7 @@ const Header: React.FC<HeaderProps> = ({
                     }}
                     className="w-full justify-start px-4 py-2 text-left text-[#111827]"
                   >
-                    Logout
+                    Đăng xuất
                   </Button>
                 </div>
               )}

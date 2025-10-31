@@ -184,7 +184,7 @@ export interface BoardProps {
   tasks: Task[];
   currentUser: string;
   isLeader: boolean;
-  onMove: (e: DragEndEvent) => void;
+  onMove: (e: DragEndEvent, fallbackStatus?: TaskStatus | null) => void;
   onTaskClick: (t: Task) => void;
 }
 

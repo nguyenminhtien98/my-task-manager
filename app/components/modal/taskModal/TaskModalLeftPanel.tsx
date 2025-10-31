@@ -18,7 +18,7 @@ import {
 } from "../../../types/Types";
 import IssueTypeDropdown from "../../CustomDropdown/IssueTypeDropdown";
 import PriorityDropdown from "../../CustomDropdown/PriorityDropdown";
-import { useProjectMembers } from "@/app/hooks/useProjectMembers";
+import { useProjectOperations } from "@/app/hooks/useProjectOperations";
 import { database } from "@/app/appwrite";
 import toast from "react-hot-toast";
 import Button from "../../common/Button";
@@ -79,7 +79,7 @@ const TaskModalLeftPanel: React.FC<TaskModalLeftPanelProps> = ({
   onUpdate,
   reset,
 }) => {
-  const { members, isLoading: isMembersLoading } = useProjectMembers();
+  const { members, isLoading: isMembersLoading } = useProjectOperations();
   const memberNames = React.useMemo(
     () => members.map((m) => m.name),
     [members]

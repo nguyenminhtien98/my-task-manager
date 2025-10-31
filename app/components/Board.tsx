@@ -7,6 +7,9 @@ import {
     useSensor,
     PointerSensor,
     closestCorners,
+    pointerWithin,
+    rectIntersection,
+    type CollisionDetection,
     DragOverlay,
 } from "@dnd-kit/core";
 import Column from "./Column";
@@ -29,6 +32,30 @@ export default function Board({
     onTaskClick,
 }: BoardProps) {
     const [activeId, setActiveId] = useState<string | null>(null);
+    const [lastOverStatus, setLastOverStatus] = useState<TaskStatus | null>(
+        null
+    );
+
+    const collisionDetection: CollisionDetection = (args) => {
+        const pointerCollisions = pointerWithin(args);
+        if (pointerCollisions.length) {
+            return pointerCollisions;
+        }
+
+        const intersections = rectIntersection(args);
+        if (intersections.length) {
+            const thresholdCollisions = intersections.filter((collision) => {
+                const ratio = collision.data?.intersectionRatio ?? 0;
+                return ratio >= 0.4;
+            });
+            if (thresholdCollisions.length) {
+                return thresholdCollisions;
+            }
+            return intersections;
+        }
+
+        return closestCorners(args);
+    };
 
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -48,13 +75,39 @@ export default function Board({
     return (
         <DndContext
             sensors={sensors}
-            collisionDetection={closestCorners}
-            onDragStart={({ active }) => setActiveId(active.id as string)}
+            collisionDetection={collisionDetection}
+            onDragStart={({ active }) => {
+                setActiveId(active.id as string);
+                const current = findTask(active.id as string);
+                setLastOverStatus(current?.status ?? null);
+            }}
+            onDragOver={({ over }) => {
+                if (!over) return;
+                let status: TaskStatus | null = null;
+                const overData = over.data?.current as
+                    | { status?: TaskStatus }
+                    | undefined;
+                if (overData?.status) {
+                    status = overData.status;
+                } else {
+                    const rawId = over.id as string;
+                    if (rawId && ["list", "doing", "done", "completed", "bug"].includes(rawId)) {
+                        status = rawId as TaskStatus;
+                    }
+                }
+                if (status) {
+                    setLastOverStatus(status);
+                }
+            }}
             onDragEnd={(event) => {
                 setActiveId(null);
-                onMove(event);
+                setLastOverStatus(null);
+                onMove(event, lastOverStatus);
             }}
-            onDragCancel={() => setActiveId(null)}
+            onDragCancel={() => {
+                setActiveId(null);
+                setLastOverStatus(null);
+            }}
         >
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 min-h-screen">
                 {(Object.keys(columns) as TaskStatus[]).map((status) => (

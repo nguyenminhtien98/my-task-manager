@@ -2,7 +2,7 @@
 
 import React from "react";
 import AvatarUser from "../../common/AvatarUser";
-import { ProjectMemberProfile } from "../../../hooks/useProjectMembers";
+import { ProjectMemberProfile } from "../../../hooks/useProjectOperations";
 import Button from "../../common/Button";
 import { formatVietnameseDateTime } from "@/app/utils/date";
 

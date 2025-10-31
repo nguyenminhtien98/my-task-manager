@@ -17,7 +17,10 @@ export default function Column({
   isLeader,
   onTaskClick,
 }: ColumnProps) {
-  const { setNodeRef, isOver } = useDroppable({ id: status });
+  const { setNodeRef, isOver } = useDroppable({
+    id: status,
+    data: { status },
+  });
 
   return (
     <div

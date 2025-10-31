@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import toast from "react-hot-toast";
 import { Project, BasicProfile, Task } from "@/app/types/Types";
 import { database } from "@/app/appwrite";
 import { Query } from "appwrite";
@@ -10,6 +9,7 @@ import HoverPopover from "@/app/components/common/HoverPopover";
 import Button from "@/app/components/common/Button";
 import { useAuth } from "@/app/context/AuthContext";
 import { useProject } from "@/app/context/ProjectContext";
+import { useProjectOperations } from "@/app/hooks/useProjectOperations";
 
 interface ScreenProjectDetailProps {
   project: Project;
@@ -21,12 +21,8 @@ const ScreenProjectDetail: React.FC<ScreenProjectDetailProps> = ({
   onDeleted,
 }) => {
   const { user } = useAuth();
-  const {
-    currentProject,
-    setCurrentProject,
-    setCurrentProjectRole,
-    setProjects,
-  } = useProject();
+  const { currentProject } = useProject();
+  const { deleteProject } = useProjectOperations();
   const [members, setMembers] = useState<BasicProfile[]>([]);
   const [loading, setLoading] = useState(false);
   const [myTaskCounts, setMyTaskCounts] = useState<Record<string, number>>({});
@@ -131,93 +127,12 @@ const ScreenProjectDetail: React.FC<ScreenProjectDetailProps> = ({
     );
     if (!confirmed) return;
 
-    const databaseId = process.env.NEXT_PUBLIC_DATABASE_ID;
-    const projectsCollectionId =
-      process.env.NEXT_PUBLIC_COLLECTION_ID_PROJECTS;
-    const membershipsCollectionId =
-      process.env.NEXT_PUBLIC_COLLECTION_ID_PROJECT_MEMBERSHIPS;
-    const tasksCollectionId =
-      process.env.NEXT_PUBLIC_COLLECTION_ID_TASKS;
-
-    if (!databaseId || !projectsCollectionId) {
-      toast.error("Thiếu cấu hình Appwrite để xóa dự án.");
-      return;
-    }
-
     setIsDeleting(true);
     try {
-      if (membershipsCollectionId) {
-        const memberships = await database.listDocuments(
-          String(databaseId),
-          String(membershipsCollectionId),
-          [Query.equal("project", project.$id), Query.limit(200)]
-        );
-        await Promise.all(
-          memberships.documents.map((membership) =>
-            database
-              .deleteDocument(
-                String(databaseId),
-                String(membershipsCollectionId),
-                membership.$id
-              )
-              .catch((err) => {
-                console.error(
-                  "Failed to delete project membership:",
-                  err
-                );
-              })
-          )
-        );
+      const result = await deleteProject(project.$id);
+      if (result.success) {
+        onDeleted?.();
       }
-
-      if (tasksCollectionId) {
-        const tasks = await database.listDocuments(
-          String(databaseId),
-          String(tasksCollectionId),
-          [Query.equal("projectId", project.$id), Query.limit(200)]
-        );
-        await Promise.all(
-          tasks.documents.map((task) =>
-            database
-              .deleteDocument(
-                String(databaseId),
-                String(tasksCollectionId),
-                task.$id
-              )
-              .catch((err) => {
-                console.error("Failed to delete project task:", err);
-              })
-          )
-        );
-      }
-
-      await database.deleteDocument(
-        String(databaseId),
-        String(projectsCollectionId),
-        project.$id
-      );
-
-      setProjects((prev) => {
-        const updated = prev.filter((p) => p.$id !== project.$id);
-        if (currentProject?.$id === project.$id) {
-          const nextProject = updated[0] ?? null;
-          setCurrentProject(nextProject ?? null);
-          setCurrentProjectRole(
-            nextProject
-              ? nextProject.leader.$id === user?.id
-                ? "leader"
-                : "user"
-              : null
-          );
-        }
-        return updated;
-      });
-
-      toast.success("Đã xóa dự án.");
-      onDeleted?.();
-    } catch (error) {
-      console.error("Failed to delete project:", error);
-      toast.error("Xóa dự án thất bại.");
     } finally {
       setIsDeleting(false);
     }

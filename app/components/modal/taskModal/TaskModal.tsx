@@ -5,7 +5,6 @@ import ModalComponent from "../../common/ModalComponent";
 import {
   CreateTaskFormValues,
   TaskDetailFormValues,
-  Task,
   TaskModalProps,
   TaskAttachment,
 } from "../../../types/Types";
@@ -13,13 +12,12 @@ import { useAuth } from "../../../context/AuthContext";
 import { useProject } from "../../../context/ProjectContext";
 import { database } from "../../../appwrite";
 import toast from "react-hot-toast";
-import { Permission, Role } from "appwrite";
 import {
   detectMediaTypeFromUrl,
   extractMediaNameFromUrl,
 } from "../../../utils/media";
-import { uploadFilesToCloudinary } from "../../../utils/upload";
-import { useProjectMembers } from "../../../hooks/useProjectMembers";
+import { useProjectOperations } from "../../../hooks/useProjectOperations";
+import { useTask } from "../../../hooks/useTask";
 import TaskModalLeftPanel from "./TaskModalLeftPanel";
 import TaskDetailRightPanel from "./TaskDetailRightPanel";
 
@@ -135,7 +133,8 @@ const TaskModal: React.FC<TaskModalProps> = ({
     mode: "onChange",
   });
 
-  const { addMember: addProjectMember, members } = useProjectMembers();
+  const { addMember: addProjectMember, members } = useProjectOperations();
+  const { createTask, updateTask, receiveTask } = useTask();
 
   const watchedAssigneeRaw = watch("assignee");
   const watchedAssigneeId = getAssigneeId(watchedAssigneeRaw);
@@ -217,30 +216,17 @@ const TaskModal: React.FC<TaskModalProps> = ({
     e.preventDefault();
     e.stopPropagation();
     if (!task || !user) return;
-    try {
-      await database.updateDocument(
-        String(process.env.NEXT_PUBLIC_DATABASE_ID),
-        String(process.env.NEXT_PUBLIC_COLLECTION_ID_TASKS),
-        task.id,
-        { assignee: user.id }
-      );
+
+    const result = await receiveTask({ task });
+    if (result.success && result.task) {
       setValue(
         "assignee",
         { $id: user.id, name: user.name },
         { shouldDirty: false }
       );
       if (onUpdate) {
-        onUpdate({ ...task, assignee: { $id: user.id, name: user.name } });
+        onUpdate(result.task);
       }
-      toast.success("Nhận task thành công");
-    } catch (err) {
-      const message =
-        typeof err === "object" &&
-        err &&
-        "message" in (err as Record<string, unknown>)
-          ? String((err as { message?: unknown }).message)
-          : "Nhận task thất bại";
-      toast.error(message);
     }
   };
 
@@ -259,164 +245,35 @@ const TaskModal: React.FC<TaskModalProps> = ({
     setSelectedFiles((prev) => prev.filter((file) => file.name !== name));
   };
 
-  const uploadSelectedFiles = async (): Promise<TaskAttachment[]> => {
-    if (selectedFiles.length === 0) return [];
-    const uploaded = await uploadFilesToCloudinary(selectedFiles);
-    return uploaded.map((item) => ({
-      url: item.url,
-      name: item.name,
-      type: item.type,
-      createdAt: new Date().toISOString(),
-    }));
-  };
-
   const onSubmitCreate: SubmitHandler<CreateTaskFormValues> = async (data) => {
-    if (!isValid) return;
-    let attachments: TaskAttachment[] = [];
-    try {
-      attachments = await uploadSelectedFiles();
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Upload ảnh thất bại";
-      toast.error(message);
-      return;
-    }
+    if (!isValid || !nextSeq) return;
 
-    const baseTaskFields = {
-      seq: nextSeq!,
-      title: data.title,
-      description: data.description,
-      status: "list" as const,
-      order: 0,
-      startDate: data.startDate.trim() === "" ? null : data.startDate,
-      endDate: data.endDate.trim() === "" ? null : data.endDate,
-      predictedHours: data.predictedHours,
-      issueType: data.issueType!,
-      priority: data.priority!,
-      projectId: currentProject ? currentProject.$id : "",
-      projectName: currentProject ? currentProject.name : "",
-      completedBy: user!.id,
-      attachedFile: attachments,
-    };
+    const result = await createTask({
+      data,
+      nextSeq,
+      selectedFiles,
+      isLeader,
+      members,
+    });
 
-    const attributeId =
-      (
-        globalThis as unknown as { crypto?: { randomUUID?: () => string } }
-      ).crypto?.randomUUID?.() ||
-      `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-
-    let assigneeProfile = undefined;
-    if (isLeader) {
-      if (typeof data.assignee === "object" && data.assignee.name) {
-        assigneeProfile = data.assignee;
-      } else if (
-        typeof data.assignee === "string" &&
-        data.assignee.trim() !== ""
-      ) {
-        const found = members.find((m) => m.name === data.assignee);
-        if (found)
-          assigneeProfile = {
-            $id: found.$id,
-            name: found.name,
-            email: found.email,
-            avatarUrl: found.avatarUrl,
-          };
-      }
-    } else {
-      assigneeProfile = user ? { $id: user.id, name: user.name } : undefined;
-    }
-
-    const payloadForAppwrite = {
-      ...baseTaskFields,
-      id: attributeId,
-      attachedFile: attachments.map((m) => m.url),
-      media: undefined,
-      ...(assigneeProfile ? { assignee: assigneeProfile.$id } : {}),
-      completedBy: user!.id,
-    } as Record<string, unknown>;
-
-    try {
-      const created = await database.createDocument(
-        process.env.NEXT_PUBLIC_DATABASE_ID!,
-        process.env.NEXT_PUBLIC_COLLECTION_ID_TASKS!,
-        "unique()",
-        payloadForAppwrite,
-        [
-          Permission.read(Role.any()),
-          Permission.update(Role.user(user!.id)),
-          Permission.delete(Role.user(user!.id)),
-        ]
-      );
-      toast.success("Tạo Task thành công");
-      const createdId = (created as unknown as { $id: string }).$id;
-      const newTask: Task = {
-        id: createdId,
-        ...baseTaskFields,
-        assignee: assigneeProfile,
-      };
-      onCreate!(newTask);
+    if (result.success && result.task) {
+      onCreate!(result.task);
       setSelectedFiles([]);
-      setValue("attachments", attachments);
+      setValue("attachments", result.task.attachedFile as TaskAttachment[]);
       setIsOpen(false);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (e: any) {
-      toast.error(e.message || "Tạo Task thất bại");
     }
   };
 
   const onSubmitDetail: SubmitHandler<TaskDetailFormValues> = async (data) => {
     if (!task) return;
-    const isTaskTaken =
-      typeof task.assignee === "string"
-        ? task.assignee.trim() !== ""
-        : Boolean(task.assignee);
 
-    const updatedFields: Partial<Task> = {};
-    const canEditTiming = isTaskTaken && task.status !== "completed";
-    if (canEditTiming) {
-      if (
-        typeof data.startDate === "string" &&
-        data.startDate.trim() !== "" &&
-        data.startDate !== task.startDate
-      ) {
-        updatedFields.startDate = data.startDate;
-      }
-      if (
-        typeof data.endDate === "string" &&
-        data.endDate.trim() !== "" &&
-        data.endDate !== task.endDate
-      ) {
-        updatedFields.endDate = data.endDate;
-      }
-      if (
-        typeof data.predictedHours === "number" &&
-        data.predictedHours !== task.predictedHours
-      ) {
-        updatedFields.predictedHours = data.predictedHours;
-      }
-    }
+    const result = await updateTask({ task, data });
 
-    if (Object.keys(updatedFields).length === 0) {
-      setIsOpen(false);
-      return;
-    }
-
-    try {
-      await database.updateDocument(
-        process.env.NEXT_PUBLIC_DATABASE_ID!,
-        process.env.NEXT_PUBLIC_COLLECTION_ID_TASKS!,
-        task.id,
-        updatedFields
-      );
-      toast.success("Cập nhật Task thành công");
-      if (onUpdate) {
-        onUpdate({ ...task, ...updatedFields });
+    if (result.success) {
+      if (result.task && onUpdate) {
+        onUpdate(result.task);
       }
       setIsOpen(false);
-    } catch (e) {
-      const err = e as { message?: string };
-      console.error("Lỗi cập nhật:", e);
-      toast.error(err?.message || "Cập nhật Task thất bại");
     }
   };
 
@@ -476,15 +333,15 @@ const TaskModal: React.FC<TaskModalProps> = ({
     >
       {mode === "detail" && task?.id !== "guideTask" ? (
         <div className="grid h-[75vh] gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,1fr)]">
-      <div className="max-h-[75vh] overflow-y-auto pr-4 no-scrollbar">
-        {leftPanel}
-      </div>
-      <TaskDetailRightPanel
-        attachments={detailAttachments}
-        taskId={task?.id}
-        assignee={task?.assignee}
-        className="max-h-[75vh]"
-      />
+          <div className="max-h-[75vh] overflow-y-auto pr-4 no-scrollbar">
+            {leftPanel}
+          </div>
+          <TaskDetailRightPanel
+            attachments={detailAttachments}
+            taskId={task?.id}
+            assignee={task?.assignee}
+            className="max-h-[75vh]"
+          />
         </div>
       ) : (
         leftPanel

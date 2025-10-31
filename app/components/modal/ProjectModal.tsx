@@ -3,20 +3,15 @@
 import React, { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import ModalComponent from "../common/ModalComponent";
-import { database } from "../../appwrite";
-import toast from "react-hot-toast";
-import { useAuth } from "../../context/AuthContext";
-import { useProject } from "../../context/ProjectContext";
-import { Project, ProjectFormValues } from "../../types/Types";
+import { useProjectOperations } from "../../hooks/useProjectOperations";
+import { ProjectFormValues } from "../../types/Types";
 
 const ProjectModal: React.FC<{
   isOpen: boolean;
   setIsOpen: (v: boolean) => void;
   onProjectCreate?: () => void;
 }> = ({ isOpen, setIsOpen, onProjectCreate }) => {
-  const { user } = useAuth();
-  const { setCurrentProject, setCurrentProjectRole, setProjects } =
-    useProject();
+  const { createProject } = useProjectOperations();
   const {
     register,
     handleSubmit,
@@ -31,50 +26,11 @@ const ProjectModal: React.FC<{
   });
 
   const onSubmit = async (data: ProjectFormValues) => {
-    if (!user) return;
-
-    try {
-      const projectDocument = await database.createDocument(
-        String(process.env.NEXT_PUBLIC_DATABASE_ID),
-        String(process.env.NEXT_PUBLIC_COLLECTION_ID_PROJECTS),
-        "unique()",
-        {
-          name: data.name,
-          leader: user.id,
-        }
-      );
-
-      await database.createDocument(
-        String(process.env.NEXT_PUBLIC_DATABASE_ID),
-        String(process.env.NEXT_PUBLIC_COLLECTION_ID_PROJECT_MEMBERSHIPS),
-        "unique()",
-        {
-          project: projectDocument.$id,
-          user: user.id,
-          joinedAt: new Date().toISOString(),
-        }
-      );
-
-      const createdProject: Project = {
-        $id: projectDocument.$id,
-        name: projectDocument.name,
-        leader: projectDocument.leader,
-        $createdAt: projectDocument.$createdAt,
-      };
-
-      setCurrentProject(createdProject);
-      setCurrentProjectRole("leader");
-      setProjects((prevProjects) => [...prevProjects, createdProject]);
-      toast.success("Tạo dự án thành công!");
+    const result = await createProject(data.name);
+    if (result.success) {
       onProjectCreate?.();
       reset();
       setIsOpen(false);
-    } catch (e: unknown) {
-      if (e instanceof Error) {
-        toast.error(e.message || "Tạo dự án thất bại");
-      } else {
-        toast.error("Tạo dự án thất bại");
-      }
     }
   };
 
