@@ -10,10 +10,7 @@ import {
   PendingAttachment,
   TaskComment,
 } from "../components/comments/types";
-import {
-  mapCommentDocument,
-  RawCommentDocument,
-} from "../utils/comment";
+import { mapCommentDocument, RawCommentDocument } from "../utils/comment";
 
 interface CreateCommentParams {
   taskId: string;
@@ -48,7 +45,8 @@ const serializeAttachment = (attachment: CommentAttachment) =>
     mimeType: attachment.mimeType,
   });
 
-export const useComment = (taskId?: string) => {
+export const useComment = (taskId?: string, options?: { locked?: boolean }) => {
+  const isLocked = options?.locked ?? false;
   const [comments, setComments] = useState<TaskComment[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
@@ -57,8 +55,12 @@ export const useComment = (taskId?: string) => {
   const mergeComment = useCallback(
     (existing: TaskComment | undefined, incoming: TaskComment): TaskComment => {
       const hasValidIncomingName =
-        incoming.user.name && incoming.user.name.trim().length > 0 && incoming.user.name !== "Người dùng";
-      const user = hasValidIncomingName ? incoming.user : existing?.user ?? incoming.user;
+        incoming.user.name &&
+        incoming.user.name.trim().length > 0 &&
+        incoming.user.name !== "Người dùng";
+      const user = hasValidIncomingName
+        ? incoming.user
+        : existing?.user ?? incoming.user;
 
       return {
         ...(existing ?? incoming),
@@ -69,7 +71,6 @@ export const useComment = (taskId?: string) => {
     []
   );
 
-  // Initial load
   useEffect(() => {
     if (!taskId) {
       setComments([]);
@@ -80,14 +81,10 @@ export const useComment = (taskId?: string) => {
       try {
         setIsLoading(true);
         const { databaseId, collectionId } = getCollectionInfo();
-        const res = await database.listDocuments(
-          databaseId,
-          collectionId,
-          [
-            Query.equal("taskId", taskId),
-            Query.orderDesc("$createdAt"),
-          ]
-        );
+        const res = await database.listDocuments(databaseId, collectionId, [
+          Query.equal("taskId", taskId),
+          Query.orderDesc("$createdAt"),
+        ]);
         if (cancelled) return;
         const mapped = (res.documents as unknown as RawCommentDocument[]).map(
           (doc) => mapCommentDocument(doc)
@@ -109,7 +106,6 @@ export const useComment = (taskId?: string) => {
     };
   }, [taskId]);
 
-  // Realtime subscription
   useEffect(() => {
     if (!taskId) return;
     const { databaseId, collectionId } = getCollectionInfo();
@@ -168,6 +164,10 @@ export const useComment = (taskId?: string) => {
       attachments,
     }: CreateCommentParams): Promise<TaskComment | null> => {
       if (!targetTaskId) return null;
+      if (isLocked) {
+        toast.error("Dự án đã bị đóng, không thể bình luận.");
+        return null;
+      }
       if (isCreatingRef.current) {
         toast.error("Đang gửi bình luận, vui lòng đợi...");
         return null;
@@ -252,7 +252,7 @@ export const useComment = (taskId?: string) => {
         setIsCreating(false);
       }
     },
-    [mergeComment]
+    [mergeComment, isLocked]
   );
 
   const updateComment = useCallback(
@@ -262,6 +262,10 @@ export const useComment = (taskId?: string) => {
       retainedAttachments,
       newAttachments,
     }: UpdateCommentParams): Promise<TaskComment | null> => {
+      if (isLocked) {
+        toast.error("Dự án đã bị đóng, không thể chỉnh sửa bình luận.");
+        return null;
+      }
       try {
         const { databaseId, collectionId } = getCollectionInfo();
         const trimmedContent = content.trim();
@@ -297,9 +301,8 @@ export const useComment = (taskId?: string) => {
           ...uploadedAttachments,
         ];
 
-        const serializedAttachments = combinedAttachments.map(
-          serializeAttachment
-        );
+        const serializedAttachments =
+          combinedAttachments.map(serializeAttachment);
 
         const updated = await database.updateDocument(
           databaseId,
@@ -339,11 +342,15 @@ export const useComment = (taskId?: string) => {
         return null;
       }
     },
-    [mergeComment]
+    [mergeComment, isLocked]
   );
 
   const deleteComment = useCallback(
     async (commentId: string): Promise<boolean> => {
+      if (isLocked) {
+        toast.error("Dự án đã bị đóng, không thể xóa bình luận.");
+        return false;
+      }
       try {
         const { databaseId, collectionId } = getCollectionInfo();
         await database.deleteDocument(databaseId, collectionId, commentId);
@@ -352,14 +359,12 @@ export const useComment = (taskId?: string) => {
         return true;
       } catch (error) {
         const message =
-          error instanceof Error
-            ? error.message
-            : "Xóa bình luận thất bại";
+          error instanceof Error ? error.message : "Xóa bình luận thất bại";
         toast.error(message);
         return false;
       }
     },
-    []
+    [isLocked]
   );
 
   return {

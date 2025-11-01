@@ -14,6 +14,7 @@ import ProjectModal from "./modal/ProjectModal";
 import { useTheme } from "../context/ThemeContext";
 import { useProjectOperations } from "../hooks/useProjectOperations";
 import { useTask } from "../hooks/useTask";
+import { enrichTaskAssignee, enrichTasksAssignee, preserveAssignee } from "../utils/TasksAssignee";
 
 const Board = dynamic(() => import("./Board"), { ssr: false });
 
@@ -67,7 +68,8 @@ const mapTaskDocument = (raw: RawTaskDocument): Task => {
 const HomePage: React.FC = () => {
   const { user } = useAuth();
   const { theme } = useTheme();
-  const { currentProject, currentProjectRole, setTasksHydrated } = useProject();
+  const { currentProject, currentProjectRole, setTasksHydrated, isProjectClosed } =
+    useProject();
   const { members } = useProjectOperations();
   const currentUserName = user?.name || "";
   const isLeader = currentProjectRole === "leader";
@@ -86,7 +88,7 @@ const HomePage: React.FC = () => {
   const [hasLoaded, setHasLoaded] = useState<boolean>(false);
   const { moveTask } = useTask();
 
-  const memberMap = React.useMemo(() => {
+  const memberMap = useMemo(() => {
     const map = new Map<string, BasicProfile>();
     members.forEach((member) => {
       map.set(member.$id, {
@@ -106,82 +108,6 @@ const HomePage: React.FC = () => {
     }
     return map;
   }, [members, currentProject?.leader]);
-
-  const enrichTaskAssignee = React.useCallback(
-    (task: Task): Task => {
-      if (task.assignee && typeof task.assignee === "string") {
-        const profile = memberMap.get(task.assignee);
-        if (profile) {
-          return {
-            ...task,
-            assignee: profile,
-          };
-        }
-      }
-      return task;
-    },
-    [memberMap]
-  );
-
-  const preserveAssignee = useCallback(
-    (incoming: Task, fallback?: string | BasicProfile) => {
-      const fallbackProfile =
-        typeof fallback === "object"
-          ? fallback
-          : typeof fallback === "string"
-          ? memberMap.get(fallback)
-          : undefined;
-
-      if (incoming.assignee && typeof incoming.assignee === "object") {
-        const currentProfile = incoming.assignee as BasicProfile;
-        const hasName =
-          typeof currentProfile.name === "string" &&
-          currentProfile.name.trim().length > 0;
-        if (hasName) {
-          return incoming;
-        }
-
-        const mergedProfile =
-          (currentProfile.$id && memberMap.get(currentProfile.$id)) ||
-          fallbackProfile;
-        if (mergedProfile) {
-          return {
-            ...incoming,
-            assignee: mergedProfile,
-          };
-        }
-
-        return incoming;
-      }
-
-      if (incoming.assignee == null) {
-        if (fallbackProfile) {
-          return { ...incoming, assignee: fallbackProfile };
-        }
-        if (typeof fallback === "string") {
-          return { ...incoming, assignee: fallback };
-        }
-        return incoming;
-      }
-
-      if (
-        typeof incoming.assignee === "string" &&
-        memberMap.has(incoming.assignee)
-      ) {
-        return {
-          ...incoming,
-          assignee: memberMap.get(incoming.assignee),
-        } as Task;
-      }
-
-      if (fallbackProfile) {
-        return { ...incoming, assignee: fallbackProfile };
-      }
-
-      return incoming;
-    },
-    [memberMap]
-  );
 
   const dedupeTasks = useCallback((list: Task[]) => {
     const seen = new Set<string>();
@@ -203,7 +129,6 @@ const HomePage: React.FC = () => {
     [dedupeTasks]
   );
 
-
   useEffect(() => {
     if (!user) {
       setTimeout(() => {
@@ -222,6 +147,7 @@ const HomePage: React.FC = () => {
       }
       return;
     }
+
     database
       .listDocuments(
         String(process.env.NEXT_PUBLIC_DATABASE_ID),
@@ -232,7 +158,7 @@ const HomePage: React.FC = () => {
           .map((doc) => mapTaskDocument(doc as RawTaskDocument))
           .filter((t) => t.projectId === currentProject.$id)
           .map((task) =>
-            preserveAssignee(enrichTaskAssignee(task), task.assignee)
+            preserveAssignee(enrichTaskAssignee(task, memberMap), memberMap, task.assignee)
           );
         setAllTasks(dedupeTasks(mapped));
       })
@@ -245,20 +171,14 @@ const HomePage: React.FC = () => {
           if (setTasksHydrated) setTasksHydrated(true);
         }
       });
-  }, [
-    user,
-    currentProject,
-    hasLoaded,
-    setTasksHydrated,
-    enrichTaskAssignee,
-    preserveAssignee,
-    dedupeTasks,
-  ]);
+  }, [user, currentProject, hasLoaded, setTasksHydrated, memberMap, dedupeTasks]);
 
   useEffect(() => {
     if (!user || !currentProject) return;
+
     const channel = `databases.${process.env.NEXT_PUBLIC_DATABASE_ID}.collections.${process.env.NEXT_PUBLIC_COLLECTION_ID_TASKS}.documents`;
-    const unsubscribe = subscribeToRealtime([channel], (res: unknown) => {
+
+    const unsubscribe = subscribeToRealtime([channel], async (res: unknown) => {
       const payload = res as {
         payload: RawTaskDocument;
         events: string[];
@@ -276,55 +196,76 @@ const HomePage: React.FC = () => {
         return;
       }
 
-      const mapped = enrichTaskAssignee(mapTaskDocument(raw));
-      if (mapped.projectId !== currentProject.$id) return;
+      if (events.some((e: string) => e.endsWith(".update"))) {
+        if (!documentId) return;
+
+        try {
+          const fullDoc = await database.getDocument(
+            String(process.env.NEXT_PUBLIC_DATABASE_ID),
+            String(process.env.NEXT_PUBLIC_COLLECTION_ID_TASKS),
+            documentId
+          );
+
+          const mapped = enrichTaskAssignee(
+            mapTaskDocument(fullDoc as RawTaskDocument),
+            memberMap
+          );
+
+          if (mapped.projectId !== currentProject.$id) return;
+
+          let finalAssignee = mapped.assignee;
+          if (typeof mapped.assignee === "string" && mapped.assignee.trim() !== "") {
+            const enriched = memberMap.get(mapped.assignee);
+            if (enriched) {
+              finalAssignee = enriched;
+            }
+          }
+
+          const updatedTask = { ...mapped, assignee: finalAssignee };
+
+          applyTasks((prev) =>
+            prev.map((t) => (t.id === mapped.id ? updatedTask : t))
+          );
+
+          setSelectedTask((task) =>
+            task && task.id === mapped.id ? updatedTask : task
+          );
+        } catch (error) {
+          console.error("❌ Failed to fetch full document:", error);
+        }
+        return;
+      }
 
       if (events.some((e: string) => e.endsWith(".create"))) {
+        const mapped = enrichTaskAssignee(mapTaskDocument(raw), memberMap);
+        if (mapped.projectId !== currentProject.$id) return;
+
         applyTasks((prev) => {
           if (prev.some((task) => task.id === mapped.id)) {
             return prev;
           }
-          return [...prev, preserveAssignee(mapped, mapped.assignee)];
+          return [...prev, preserveAssignee(mapped, memberMap, mapped.assignee)];
         });
-      } else if (events.some((e: string) => e.endsWith(".update"))) {
-        applyTasks((prev) =>
-          prev.map((t) =>
-            t.id === mapped.id
-              ? preserveAssignee(mapped, t.assignee)
-              : t
-          )
-        );
-        setSelectedTask((task) =>
-          task && task.id === mapped.id
-            ? preserveAssignee(mapped, task.assignee)
-            : task
-        );
       }
     });
 
     return () => unsubscribe();
-  }, [user, currentProject, enrichTaskAssignee, preserveAssignee, applyTasks]);
+  }, [user, currentProject, applyTasks, memberMap]);
 
   useEffect(() => {
-    setAllTasks((prev) =>
-      dedupeTasks(
-        prev.map((task) =>
-          preserveAssignee(enrichTaskAssignee(task), task.assignee)
-        )
-      )
-    );
+    setAllTasks((prev) => dedupeTasks(enrichTasksAssignee(prev, memberMap)));
     setSelectedTask((task) =>
-      task
-        ? preserveAssignee(enrichTaskAssignee(task), task.assignee)
-        : task
+      task ? enrichTaskAssignee(task, memberMap) : task
     );
-  }, [enrichTaskAssignee, preserveAssignee, dedupeTasks]);
+  }, [memberMap, dedupeTasks]);
 
   const handleCreateClick = () => {
     if (user) {
       if (!currentProject) {
         setProjectModalOpen(true);
         setShouldOpenTaskAfterProjectCreation(true);
+      } else if (isProjectClosed) {
+        toast.error("Dự án đã bị đóng, không thể tạo task mới.");
       } else {
         setTaskModalOpen(true);
       }
@@ -350,6 +291,8 @@ const HomePage: React.FC = () => {
       if (!currentProject) {
         setProjectModalOpen(true);
         setShouldOpenTaskAfterProjectCreation(true);
+      } else if (isProjectClosed) {
+        toast.error("Dự án đã bị đóng, không thể tạo task mới.");
       } else {
         setTaskModalOpen(true);
       }
@@ -362,15 +305,18 @@ const HomePage: React.FC = () => {
     dedupeTasks,
   ]);
 
-
   const handleCreateTask = (task: Task) => {
     if (currentProject) {
       const enrichedTask = preserveAssignee(
-        enrichTaskAssignee({
-          ...task,
-          projectId: currentProject.$id,
-          projectName: currentProject.name,
-        }),
+        enrichTaskAssignee(
+          {
+            ...task,
+            projectId: currentProject.$id,
+            projectName: currentProject.name,
+          },
+          memberMap
+        ),
+        memberMap,
         task.assignee
       );
       applyTasks((prev) => [...prev, enrichedTask]);
@@ -379,8 +325,12 @@ const HomePage: React.FC = () => {
 
   const handleUpdateTask = (updated: Task) => {
     const previous = allTasks.find((t) => t.id === updated.id);
-    const enriched = enrichTaskAssignee(updated);
-    const ensured = preserveAssignee(enriched, previous?.assignee ?? updated.assignee);
+    const enriched = enrichTaskAssignee(updated, memberMap);
+    const ensured = preserveAssignee(
+      enriched,
+      memberMap,
+      previous?.assignee ?? updated.assignee
+    );
     applyTasks((prev) =>
       prev.map((t) => (t.id === ensured.id ? { ...t, ...ensured } : t))
     );
@@ -408,6 +358,7 @@ const HomePage: React.FC = () => {
     fallbackStatus: TaskStatus | null = null
   ) => {
     const { active, over } = event;
+    if (isProjectClosed) return;
     const sourceStatus = active.data.current?.status as TaskStatus;
     if (!sourceStatus || sourceStatus === "completed") return;
 
@@ -450,12 +401,16 @@ const HomePage: React.FC = () => {
       isLeader && targetStatus === "completed" ? currentUserName : undefined;
 
     const optimisticTask: Task = preserveAssignee(
-      enrichTaskAssignee({
-        ...currentTask,
-        status: targetStatus,
-        order: targetOrder,
-        completedBy: newCompletedBy,
-      }),
+      enrichTaskAssignee(
+        {
+          ...currentTask,
+          status: targetStatus,
+          order: targetOrder,
+          completedBy: newCompletedBy,
+        },
+        memberMap
+      ),
+      memberMap,
       currentTask.assignee
     );
 
@@ -479,15 +434,14 @@ const HomePage: React.FC = () => {
     }
 
     const enrichedResult = preserveAssignee(
-      enrichTaskAssignee(result.task),
+      enrichTaskAssignee(result.task, memberMap),
+      memberMap,
       currentTask.assignee
     );
     applyTasks((prev) =>
       prev.map((t) => (t.id === enrichedResult.id ? enrichedResult : t))
     );
   };
-
-  // Initial loading splash moved to AppBootstrap; render page directly here
 
   return (
     <div
@@ -498,6 +452,8 @@ const HomePage: React.FC = () => {
         onCreateTask={handleCreateClick}
         onLoginClick={handleLoginClick}
         onCreateProject={handleCreateProject}
+        isProjectClosed={isProjectClosed}
+        projectTheme={currentProject?.themeColor || theme}
       />
 
       <div className="relative p-4">
@@ -510,8 +466,8 @@ const HomePage: React.FC = () => {
             setSelectedTask(t);
             setTaskDetailOpen(true);
           }}
+          isProjectClosed={isProjectClosed}
         />
-        {/* Removed inner loading overlay per requirement */}
       </div>
 
       <ProjectModal

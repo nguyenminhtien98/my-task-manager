@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useAuth } from "./context/AuthContext";
 import { useProject } from "./context/ProjectContext";
 import { DEFAULT_THEME_GRADIENT } from "./utils/themeColors";
+import FaviconUpdater from "./components/FaviconUpdater";
 
 const AppBootstrap: React.FC<{ children: React.ReactNode }> = ({
   children,
@@ -41,7 +42,12 @@ const AppBootstrap: React.FC<{ children: React.ReactNode }> = ({
     );
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      <FaviconUpdater />
+      {children}
+    </>
+  );
 };
 
 export default AppBootstrap;

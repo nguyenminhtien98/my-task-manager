@@ -12,6 +12,7 @@ interface ProjectMemberListViewProps {
   isMembersLoading: boolean;
   onAddMember: (userId: string) => Promise<void>;
   onMemberClick: (member: EnrichedProjectMember) => void;
+  isProjectClosed: boolean;
 }
 
 const ProjectMemberListView: React.FC<ProjectMemberListViewProps> = ({
@@ -21,6 +22,7 @@ const ProjectMemberListView: React.FC<ProjectMemberListViewProps> = ({
   isMembersLoading,
   onAddMember,
   onMemberClick,
+  isProjectClosed,
 }) => {
   const existingMemberIds = React.useMemo(
     () => members.map((m) => m.$id),
@@ -37,7 +39,13 @@ const ProjectMemberListView: React.FC<ProjectMemberListViewProps> = ({
           <UserSearchInput
             onAddMember={onAddMember}
             existingMemberIds={existingMemberIds}
+            disabled={isProjectClosed}
           />
+          {isProjectClosed && (
+            <p className="text-xs text-red-500">
+              Dự án đã đóng, không thể thêm thành viên mới.
+            </p>
+          )}
         </div>
       )}
 

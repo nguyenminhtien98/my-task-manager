@@ -54,6 +54,7 @@ interface TaskModalLeftPanelProps {
   reset?: (
     values?: Partial<CreateTaskFormValues & Partial<TaskDetailFormValues>>
   ) => void;
+  isProjectClosed: boolean;
 }
 
 const TaskModalLeftPanel: React.FC<TaskModalLeftPanelProps> = ({
@@ -78,6 +79,7 @@ const TaskModalLeftPanel: React.FC<TaskModalLeftPanelProps> = ({
   task,
   onUpdate,
   reset,
+  isProjectClosed,
 }) => {
   const { members, isLoading: isMembersLoading } = useProjectOperations();
   const memberNames = React.useMemo(
@@ -103,6 +105,12 @@ const TaskModalLeftPanel: React.FC<TaskModalLeftPanelProps> = ({
 
   return (
     <form onSubmit={onSubmit} className="space-y-4">
+      {isProjectClosed && (
+        <div className="rounded border border-yellow-400 bg-yellow-100 px-3 py-2 text-sm text-yellow-800">
+          Dự án đã được đóng. Bạn chỉ có thể xem thông tin task.
+        </div>
+      )}
+      <fieldset disabled={isProjectClosed} className="space-y-4">
       <div>
         <label className="block text-sm font-semibold text-sub">Tiêu đề</label>
         <input
@@ -396,39 +404,40 @@ const TaskModalLeftPanel: React.FC<TaskModalLeftPanelProps> = ({
         </div>
       </div>
 
-      <div className="flex justify-end space-x-4">
-        {showReceiveButton ? (
-          <Button
-            onClick={handleReceive}
-            className="rounded bg-green-500 px-4 py-2 text-white"
-          >
-            Nhận Task
-          </Button>
-        ) : (
-          (mode === "create" ||
-            (mode === "detail" &&
-              Object.keys(dirtyFields).filter((k) => k !== "assignee").length >
-                0)) && (
+        <div className="flex justify-end space-x-4">
+          {showReceiveButton ? (
             <Button
-              type="submit"
-              disabled={isSubmitting || !isValid}
-              className={`rounded px-4 py-2 text-white ${
-                isSubmitting || !isValid
-                  ? "bg-gray-400 cursor-not-allowed"
-                  : "bg-black"
-              }`}
+              onClick={handleReceive}
+              className="rounded bg-green-500 px-4 py-2 text-white"
             >
-              {isSubmitting
-                ? mode === "create"
-                  ? "Đang tạo..."
-                  : "Đang lưu..."
-                : mode === "create"
-                ? "Tạo"
-                : "Lưu"}
+              Nhận Task
             </Button>
-          )
-        )}
-      </div>
+          ) : (
+            (mode === "create" ||
+              (mode === "detail" &&
+                Object.keys(dirtyFields).filter((k) => k !== "assignee").length >
+                  0)) && (
+              <Button
+                type="submit"
+                disabled={isSubmitting || !isValid}
+                className={`rounded px-4 py-2 text-white ${
+                  isSubmitting || !isValid
+                    ? "bg-gray-400 cursor-not-allowed"
+                    : "bg-black"
+                }`}
+              >
+                {isSubmitting
+                  ? mode === "create"
+                    ? "Đang tạo..."
+                    : "Đang lưu..."
+                  : mode === "create"
+                  ? "Tạo"
+                  : "Lưu"}
+              </Button>
+            )
+          )}
+        </div>
+      </fieldset>
     </form>
   );
 };

@@ -30,6 +30,7 @@ export default function Board({
     isLeader,
     onMove,
     onTaskClick,
+    isProjectClosed,
 }: BoardProps) {
     const [activeId, setActiveId] = useState<string | null>(null);
     const [lastOverStatus, setLastOverStatus] = useState<TaskStatus | null>(
@@ -77,11 +78,13 @@ export default function Board({
             sensors={sensors}
             collisionDetection={collisionDetection}
             onDragStart={({ active }) => {
+                if (isProjectClosed) return;
                 setActiveId(active.id as string);
                 const current = findTask(active.id as string);
                 setLastOverStatus(current?.status ?? null);
             }}
             onDragOver={({ over }) => {
+                if (isProjectClosed) return;
                 if (!over) return;
                 let status: TaskStatus | null = null;
                 const overData = over.data?.current as
@@ -102,6 +105,7 @@ export default function Board({
             onDragEnd={(event) => {
                 setActiveId(null);
                 setLastOverStatus(null);
+                if (isProjectClosed) return;
                 onMove(event, lastOverStatus);
             }}
             onDragCancel={() => {
@@ -118,6 +122,7 @@ export default function Board({
                         tasks={columns[status]}
                         currentUserName={currentUser}
                         isLeader={isLeader}
+                        isProjectClosed={isProjectClosed}
                         onTaskClick={onTaskClick}
                     />
                 ))}

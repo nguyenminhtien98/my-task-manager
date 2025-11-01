@@ -18,6 +18,7 @@ interface CommentItemProps {
   onPreview: (media: TaskAttachment) => void;
   onUpdateComment: (params: UpdateCommentParams) => Promise<TaskComment | null>;
   onDeleteComment: (commentId: string) => Promise<boolean>;
+  isLocked?: boolean;
 }
 
 const renderAttachment = (attachment: CommentAttachment, onPreview: (media: TaskAttachment) => void) => {
@@ -74,6 +75,7 @@ const CommentItem: React.FC<CommentItemProps> = ({
   onPreview,
   onUpdateComment,
   onDeleteComment,
+  isLocked = false,
 }) => {
   const { user } = useAuth();
   const isOwner = user?.id === comment.user.id;
@@ -86,6 +88,8 @@ const CommentItem: React.FC<CommentItemProps> = ({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const canEdit = isOwner && !isLocked;
+  const canDelete = isOwner && !isLocked;
 
   const clearPendingAttachments = useCallback(() => {
     setPendingAttachments((prev) => {
@@ -132,6 +136,12 @@ const CommentItem: React.FC<CommentItemProps> = ({
   }, [editContent, isEditing]);
 
   useEffect(() => {
+    if (isLocked && isEditing) {
+      resetEditingState();
+    }
+  }, [isLocked, isEditing, resetEditingState]);
+
+  useEffect(() => {
     return () => {
       clearPendingAttachments();
     };
@@ -156,6 +166,7 @@ const CommentItem: React.FC<CommentItemProps> = ({
   }, [comment.id, isEditing, resetEditingState]);
 
   const handleStartEdit = () => {
+    if (!canEdit) return;
     if (typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent(EDIT_EVENT_NAME, { detail: comment.id }));
     }
@@ -183,10 +194,11 @@ const CommentItem: React.FC<CommentItemProps> = ({
   const hasContentOrAttachments =
     trimmedEditContent.length > 0 || editAttachments.length > 0 || pendingAttachments.length > 0;
   const hasChanges = trimmedOriginalContent !== trimmedEditContent || attachmentsChanged;
-  const canSubmitEdit = hasChanges && hasContentOrAttachments && !isUpdating;
+  const canSubmitEdit =
+    canEdit && hasChanges && hasContentOrAttachments && !isUpdating;
 
   const handleSubmitEdit = async () => {
-    if (!canSubmitEdit || isUpdating) return;
+    if (!canEdit || !canSubmitEdit || isUpdating) return;
     setIsUpdating(true);
     const result = await onUpdateComment({
       comment,
@@ -214,7 +226,7 @@ const CommentItem: React.FC<CommentItemProps> = ({
   };
 
   const handleDeleteComment = async () => {
-    if (!isOwner || isEditing || isDeleting) return;
+    if (!canDelete || isEditing || isDeleting) return;
     const confirmed = window.confirm("Bạn có chắc muốn xóa bình luận này?");
     if (!confirmed) return;
     setIsDeleting(true);
@@ -227,6 +239,7 @@ const CommentItem: React.FC<CommentItemProps> = ({
   };
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (isLocked) return;
     const files = event.target.files;
     if (!files || files.length === 0) {
       event.target.value = "";
@@ -448,27 +461,34 @@ const CommentItem: React.FC<CommentItemProps> = ({
                 {comment.attachments.map((attachment) => renderAttachment(attachment, onPreview))}
 
               </div>
-              {isOwner && (
+              {(canEdit || canDelete) && (
                 <div className="mt-2 flex items-center text-xs font-medium text-white">
-                  <button
-                    type="button"
-                    onClick={handleStartEdit}
-                    className="cursor-pointer hover:underline"
-                  >
-                    Chỉnh sửa
-                  </button>
-                  <span
-                    aria-hidden="true"
-                    className="mx-2 inline-block h-1 w-1 rounded-full bg-white"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleDeleteComment}
-                    disabled={isDeleting}
-                    className={`cursor-pointer hover:underline ${isDeleting ? "opacity-60" : ""}`}
-                  >
-                    {isDeleting ? "Đang xóa..." : "Xóa"}
-                  </button>
+                  {canEdit && (
+                    <button
+                      type="button"
+                      onClick={handleStartEdit}
+                      className={`cursor-pointer hover:underline ${isLocked ? "opacity-60" : ""}`}
+                      disabled={isLocked}
+                    >
+                      Chỉnh sửa
+                    </button>
+                  )}
+                  {canEdit && canDelete && (
+                    <span
+                      aria-hidden="true"
+                      className="mx-2 inline-block h-1 w-1 rounded-full bg-white"
+                    />
+                  )}
+                  {canDelete && (
+                    <button
+                      type="button"
+                      onClick={handleDeleteComment}
+                      disabled={isDeleting || isLocked}
+                      className={`cursor-pointer hover:underline ${isDeleting || isLocked ? "opacity-60" : ""}`}
+                    >
+                      {isDeleting ? "Đang xóa..." : "Xóa"}
+                    </button>
+                  )}
                 </div>
               )}
             </>

@@ -6,8 +6,8 @@ import { useProject } from "../context/ProjectContext";
 import { HeaderProps } from "../types/Types";
 import AvatarUser from "./common/AvatarUser";
 import AnimatedGradientLogo from "./common/AnimatedGradientLogo";
+import BrandOrbHeaderIcon from "./common/LogoComponent";
 import { useTheme } from "../context/ThemeContext";
-import { database } from "../appwrite";
 import ThemePickerModal from "./modal/ThemePickerModal";
 import EditProfileModal from "./modal/editProfileModal";
 import { DEFAULT_THEME_GRADIENT } from "../utils/themeColors";
@@ -19,11 +19,14 @@ import {
 } from "../hooks/useProjectOperations";
 import ProjectMembersModal from "./modal/projectMemberModal";
 import ProjectManagerModal from "./modal/projectModal/ProjectManagerModal";
+import { useProjectTheme } from "../hooks/useProjectTheme";
 
 const Header: React.FC<HeaderProps> = ({
   onCreateTask,
   onLoginClick,
   onCreateProject,
+  isProjectClosed,
+  projectTheme,
 }) => {
   const { user, logout } = useAuth();
   const { projects, currentProject, setCurrentProject, setCurrentProjectRole } =
@@ -35,7 +38,6 @@ const Header: React.FC<HeaderProps> = ({
   const [pendingTheme, setPendingTheme] = useState<string>(
     DEFAULT_THEME_GRADIENT
   );
-  const [isSavingTheme, setIsSavingTheme] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const filterRef = useRef<HTMLDivElement>(null);
   const [isProjectManagerOpen, setIsProjectManagerOpen] = useState(false);
@@ -45,6 +47,7 @@ const Header: React.FC<HeaderProps> = ({
   const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
   const [modalInitialMember, setModalInitialMember] =
     useState<EnrichedProjectMember | null>(null);
+  const { isSaving: isSavingTheme, saveTheme } = useProjectTheme();
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -97,28 +100,14 @@ const Header: React.FC<HeaderProps> = ({
 
   const handleSaveTheme = async () => {
     if (!user || !currentProject) return;
-    setIsSavingTheme(true);
-    try {
-      await database.updateDocument(
-        String(process.env.NEXT_PUBLIC_DATABASE_ID),
-        String(process.env.NEXT_PUBLIC_COLLECTION_ID_PROJECTS),
-        currentProject.$id,
-        { themeColor: pendingTheme }
-      );
-      // Update current project in context so UI reflects new theme immediately
-      setCurrentProject({
-        ...currentProject,
-        themeColor: pendingTheme,
-      });
-      setTheme(pendingTheme);
+    const result = await saveTheme(pendingTheme);
+    if (result.success) {
       toast.success("Đã cập nhật màu nền dự án.");
       setThemeModalOpen(false);
-    } catch (error) {
-      console.error("Failed to update theme color:", error);
-      toast.error("Cập nhật màu nền dự án thất bại.");
+    } else {
+      toast.error(result.message ?? "Cập nhật màu nền dự án thất bại.");
       resetTheme();
-    } finally {
-      setIsSavingTheme(false);
+      setPendingTheme(currentProject.themeColor || DEFAULT_THEME_GRADIENT);
     }
   };
 
@@ -148,8 +137,14 @@ const Header: React.FC<HeaderProps> = ({
 
   return (
     <>
-      <header className="sticky top-0 z-50 flex w-full flex-col items-center justify-between gap-4 border-b border-white/30 bg-white/40 p-2 backdrop-blur-lg sm:flex-row">
-        <AnimatedGradientLogo className="text-xl font-bold sm:text-2xl" />
+      <header className="sticky top-0 z-50 flex w-full flex-col items-center justify-between gap-4 border-b border-white/20 bg-black/60 p-2 backdrop-blur-lg sm:flex-row">
+        <div className="flex items-center gap-2">
+          <BrandOrbHeaderIcon
+            size={28}
+            background={projectTheme || DEFAULT_THEME_GRADIENT}
+          />
+          <AnimatedGradientLogo className="text-xl font-bold sm:text-2xl" />
+        </div>
 
         <div className="flex flex-col items-center space-y-2 sm:flex-row sm:space-y-0 sm:space-x-4">
           {user && currentProject && (
@@ -173,7 +168,7 @@ const Header: React.FC<HeaderProps> = ({
                         name={member.name}
                         avatarUrl={member.avatarUrl}
                         size={34}
-                        className={`${member.isLeader ? "border border-black" : ""
+                        className={`${member.isLeader ? "border-2 border-white" : ""
                           } shadow`}
                         title={
                           member.isLeader
@@ -200,7 +195,10 @@ const Header: React.FC<HeaderProps> = ({
             <div ref={filterRef} className="relative">
               <Button
                 onClick={() => setShowProjectFilter((prev) => !prev)}
-                className="px-3 py-1 bg-[#40a8f6] text-white hover:bg-[#3494dc]"
+                className="px-3 py-1 text-white"
+                style={{
+                  background: currentProject?.themeColor || DEFAULT_THEME_GRADIENT,
+                }}
               >
                 Dự án: {currentProject ? currentProject.name : "Chọn dự án"}
               </Button>
@@ -235,15 +233,23 @@ const Header: React.FC<HeaderProps> = ({
           {user && projects.length > 0 && onCreateProject && (
             <Button
               onClick={onCreateProject}
-              className="px-3 py-1 bg-green-600 text-white hover:bg-green-700"
+              className="px-3 py-1 bg-green-600 text-white"
             >
               Add Project
             </Button>
           )}
 
           <Button
-            onClick={onCreateTask}
-            className="px-3 py-1 bg-[#d15f63] text-white hover:bg-[#df8c8c]"
+            onClick={() => {
+              if (isProjectClosed) return;
+              onCreateTask();
+            }}
+            className={`px-3 py-1 text-white ${isProjectClosed
+              ? "bg-gray-400 cursor-not-allowed"
+              : "bg-[#d15f63] hover:bg-[#df8c8c]"
+              }`}
+            disabled={isProjectClosed}
+            title={isProjectClosed ? "Dự án đã đóng, không thể tạo task" : ""}
           >
             Add Task
           </Button>
@@ -320,6 +326,7 @@ const Header: React.FC<HeaderProps> = ({
         isOpen={isMemberModalOpen}
         onClose={handleCloseMembersModal}
         initialMember={modalInitialMember}
+        isProjectClosed={isProjectClosed}
       />
 
       <ThemePickerModal

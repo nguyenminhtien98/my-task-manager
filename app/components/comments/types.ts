@@ -37,6 +37,7 @@ export interface CommentFetcherResult {
 export interface CommentSectionProps {
   taskId?: string;
   canComment?: boolean;
+  isLocked?: boolean;
 }
 
 export type { TaskAttachment };

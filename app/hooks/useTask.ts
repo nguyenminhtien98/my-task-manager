@@ -47,15 +47,9 @@ interface MoveTaskParams {
 
 export const useTask = () => {
   const { user } = useAuth();
-  const { currentProject } = useProject();
-  // Track tasks that are being created/updated locally to avoid duplicate in realtime
+  const { currentProject, isProjectClosed } = useProject();
+  const closedMessage = "Dự án đã bị đóng, thao tác không khả dụng.";
   const locallyModifiedTaskIdsRef = useRef<Set<string>>(new Set());
-
-  // Realtime subscription for tasks
-  // Note: This hook provides realtime subscription infrastructure.
-  // The actual state management should be handled by the component using this hook
-  // (e.g., HomePage with setAllTasks). This subscription can be used to emit events
-  // or notify via callbacks if needed in the future.
   useEffect(() => {
     if (!user || !currentProject) return;
 
@@ -77,9 +71,7 @@ export const useTask = () => {
       const rawUnknown = payload.payload.data ?? (payload as unknown);
       const raw = rawUnknown as Record<string, unknown> & { $id?: string };
 
-      // Skip if this task was modified locally (will be handled by create/update functions)
       if (documentId && locallyModifiedTaskIdsRef.current.has(documentId)) {
-        // Remove from ref after handling to allow future updates
         locallyModifiedTaskIdsRef.current.delete(documentId);
         return;
       }
@@ -91,12 +83,7 @@ export const useTask = () => {
         completedBy: raw.completedBy as string,
       };
 
-      // Only process tasks for current project
       if (doc.projectId !== currentProject.$id) return;
-
-      // Realtime events are handled by HomePage's subscription
-      // This subscription here just ensures we track locally modified tasks
-      // to avoid duplicate updates
     });
 
     return () => {
@@ -124,10 +111,13 @@ export const useTask = () => {
       if (!user) {
         return { success: false, message: "Chưa đăng nhập" };
       }
+      if (isProjectClosed) {
+        toast.error(closedMessage);
+        return { success: false, message: closedMessage };
+      }
 
       const { data, nextSeq, selectedFiles, isLeader, members } = params;
 
-      // Upload attachments
       let attachments: TaskAttachment[] = [];
       try {
         attachments = await uploadSelectedFiles(selectedFiles);
@@ -211,7 +201,6 @@ export const useTask = () => {
           assignee: assigneeProfile,
         };
 
-        // Mark task as locally created to skip realtime update
         locallyModifiedTaskIdsRef.current.add(createdId);
 
         toast.success("Tạo Task thành công");
@@ -225,7 +214,7 @@ export const useTask = () => {
         return { success: false, message: errorMessage };
       }
     },
-    [user, currentProject]
+    [user, currentProject, isProjectClosed]
   );
 
   const updateTask = useCallback(
@@ -234,6 +223,10 @@ export const useTask = () => {
     ): Promise<{ success: boolean; task?: Task; message?: string }> => {
       if (!user) {
         return { success: false, message: "Chưa đăng nhập" };
+      }
+      if (isProjectClosed) {
+        toast.error(closedMessage);
+        return { success: false, message: closedMessage };
       }
 
       const { task, data } = params;
@@ -269,7 +262,7 @@ export const useTask = () => {
       }
 
       if (Object.keys(updatedFields).length === 0) {
-        return { success: true, task }; // No changes, return success
+        return { success: true, task };
       }
 
       try {
@@ -280,7 +273,6 @@ export const useTask = () => {
           updatedFields
         );
 
-        // Mark task as locally updated to skip realtime update
         locallyModifiedTaskIdsRef.current.add(task.id);
 
         const updatedTask = { ...task, ...updatedFields };
@@ -294,7 +286,7 @@ export const useTask = () => {
         return { success: false, message: errorMessage };
       }
     },
-    [user]
+    [user, isProjectClosed]
   );
 
   const receiveTask = useCallback(
@@ -303,6 +295,10 @@ export const useTask = () => {
     ): Promise<{ success: boolean; task?: Task; message?: string }> => {
       if (!user) {
         return { success: false, message: "Chưa đăng nhập" };
+      }
+      if (isProjectClosed) {
+        toast.error(closedMessage);
+        return { success: false, message: closedMessage };
       }
 
       const { task } = params;
@@ -315,7 +311,6 @@ export const useTask = () => {
           { assignee: user.id }
         );
 
-        // Mark task as locally updated to skip realtime update
         locallyModifiedTaskIdsRef.current.add(task.id);
 
         const updatedTask: Task = {
@@ -336,13 +331,17 @@ export const useTask = () => {
         return { success: false, message };
       }
     },
-    [user]
+    [user, isProjectClosed]
   );
 
   const deleteTask = useCallback(
     async (taskId: string): Promise<{ success: boolean; message?: string }> => {
       if (!user) {
         return { success: false, message: "Chưa đăng nhập" };
+      }
+      if (isProjectClosed) {
+        toast.error(closedMessage);
+        return { success: false, message: closedMessage };
       }
 
       try {
@@ -352,7 +351,6 @@ export const useTask = () => {
           taskId
         );
 
-        // Mark task as locally deleted to skip realtime update
         locallyModifiedTaskIdsRef.current.add(taskId);
 
         toast.success("Xóa Task thành công");
@@ -368,7 +366,7 @@ export const useTask = () => {
         return { success: false, message };
       }
     },
-    [user]
+    [user, isProjectClosed]
   );
 
   const moveTask = useCallback(
@@ -377,6 +375,10 @@ export const useTask = () => {
     ): Promise<{ success: boolean; task?: Task; message?: string }> => {
       if (!user) {
         return { success: false, message: "Chưa đăng nhập" };
+      }
+      if (isProjectClosed) {
+        toast.error(closedMessage);
+        return { success: false, message: closedMessage };
       }
 
       const { task, status, order, completedBy } = params;
@@ -424,7 +426,7 @@ export const useTask = () => {
         return { success: false, message };
       }
     },
-    [user]
+    [user, isProjectClosed]
   );
 
   return {

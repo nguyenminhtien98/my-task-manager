@@ -11,6 +11,7 @@ interface CommentListProps {
   onPreview: (media: TaskAttachment) => void;
   onUpdateComment: (params: UpdateCommentParams) => Promise<TaskComment | null>;
   onDeleteComment: (commentId: string) => Promise<boolean>;
+  isLocked?: boolean;
 }
 
 const CommentList: React.FC<CommentListProps> = ({
@@ -19,6 +20,7 @@ const CommentList: React.FC<CommentListProps> = ({
   onPreview,
   onUpdateComment,
   onDeleteComment,
+  isLocked = false,
 }) => {
   if (isLoading) {
     return <div className="text-sm text-white">Đang tải bình luận...</div>;
@@ -37,6 +39,7 @@ const CommentList: React.FC<CommentListProps> = ({
           onPreview={onPreview}
           onUpdateComment={onUpdateComment}
           onDeleteComment={onDeleteComment}
+          isLocked={isLocked}
         />
       ))}
     </div>

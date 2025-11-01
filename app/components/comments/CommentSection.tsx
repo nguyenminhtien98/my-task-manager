@@ -10,6 +10,7 @@ import { useComment } from "@/app/hooks/useComment";
 const CommentSection: React.FC<CommentSectionProps> = ({
   taskId,
   canComment = true,
+  isLocked = false,
 }) => {
   const {
     comments,
@@ -18,7 +19,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({
     createComment,
     updateComment,
     deleteComment,
-  } = useComment(taskId);
+  } = useComment(taskId, { locked: isLocked });
   const [previewMedia, setPreviewMedia] = useState<TaskAttachment | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
@@ -38,12 +39,18 @@ const CommentSection: React.FC<CommentSectionProps> = ({
 
   return (
     <div className="px-4 pb-6">
-      {canComment && (
+      {canComment && !isLocked && (
         <CommentForm
           taskId={taskId}
           isSubmitting={isCreating}
           onSubmit={createComment}
+          disabled={isLocked}
         />
+      )}
+      {isLocked && (
+        <p className="mt-2 text-xs text-red-300">
+          Dự án đã đóng, bình luận tạm thời bị khóa.
+        </p>
       )}
       <div className={canComment ? "mt-4" : undefined}>
         <CommentList
@@ -52,6 +59,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({
           onPreview={handlePreview}
           onUpdateComment={updateComment}
           onDeleteComment={deleteComment}
+          isLocked={isLocked}
         />
       </div>
       <MediaPreviewModal isOpen={isPreviewOpen} onClose={closePreview} media={previewMedia} />

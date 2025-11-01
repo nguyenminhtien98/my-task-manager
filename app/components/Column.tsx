@@ -15,11 +15,13 @@ export default function Column({
   tasks,
   currentUserName,
   isLeader,
+  isProjectClosed,
   onTaskClick,
 }: ColumnProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: status,
     data: { status },
+    disabled: isProjectClosed,
   });
 
   return (
@@ -37,6 +39,7 @@ export default function Column({
       <SortableContext
         items={tasks.map((t) => t.id)}
         strategy={verticalListSortingStrategy}
+        disabled={isProjectClosed}
       >
         {tasks.map((task, index) => (
           <TaskCard
@@ -45,11 +48,12 @@ export default function Column({
             onClick={() => onTaskClick(task)}
             customClass={index !== 0 ? "mt-[10px]" : ""}
             isDraggable={
-              isLeader ||
-              ((typeof task.assignee === "object"
-                ? task?.assignee?.name === currentUserName
-                : task.assignee === currentUserName) &&
-                task.status !== "completed")
+              !isProjectClosed &&
+              task.status !== "completed" &&
+              (isLeader ||
+                (typeof task.assignee === "object"
+                  ? task?.assignee?.name === currentUserName
+                  : task.assignee === currentUserName))
             }
           />
         ))}

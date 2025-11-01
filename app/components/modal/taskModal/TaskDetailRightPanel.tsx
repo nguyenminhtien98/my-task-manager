@@ -26,9 +26,10 @@ const TaskDetailRightPanel: React.FC<TaskDetailRightPanelProps> = ({
   const [previewMedia, setPreviewMedia] = useState<TaskAttachment | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const { user } = useAuth();
-  const { currentProject } = useProject();
+  const { currentProject, isProjectClosed } = useProject();
   const leaderId = currentProject?.leader?.$id;
   const canComment =
+    !isProjectClosed &&
     !!user &&
     (user.id === (typeof assignee === "object" ? assignee?.$id : assignee) ||
       user.id === leaderId);
@@ -175,7 +176,11 @@ const TaskDetailRightPanel: React.FC<TaskDetailRightPanelProps> = ({
           </div>
         )}
 
-        <CommentSection taskId={taskId} canComment={canComment} />
+        <CommentSection
+          taskId={taskId}
+          canComment={canComment}
+          isLocked={isProjectClosed}
+        />
       </div>
 
       <MediaPreviewModal

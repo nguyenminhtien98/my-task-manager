@@ -71,14 +71,22 @@ const Button: React.FC<ButtonProps> = ({
   }
 
   if (disabled) {
-    inlineStyle.backgroundColor = "rgba(0,0,0,0.4)";
-    inlineStyle.color = "#ffffff";
+    if (!hasBgClass && !backgroundColor) {
+      inlineStyle.backgroundColor = "rgba(0,0,0,0.4)";
+    }
+    if (!hasTextClass && !textColor) {
+      inlineStyle.color = "#ffffff";
+    }
   }
 
   const classes = [
     baseClasses,
     variant === "ghost" ? "bg-transparent" : "",
-    !disabled ? effectiveHover : disabledClasses,
+    !disabled
+      ? effectiveHover
+      : hasBgClass
+      ? "cursor-not-allowed opacity-80"
+      : disabledClasses,
     className,
   ]
     .filter(Boolean)

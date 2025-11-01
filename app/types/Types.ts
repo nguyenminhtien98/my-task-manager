@@ -52,15 +52,12 @@ export interface TaskCardProps {
   isDraggable?: boolean;
 }
 
-// Định nghĩa props chung cho TaskModal
 export interface TaskModalProps {
   mode: "create" | "detail";
   isOpen: boolean;
   setIsOpen: (v: boolean) => void;
-  // create mode:
   onCreate?: (task: Task) => void;
   nextSeq?: number;
-  // detail mode:
   task?: Task | null;
   onUpdate?: (task: Task) => void;
 }
@@ -68,7 +65,7 @@ export interface TaskModalProps {
 export interface CreateTaskModalProps {
   isOpen: boolean;
   setIsOpen: (value: boolean) => void;
-  onCreate: (data: Task) => void; // now chỉ trả về form data
+  onCreate: (data: Task) => void;
   nextSeq: number;
 }
 
@@ -136,6 +133,7 @@ export interface ColumnProps {
   tasks: Task[];
   currentUserName: string;
   isLeader: boolean;
+  isProjectClosed: boolean;
   onTaskClick: (task: Task) => void;
 }
 
@@ -143,6 +141,8 @@ export interface HeaderProps {
   onCreateTask: () => void;
   onLoginClick: () => void;
   onCreateProject?: () => void;
+  isProjectClosed: boolean;
+  projectTheme?: string | null;
 }
 
 export interface Profile {
@@ -154,12 +154,15 @@ export interface Profile {
   avatarUrl?: string | null;
 }
 
+export type ProjectStatus = "active" | "closed";
+
 export interface Project {
   $id: string;
   name: string;
   leader: Profile;
   $createdAt?: string;
   themeColor?: string;
+  status?: ProjectStatus;
 }
 
 export interface ProjectContextType {
@@ -172,6 +175,7 @@ export interface ProjectContextType {
   isProjectsHydrated?: boolean;
   isTasksHydrated?: boolean;
   setTasksHydrated?: (ready: boolean) => void;
+  isProjectClosed: boolean;
 }
 
 export interface AssigneeDropdownProps {
@@ -186,6 +190,7 @@ export interface BoardProps {
   isLeader: boolean;
   onMove: (e: DragEndEvent, fallbackStatus?: TaskStatus | null) => void;
   onTaskClick: (t: Task) => void;
+  isProjectClosed: boolean;
 }
 
 export interface LeaderAssigneeOptionsProps {

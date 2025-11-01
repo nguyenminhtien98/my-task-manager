@@ -17,6 +17,7 @@ interface ProjectMembersModalProps {
   isOpen: boolean;
   onClose: () => void;
   initialMember?: EnrichedProjectMember | null;
+  isProjectClosed?: boolean;
 }
 
 interface TaskStats {
@@ -32,8 +33,10 @@ const ProjectMembersModal: React.FC<ProjectMembersModalProps> = ({
   isOpen,
   onClose,
   initialMember,
+  isProjectClosed: projectClosedProp,
 }) => {
-  const { currentProject, currentProjectRole } = useProject();
+  const { currentProject, currentProjectRole, isProjectClosed: contextProjectClosed } =
+    useProject();
   const {
     members: allMembers,
     leader,
@@ -50,6 +53,7 @@ const ProjectMembersModal: React.FC<ProjectMembersModalProps> = ({
 
   const projectId = currentProject?.$id;
   const isLeader = currentProjectRole === "leader";
+  const isProjectClosed = projectClosedProp ?? contextProjectClosed;
 
   const nonLeaderMembers = useMemo(
     () => allMembers.filter((member) => !member.isLeader),
@@ -58,7 +62,6 @@ const ProjectMembersModal: React.FC<ProjectMembersModalProps> = ({
 
   useEffect(() => {
     if (!isOpen) {
-      // Modal đóng: không cần đổi view để tránh nháy, chỉ reset dữ liệu nội bộ
       setActiveMember(null);
       setStats(defaultStats);
       setIsProcessing(false);
@@ -176,6 +179,10 @@ const ProjectMembersModal: React.FC<ProjectMembersModalProps> = ({
   };
 
   const handleAddMember = async (userId: string) => {
+    if (isProjectClosed) {
+      toast.error("Dự án đã đóng, không thể thêm thành viên.");
+      return;
+    }
     setIsProcessing(true);
     const result = await addMember(userId);
     setIsProcessing(false);
@@ -190,6 +197,10 @@ const ProjectMembersModal: React.FC<ProjectMembersModalProps> = ({
   const handleRemove = async () => {
     if (!activeMember || !activeMember.membershipId) {
       toast.error("Không thể xóa thành viên này.");
+      return;
+    }
+    if (isProjectClosed) {
+      toast.error("Dự án đã đóng, không thể xóa thành viên.");
       return;
     }
     setIsProcessing(true);
@@ -215,6 +226,11 @@ const ProjectMembersModal: React.FC<ProjectMembersModalProps> = ({
       showBackButton={view === "profile"}
       onBack={handleBack}
     >
+      {isProjectClosed && (
+        <div className="mb-4 rounded border border-yellow-400 bg-yellow-100 px-3 py-2 text-sm text-yellow-800">
+          Dự án đã đóng. Chức năng quản lý thành viên đang bị khóa.
+        </div>
+      )}
       {view === "list" ? (
         <ProjectMemberListView
           leader={leader}
@@ -223,12 +239,15 @@ const ProjectMembersModal: React.FC<ProjectMembersModalProps> = ({
           isMembersLoading={isMembersLoading}
           onAddMember={handleAddMember}
           onMemberClick={handleMemberSelect}
+          isProjectClosed={isProjectClosed}
         />
       ) : activeMember ? (
         <ProjectMemberProfileView
           member={activeMember}
           stats={stats}
-          canRemove={Boolean(isLeader && !activeMember.isLeader)}
+          canRemove={Boolean(
+            isLeader && !activeMember.isLeader && !isProjectClosed
+          )}
           onRemove={handleRemove}
           isRemoving={isProcessing}
         />

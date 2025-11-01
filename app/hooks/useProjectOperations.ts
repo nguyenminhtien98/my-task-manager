@@ -5,9 +5,14 @@ import { Query } from "appwrite";
 import { database, subscribeToRealtime } from "../appwrite";
 import { useProject } from "../context/ProjectContext";
 import { useAuth } from "../context/AuthContext";
-import { BasicProfile, Project } from "../types/Types";
+import { BasicProfile, Project, ProjectStatus } from "../types/Types";
 import { emitMembersChanged, onMembersChanged } from "../../lib/membersBus";
 import toast from "react-hot-toast";
+
+const ensureProjectStatus = (project: Project): Project => ({
+  ...project,
+  status: project.status ?? "active",
+});
 
 export interface EnrichedProjectMember extends BasicProfile {
   isLeader: boolean;
@@ -30,12 +35,10 @@ export const useProjectOperations = () => {
   const [members, setMembers] = useState<ProjectMemberProfile[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [version, setVersion] = useState(0);
-  // Track projects that are being created locally to avoid duplicate in realtime
   const locallyCreatedProjectIdsRef = useRef<Set<string>>(new Set());
 
-  const refetch = () => setVersion((v) => v + 1);
+  const refetch = useCallback(() => setVersion((v) => v + 1), []);
 
-  // Fetch project members
   useEffect(() => {
     if (!currentProject) {
       setMembers([]);
@@ -95,7 +98,6 @@ export const useProjectOperations = () => {
     fetchMembers();
   }, [currentProject, version]);
 
-  // Listen to members changed events
   useEffect(() => {
     if (!currentProject) return;
     const unsubscribe = onMembersChanged((projectId) => {
@@ -104,9 +106,67 @@ export const useProjectOperations = () => {
       }
     });
     return unsubscribe;
-  }, [currentProject]);
+  }, [currentProject, refetch]);
 
-  // Realtime subscription for projects
+  useEffect(() => {
+    if (!currentProject) return;
+
+    const databaseId = process.env.NEXT_PUBLIC_DATABASE_ID;
+    const membershipsCollectionId =
+      process.env.NEXT_PUBLIC_COLLECTION_ID_PROJECT_MEMBERSHIPS;
+
+    if (!databaseId || !membershipsCollectionId) {
+      return;
+    }
+
+    const currentProjectId = currentProject.$id;
+    const channel = `databases.${databaseId}.collections.${membershipsCollectionId}.documents`;
+
+    const unsubscribe = subscribeToRealtime([channel], (res: unknown) => {
+      const event = res as {
+        events?: string[];
+        payload?: {
+          $id?: string;
+          project?: unknown;
+          data?: { project?: unknown };
+        };
+      };
+
+      const events = event.events ?? [];
+      if (!events.length) return;
+
+      const membershipData =
+        ((event.payload?.data as { project?: unknown } | undefined) ??
+          event.payload) ?? null;
+
+      const membershipProjectId =
+        typeof membershipData?.project === "string"
+          ? membershipData.project
+          : undefined;
+
+      if (
+        membershipProjectId &&
+        membershipProjectId !== currentProjectId
+      ) {
+        return;
+      }
+
+      if (
+        events.some((e) =>
+          e.endsWith(".create") ||
+          e.endsWith(".update") ||
+          e.endsWith(".delete")
+        )
+      ) {
+        refetch();
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [currentProject, refetch]);
+
   useEffect(() => {
     if (!user) return;
 
@@ -130,12 +190,10 @@ export const useProjectOperations = () => {
         (payload.payload?.data as unknown as Project | undefined) ??
         (payload.payload as unknown as Project | undefined);
 
-      // Handle delete event
       if (events.some((e) => e.endsWith(".delete"))) {
         if (documentId) {
           setProjects((prev) => {
             const updated = prev.filter((p) => p.$id !== documentId);
-            // If deleted project is current project, switch to next project
             if (currentProject?.$id === documentId) {
               const nextProject = updated[0] ?? null;
               setCurrentProject(nextProject ?? null);
@@ -153,45 +211,63 @@ export const useProjectOperations = () => {
         return;
       }
 
-      // Handle create event
       if (events.some((e) => e.endsWith(".create"))) {
         if (!rawData) return;
-        const newProject = rawData as Project;
+        const newProject = ensureProjectStatus(rawData as Project);
 
-        // Skip if this project was created locally (will be handled by createProject function)
         if (locallyCreatedProjectIdsRef.current.has(newProject.$id)) {
-          // Remove from ref after handling to allow future updates
           locallyCreatedProjectIdsRef.current.delete(newProject.$id);
           return;
         }
-
-        // Only add if user is leader or member of this project
-        // Check if user is leader
         // const isLeader = newProject.leader?.$id === user.id;
-        // For member check, we need to verify membership, but for now we'll add it
-        // The ProjectContext will filter properly on next fetch
-
         setProjects((prev) => {
-          // Check if project already exists (double check to prevent race conditions)
           if (prev.some((p) => p.$id === newProject.$id)) {
             return prev;
           }
           return [...prev, newProject];
         });
       } else if (events.some((e) => e.endsWith(".update"))) {
-        // Handle update event
         if (!rawData) return;
-        const updatedProject = rawData as Project;
+        const updatedProject = ensureProjectStatus(rawData as Project);
+
+        const incomingLeader = (() => {
+          const value = (updatedProject as unknown as {
+            leader?: unknown;
+          }).leader;
+          if (
+            value &&
+            typeof value === "object" &&
+            "$id" in (value as Record<string, unknown>)
+          ) {
+            return value as Project["leader"];
+          }
+          return undefined;
+        })();
 
         setProjects((prev) =>
-          prev.map((p) => (p.$id === updatedProject.$id ? updatedProject : p))
+          prev.map((p) =>
+            p.$id === updatedProject.$id
+              ? {
+                  ...p,
+                  ...updatedProject,
+                  leader: incomingLeader ?? p.leader,
+                  status: updatedProject.status ?? p.status ?? "active",
+                }
+              : p
+          )
         );
 
-        // Update current project if it's the one being updated
         if (currentProject?.$id === updatedProject.$id) {
-          setCurrentProject(updatedProject);
+          const leader = incomingLeader ?? currentProject.leader;
+          const nextProject: Project = {
+            ...currentProject,
+            ...updatedProject,
+            leader,
+            status: updatedProject.status ?? currentProject.status ?? "active",
+          };
+          setCurrentProject(nextProject);
           setCurrentProjectRole(
-            updatedProject.leader.$id === user.id ? "leader" : "user"
+            leader.$id === user.id ? "leader" : "user"
           );
         }
       }
@@ -212,6 +288,12 @@ export const useProjectOperations = () => {
     async (email: string): Promise<{ success: boolean; message: string }> => {
       if (!currentProject) {
         return { success: false, message: "Chưa chọn dự án" };
+      }
+      if ((currentProject.status ?? "active") === "closed") {
+        return {
+          success: false,
+          message: "Dự án đã bị đóng, không thể thêm thành viên",
+        };
       }
 
       try {
@@ -269,7 +351,7 @@ export const useProjectOperations = () => {
         return { success: false, message: "Thêm thành viên thất bại" };
       }
     },
-    [currentProject]
+    [currentProject, refetch]
   );
 
   const removeMember = useCallback(
@@ -278,6 +360,12 @@ export const useProjectOperations = () => {
     ): Promise<{ success: boolean; message: string }> => {
       if (!currentProject) {
         return { success: false, message: "Chưa chọn dự án" };
+      }
+      if ((currentProject.status ?? "active") === "closed") {
+        return {
+          success: false,
+          message: "Dự án đã bị đóng, không thể xóa thành viên",
+        };
       }
 
       try {
@@ -300,7 +388,7 @@ export const useProjectOperations = () => {
         return { success: false, message: "Xóa thành viên thất bại" };
       }
     },
-    [currentProject]
+    [currentProject, refetch]
   );
 
   const createProject = useCallback(
@@ -320,7 +408,6 @@ export const useProjectOperations = () => {
           process.env.NEXT_PUBLIC_COLLECTION_ID_PROJECT_MEMBERSHIPS
         );
 
-        // Create project document
         const projectDocument = await database.createDocument(
           databaseId,
           projectsCollectionId,
@@ -328,10 +415,10 @@ export const useProjectOperations = () => {
           {
             name: name,
             leader: user.id,
+            status: "active",
           }
         );
 
-        // Create membership for leader
         await database.createDocument(
           databaseId,
           membershipsCollectionId,
@@ -343,21 +430,19 @@ export const useProjectOperations = () => {
           }
         );
 
-        const createdProject: Project = {
+        const createdProject: Project = ensureProjectStatus({
           $id: projectDocument.$id,
           name: projectDocument.name,
           leader: projectDocument.leader,
           $createdAt: projectDocument.$createdAt,
-        };
+           status: projectDocument.status ?? "active",
+        });
 
-        // Mark this project as locally created to skip realtime update
         locallyCreatedProjectIdsRef.current.add(createdProject.$id);
 
-        // Update context state
         setCurrentProject(createdProject);
         setCurrentProjectRole("leader");
         setProjects((prevProjects) => {
-          // Double check to prevent duplicates
           if (prevProjects.some((p) => p.$id === createdProject.$id)) {
             return prevProjects;
           }
@@ -400,7 +485,6 @@ export const useProjectOperations = () => {
       }
 
       try {
-        // Delete all memberships
         if (membershipsCollectionId) {
           const memberships = await database.listDocuments(
             String(databaseId),
@@ -422,7 +506,6 @@ export const useProjectOperations = () => {
           );
         }
 
-        // Delete all tasks
         if (tasksCollectionId) {
           const tasks = await database.listDocuments(
             String(databaseId),
@@ -444,14 +527,12 @@ export const useProjectOperations = () => {
           );
         }
 
-        // Delete project
         await database.deleteDocument(
           String(databaseId),
           String(projectsCollectionId),
           projectId
         );
 
-        // Update context state (realtime will also handle this, but we do it here for immediate UI update)
         setProjects((prev) => {
           const updated = prev.filter((p) => p.$id !== projectId);
           if (currentProject?.$id === projectId) {
@@ -491,6 +572,92 @@ export const useProjectOperations = () => {
     [members]
   );
 
+  const updateProjectStatus = useCallback(
+    async (
+      projectId: string,
+      status: ProjectStatus
+    ): Promise<{ success: boolean; message?: string }> => {
+      if (!user) {
+        return { success: false, message: "Chưa đăng nhập" };
+      }
+
+      const databaseId = process.env.NEXT_PUBLIC_DATABASE_ID;
+      const projectsCollectionId =
+        process.env.NEXT_PUBLIC_COLLECTION_ID_PROJECTS;
+
+      if (!databaseId || !projectsCollectionId) {
+        const message = "Thiếu cấu hình Appwrite.";
+        toast.error(message);
+        return { success: false, message };
+      }
+
+      try {
+        await database.updateDocument(
+          String(databaseId),
+          String(projectsCollectionId),
+          projectId,
+          {
+            status,
+          }
+        );
+
+        setProjects((prev) =>
+          prev.map((project) =>
+            project.$id === projectId
+              ? ensureProjectStatus({
+                  ...project,
+                  status,
+                })
+              : project
+          )
+        );
+
+        if (currentProject?.$id === projectId) {
+          const nextProject = ensureProjectStatus({
+            ...currentProject,
+            status,
+          });
+          setCurrentProject(nextProject);
+          setCurrentProjectRole(
+            nextProject.leader.$id === user.id ? "leader" : "user"
+          );
+        }
+
+        toast.success(
+          status === "closed"
+            ? "Đã đóng dự án."
+            : "Đã mở lại dự án."
+        );
+        return { success: true };
+      } catch (error) {
+        console.error("Failed to update project status:", error);
+        const message =
+          error instanceof Error
+            ? error.message || "Cập nhật trạng thái dự án thất bại."
+            : "Cập nhật trạng thái dự án thất bại.";
+        toast.error(message);
+        return { success: false, message };
+      }
+    },
+    [
+      user,
+      currentProject,
+      setProjects,
+      setCurrentProject,
+      setCurrentProjectRole,
+    ]
+  );
+
+  const closeProject = useCallback(
+    (projectId: string) => updateProjectStatus(projectId, "closed"),
+    [updateProjectStatus]
+  );
+
+  const reopenProject = useCallback(
+    (projectId: string) => updateProjectStatus(projectId, "active"),
+    [updateProjectStatus]
+  );
+
   return {
     members,
     isLoading,
@@ -499,6 +666,8 @@ export const useProjectOperations = () => {
     removeMember,
     createProject,
     deleteProject,
+    closeProject,
+    reopenProject,
   };
 };
 

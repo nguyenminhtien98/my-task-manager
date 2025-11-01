@@ -5,11 +5,20 @@ import React, {
   useState,
   useEffect,
   ReactNode,
+  useCallback,
 } from "react";
 import { database } from "../appwrite";
 import { Query } from "appwrite";
 import { Project, ProjectContextType } from "../types/Types";
 import { useAuth } from "./AuthContext";
+
+const applyProjectStatus = (project: Project): Project => ({
+  ...project,
+  status: project.status ?? "active",
+});
+
+const normalizeProject = (project: Project | null): Project | null =>
+  project ? applyProjectStatus(project) : null;
 
 const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
 
@@ -27,18 +36,23 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({
   const [isProjectsHydrated, setIsProjectsHydrated] = useState(false);
   const [isTasksHydrated, setIsTasksHydrated] = useState(false);
 
-  const setCurrentProject = (project: Project | null) => {
-    setCurrentProjectState(project);
-    if (project) {
-      localStorage.setItem("activeProjectId", project.$id);
+  const setCurrentProject = useCallback((project: Project | null) => {
+    const normalized = normalizeProject(project);
+    setCurrentProjectState(normalized);
+    if (typeof window === "undefined") return;
+    const storage = window.sessionStorage;
+    if (normalized) {
+      storage.setItem("activeProjectId", normalized.$id);
     } else {
-      localStorage.removeItem("activeProjectId");
+      storage.removeItem("activeProjectId");
     }
-  };
+  }, []);
 
   useEffect(() => {
     if (!user) {
-      localStorage.removeItem("activeProjectId");
+      if (typeof window !== "undefined") {
+        window.sessionStorage.removeItem("activeProjectId");
+      }
       setProjects([]);
       setCurrentProject(null);
       setCurrentProjectRole(null);
@@ -81,7 +95,9 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({
           [Query.equal("$id", allProjectIds)]
         );
 
-        const myProjects = projectResponse.documents as unknown as Project[];
+        const myProjects = (
+          projectResponse.documents as unknown as Project[]
+        ).map((proj) => applyProjectStatus(proj));
         setProjects(myProjects);
 
         if (myProjects.length) {
@@ -94,7 +110,10 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({
             return 0;
           });
 
-          const storedActiveProjectId = localStorage.getItem("activeProjectId");
+          const storedActiveProjectId =
+            typeof window !== "undefined"
+              ? window.sessionStorage.getItem("activeProjectId")
+              : null;
           let activeProject = sortedProjects[0];
 
           if (storedActiveProjectId) {
@@ -122,7 +141,23 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({
     };
 
     fetchProjects();
-  }, [user]);
+  }, [user, setCurrentProject, setCurrentProjectRole, setProjects]);
+
+  useEffect(() => {
+    if (!currentProject) return;
+    const latest = projects.find((proj) => proj.$id === currentProject.$id);
+    if (!latest) return;
+    if (
+      latest.status !== currentProject.status ||
+      latest.name !== currentProject.name ||
+      latest.themeColor !== currentProject.themeColor
+    ) {
+      setCurrentProject(latest);
+      setCurrentProjectRole(
+        latest.leader.$id === user?.id ? "leader" : "user"
+      );
+    }
+  }, [projects, currentProject, setCurrentProject, setCurrentProjectRole, user?.id]);
 
   return (
     <ProjectContext.Provider
@@ -136,6 +171,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({
         isProjectsHydrated,
         isTasksHydrated,
         setTasksHydrated: setIsTasksHydrated,
+        isProjectClosed: (currentProject?.status ?? "active") === "closed",
       }}
     >
       {children}

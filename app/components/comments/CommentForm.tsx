@@ -14,9 +14,10 @@ interface CommentFormProps {
   taskId: string;
   onSubmit: (params: CreateCommentParams) => Promise<TaskComment | null>;
   isSubmitting: boolean;
+  disabled?: boolean;
 }
 
-const CommentForm: React.FC<CommentFormProps> = ({ taskId, onSubmit, isSubmitting }) => {
+const CommentForm: React.FC<CommentFormProps> = ({ taskId, onSubmit, isSubmitting, disabled = false }) => {
   const { user } = useAuth();
   const [commentText, setCommentText] = useState("");
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
@@ -65,6 +66,7 @@ const CommentForm: React.FC<CommentFormProps> = ({ taskId, onSubmit, isSubmittin
   }, []);
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (disabled) return;
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
@@ -107,11 +109,13 @@ const CommentForm: React.FC<CommentFormProps> = ({ taskId, onSubmit, isSubmittin
     });
   };
 
-  const canSubmit = Boolean(commentText.trim()) || pendingAttachments.length > 0;
+  const canSubmit =
+    !disabled &&
+    (Boolean(commentText.trim()) || pendingAttachments.length > 0);
   const shouldShowControls = isCommentActive || pendingAttachments.length > 0 || Boolean(commentText.trim());
 
   const handleSubmit = async () => {
-    if (!user || !canSubmit || isSubmitting) {
+    if (!user || !canSubmit || isSubmitting || disabled) {
       return;
     }
 
@@ -170,17 +174,19 @@ const CommentForm: React.FC<CommentFormProps> = ({ taskId, onSubmit, isSubmittin
           <div className="flex items-center gap-3 text-white">
             <button
               type="button"
-              onClick={() => imageInputRef.current?.click()}
+              onClick={() => !disabled && imageInputRef.current?.click()}
               className="rounded-full bg-white/10 p-2 text-white hover:bg-white/20"
               title="Đính kèm hình ảnh/video"
+              disabled={disabled}
             >
               <FiImage />
             </button>
             <button
               type="button"
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => !disabled && fileInputRef.current?.click()}
               className="rounded-full bg-white/10 p-2 text-white hover:bg-white/20"
               title="Đính kèm tệp tin"
+              disabled={disabled}
             >
               <FiPaperclip />
             </button>
@@ -189,10 +195,11 @@ const CommentForm: React.FC<CommentFormProps> = ({ taskId, onSubmit, isSubmittin
             type="button"
             onClick={(e) => {
               e.preventDefault();
+              if (disabled) return;
               void handleSubmit();
             }}
-            disabled={!canSubmit || isSubmitting}
-            className={`rounded px-4 py-1 text-sm font-medium ${canSubmit && !isSubmitting
+            disabled={!canSubmit || isSubmitting || disabled}
+            className={`rounded px-4 py-1 text-sm font-medium ${canSubmit && !isSubmitting && !disabled
               ? "bg-black text-white hover:bg-black/80"
               : "bg-black/30 text-white/60 cursor-not-allowed"
               }`}
@@ -218,13 +225,19 @@ const CommentForm: React.FC<CommentFormProps> = ({ taskId, onSubmit, isSubmittin
           }}
           onChange={(event) => setCommentText(event.target.value)}
           onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey && !isSubmitting) {
+            if (
+              event.key === "Enter" &&
+              !event.shiftKey &&
+              !isSubmitting &&
+              !disabled
+            ) {
               event.preventDefault();
               void handleSubmit();
             }
           }}
           placeholder="Viết bình luận"
-          className="no-scrollbar w-full resize-none border-0 bg-transparent text-sm text-white placeholder:text-white/50 focus:outline-none focus:ring-0"
+          className={`no-scrollbar w-full resize-none border-0 bg-transparent text-sm text-white placeholder:text-white/50 focus:outline-none focus:ring-0 ${disabled ? "cursor-not-allowed opacity-70" : ""}`}
+          disabled={disabled}
         />
 
         {pendingAttachments.length > 0 && (

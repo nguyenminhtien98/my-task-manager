@@ -3,11 +3,10 @@
 import React, { useState, useRef, ChangeEvent } from "react";
 import toast from "react-hot-toast";
 import { useAuth } from "@/app/context/AuthContext";
-import { database } from "@/app/appwrite";
-import { uploadFilesToCloudinary } from "@/app/utils/upload";
 import ModalComponent from "../../common/ModalComponent";
 import EditProfileView from "./EditProfileView";
 import AvatarEditView from "./AvatarEditView";
+import { useProfile } from "@/app/hooks/useProfile";
 
 interface EditProfileModalProps {
   isOpen: boolean;
@@ -15,25 +14,24 @@ interface EditProfileModalProps {
 }
 
 const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onClose }) => {
-  const { user, setUser } = useAuth();
+  const { user } = useAuth();
   const [view, setView] = useState<"profile" | "avatar">("profile");
   const [imgSrc, setImgSrc] = useState("");
   const [newAvatarFile, setNewAvatarFile] = useState<File | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { isUpdating, updateProfile } = useProfile();
 
   const handleClose = () => {
     setTimeout(() => {
       setView("profile");
       setImgSrc("");
       setNewAvatarFile(null);
-      setIsUploading(false);
     }, 300);
     onClose();
   };
 
   const handleAvatarChangeClick = () => {
-    if (isUploading) return;
+    if (isUpdating) return;
     fileInputRef.current?.click();
   };
 
@@ -66,44 +64,16 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onClose }) 
       return handleClose();
     }
 
-    setIsUploading(true);
-    let newAvatarUrl: string | undefined = undefined;
+    const result = await updateProfile({
+      name: newName,
+      avatarFile: newAvatarFile,
+    });
 
-    try {
-      if (avatarHasChanged && newAvatarFile) {
-        const uploaded = await uploadFilesToCloudinary([newAvatarFile]);
-        if (uploaded.length > 0 && uploaded[0].url) {
-          newAvatarUrl = uploaded[0].url;
-        } else {
-          throw new Error("Upload ảnh thất bại.");
-        }
-      }
-
-      const updateData: { name?: string; avatarUrl?: string } = {};
-      if (nameHasChanged) updateData.name = newName.trim();
-      if (newAvatarUrl) updateData.avatarUrl = newAvatarUrl;
-
-      if (Object.keys(updateData).length > 0) {
-        await database.updateDocument(
-          String(process.env.NEXT_PUBLIC_DATABASE_ID),
-          String(process.env.NEXT_PUBLIC_COLLECTION_ID_PROFILE),
-          user.id,
-          updateData
-        );
-
-        const updatedUser = { ...user, ...updateData };
-        setUser(updatedUser);
-        toast.success("Cập nhật hồ sơ thành công!");
-      } else {
-        toast.success("Không có gì thay đổi.");
-      }
-
+    if (result.success) {
+      toast.success(result.message);
       handleClose();
-
-    } catch (error) {
-      console.error("Lỗi cập nhật hồ sơ:", error);
-      toast.error(error instanceof Error ? error.message : "Đã có lỗi xảy ra.");
-      setIsUploading(false);
+    } else {
+      toast.error(result.message);
     }
   };
 
@@ -125,7 +95,7 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onClose }) 
         onChange={onFileChange}
         className="hidden"
         accept="image/png, image/jpeg, image/webp"
-        disabled={isUploading}
+        disabled={isUpdating}
       />
 
       {view === "profile" ? (
@@ -135,7 +105,7 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onClose }) 
           onAvatarChangeClick={handleAvatarChangeClick}
           onSaveChanges={handleUpdateProfile}
           onClose={handleClose}
-          isSaving={isUploading}
+          isSaving={isUpdating}
         />
       ) : (
         <AvatarEditView
@@ -143,7 +113,7 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onClose }) 
           userName={user.name}
           onCancel={() => setView("profile")}
           onSave={handleAvatarCropped}
-          isSaving={isUploading}
+          isSaving={isUpdating}
         />
       )}
     </ModalComponent>

@@ -45,12 +45,10 @@ const HoverPopover: React.FC<HoverPopoverProps> = ({
     const panelEl = panelRef.current;
     if (!triggerEl || !panelEl) return;
     const triggerRect = triggerEl.getBoundingClientRect();
-    // Temporarily make visible to measure height if needed
     const prevVisibility = panelEl.style.visibility;
     const prevDisplay = panelEl.style.display;
     panelEl.style.visibility = "hidden";
     panelEl.style.display = "block";
-    // Measure to ensure layout; we do not need the exact height here
     panelEl.getBoundingClientRect();
     panelEl.style.visibility = prevVisibility;
     panelEl.style.display = prevDisplay;
@@ -98,9 +96,8 @@ const HoverPopover: React.FC<HoverPopoverProps> = ({
       {open && (
         <div
           ref={panelRef}
-          className={`absolute z-50 rounded-md border border-black/10 bg-white p-2 text-sm text-[#111827] shadow-lg ${
-            align === "right" ? "right-0" : "left-0"
-          }`}
+          className={`absolute z-50 rounded-md border border-black/10 bg-white p-2 text-sm text-[#111827] shadow-lg ${align === "right" ? "right-0" : "left-0"
+            }`}
           style={{
             top: placement === "bottom" ? "calc(100% + 8px)" : undefined,
             bottom: placement === "top" ? "calc(100% + 8px)" : undefined,

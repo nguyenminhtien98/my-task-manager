@@ -65,7 +65,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
   task,
 }) => {
   const { user } = useAuth();
-  const { currentProject, currentProjectRole } = useProject();
+  const { currentProject, currentProjectRole, isProjectClosed } = useProject();
   const currentUserName = user?.name || "";
   const isLeader = currentProjectRole === "leader";
   const [existingUsers, setExistingUsers] = useState<string[]>([]);
@@ -215,7 +215,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
   const handleReceive = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!task || !user) return;
+    if (!task || !user || isProjectClosed) return;
 
     const result = await receiveTask({ task });
     if (result.success && result.task) {
@@ -278,7 +278,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
   };
 
   const showAttachmentSection = mode === "create";
-  const showReceiveButton = showReceive && !watchedAssigneeId;
+  const showReceiveButton = showReceive && !watchedAssigneeId && !isProjectClosed;
   const submitHandler = handleSubmit((values, event) => {
     if (mode === "create") {
       return onSubmitCreate(values as CreateTaskFormValues, event);
@@ -312,6 +312,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
       task={task ?? null}
       onUpdate={onUpdate}
       reset={reset}
+      isProjectClosed={isProjectClosed}
     />
   );
 

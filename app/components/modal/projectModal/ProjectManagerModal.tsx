@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import ModalComponent from "@/app/components/common/ModalComponent";
 import { Project } from "@/app/types/Types";
 import ScreenSelectProject from "./ScreenSelectProject";
 import ScreenProjectDetail from "./ScreenProjectDetail";
+import { useProject } from "@/app/context/ProjectContext";
 
 interface ProjectManagerModalProps {
   isOpen: boolean;
@@ -19,6 +20,7 @@ const ProjectManagerModal: React.FC<ProjectManagerModalProps> = ({
 }) => {
   const [screen, setScreen] = useState<Screen>("list");
   const [selected, setSelected] = useState<Project | null>(null);
+  const { projects } = useProject();
 
   const onClose = () => {
     setScreen("list");
@@ -39,6 +41,13 @@ const ProjectManagerModal: React.FC<ProjectManagerModalProps> = ({
     () => (screen === "detail" ? "Thông tin dự án" : "Quản lý dự án"),
     [screen]
   );
+
+  useEffect(() => {
+    if (!selected) return;
+    const latest = projects.find((proj) => proj.$id === selected.$id);
+    if (!latest || latest === selected) return;
+    setSelected(latest);
+  }, [projects, selected]);
 
   return (
     <ModalComponent

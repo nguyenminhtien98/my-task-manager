@@ -86,7 +86,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
     } catch (error: any) {
     } finally {
       persistUser(null);
-      localStorage.removeItem("activeProjectId");
+      if (typeof window !== "undefined") {
+        window.sessionStorage.removeItem("activeProjectId");
+      }
     }
   }, [persistUser]);
 
@@ -103,7 +105,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
         }
       } catch (error) {
         console.warn("Session hydrate failed:", error);
-        localStorage.removeItem("activeProjectId");
+        if (typeof window !== "undefined") {
+          window.sessionStorage.removeItem("activeProjectId");
+        }
         if (!cancelled) {
           persistUser(null);
         }

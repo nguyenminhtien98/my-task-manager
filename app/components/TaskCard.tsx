@@ -32,6 +32,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
   customClass = "",
   isDraggable = true,
 }) => {
+  const isDisabled = !isDraggable;
   const {
     attributes,
     listeners,
@@ -42,6 +43,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
   } = useSortable({
     id: task.id,
     data: { status: task.status },
+    disabled: isDisabled,
   });
 
   const style = {
@@ -96,7 +98,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
       {...(isDraggable ? listeners : {})}
       onClick={onClick}
       className={`bg-white p-2 rounded shadow ${customClass} ${
-        isDraggable ? "cursor-grab" : "cursor-pointer select-none"
+        isDraggable ? "cursor-grab" : "cursor-default select-none"
       } ${customClass}`}
     >
       <div className="flex justify-between items-center mb-1">
