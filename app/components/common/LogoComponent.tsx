@@ -49,7 +49,7 @@ export default function BrandOrbHeaderIcon({
             height={size}
             viewBox="0 0 100 100"
             role="img"
-            aria-label="My Task Manager logo"
+            aria-label="My Task Manager Web logo"
             className={className}
         >
             <defs>

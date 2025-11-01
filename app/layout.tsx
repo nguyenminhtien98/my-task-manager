@@ -24,10 +24,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://my-task-manager-beryl.vercel.app"),
-  title: "My Task Manager",
+  metadataBase: new URL("https://my-task-manager-web.vercel.app"),
+  title: "My Task Manager Web",
   description:
-    "Tạo, sắp xếp và giải quyết các công việc cần làm. Công cụ sẽ thúc đẩy năng suất làm việc của bạn. My Task Manager sẽ giúp bạn làm được nhiều việc hơn.",
+    "Tạo, sắp xếp và giải quyết các công việc cần làm. Công cụ sẽ thúc đẩy năng suất làm việc của bạn. My Task Manager Web sẽ giúp bạn làm được nhiều việc hơn.",
   keywords: [
     "công việc",
     "task",
@@ -44,25 +44,25 @@ export const metadata: Metadata = {
     apple: [{ url: DEFAULT_LOGO_DATA_URL, type: "image/svg+xml" }],
   },
   openGraph: {
-    title: "My Task Manager",
+    title: "My Task Manager Web",
     description:
-      "Tạo, sắp xếp và giải quyết các công việc cần làm. Công cụ sẽ thúc đẩy năng suất làm việc của bạn. My Task Manager sẽ giúp bạn làm được nhiều việc hơn.",
-    url: "https://my-task-manager-beryl.vercel.app",
-    siteName: "My Task Manager",
+      "Tạo, sắp xếp và giải quyết các công việc cần làm. Công cụ sẽ thúc đẩy năng suất làm việc của bạn. My Task Manager Web sẽ giúp bạn làm được nhiều việc hơn.",
+    url: "https://my-task-manager-web.vercel.app",
+    siteName: "My Task Manager Web",
     type: "website",
     images: [
       {
         url: DEFAULT_LOGO_DATA_URL,
-        alt: "My Task Manager logo",
+        alt: "My Task Manager Web logo",
         type: "image/svg+xml",
       },
     ],
   },
   twitter: {
     card: "summary",
-    title: "My Task Manager",
+    title: "My Task Manager Web",
     description:
-      "Tạo, sắp xếp và giải quyết các công việc cần làm. Công cụ sẽ thúc đẩy năng suất làm việc của bạn. My Task Manager sẽ giúp bạn làm được nhiều việc hơn.",
+      "Tạo, sắp xếp và giải quyết các công việc cần làm. Công cụ sẽ thúc đẩy năng suất làm việc của bạn. My Task Manager Web sẽ giúp bạn làm được nhiều việc hơn.",
     images: [DEFAULT_LOGO_DATA_URL],
   },
   other: {
@@ -78,10 +78,10 @@ export default function RootLayout({
   const schema = {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
-    name: "My Task Manager",
-    url: "https://my-task-manager-beryl.vercel.app",
+    name: "My Task Manager Web",
+    url: "https://my-task-manager-web.vercel.app",
     description:
-      "Tạo, sắp xếp và giải quyết các công việc cần làm. Công cụ sẽ thúc đẩy năng suất làm việc của bạn. My Task Manager sẽ giúp bạn làm được nhiều việc hơn.",
+      "Tạo, sắp xếp và giải quyết các công việc cần làm. Công cụ sẽ thúc đẩy năng suất làm việc của bạn. My Task Manager Web sẽ giúp bạn làm được nhiều việc hơn.",
     applicationCategory: "ProjectManagementApplication",
     operatingSystem: "Web",
     offers: {

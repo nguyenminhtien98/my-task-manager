@@ -8,6 +8,6 @@ export default function robots(): MetadataRoute.Robots {
         allow: "/",
       },
     ],
-    sitemap: "https://my-task-manager-beryl.vercel.app/sitemap.xml",
+    sitemap: "https://my-task-manager-web.vercel.app/sitemap.xml",
   };
 }
