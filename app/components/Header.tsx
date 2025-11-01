@@ -314,9 +314,9 @@ const Header: React.FC<HeaderProps> = ({
             <Button
               onClick={onLoginClick}
               variant="ghost"
-              className="px-3 py-1 bg-gray-100 text-black hover:bg-gray-200"
+              className="px-3 py-1 bg-gray-100 text-white hover:text-black hover:bg-gray-200"
             >
-              Login
+              Đăng nhập
             </Button>
           )}
         </div>
