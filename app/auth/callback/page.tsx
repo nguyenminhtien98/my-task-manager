@@ -6,7 +6,6 @@ import { account, database } from "../../appwrite";
 import { useAuth } from "../../context/AuthContext";
 import { Query, AppwriteException } from "appwrite";
 import toast from "react-hot-toast";
-import { DEFAULT_THEME_GRADIENT } from "../../utils/themeColors";
 
 const CallbackContent = () => {
   const router = useRouter();
@@ -58,7 +57,6 @@ const CallbackContent = () => {
                 name: finalName,
                 email: accountInfo.email,
                 role: "user",
-                themeColor: DEFAULT_THEME_GRADIENT,
               }
             );
             displayName = finalName;

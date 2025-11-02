@@ -16,6 +16,11 @@ import {
   detectMediaTypeFromUrl,
   extractMediaNameFromUrl,
 } from "../../../utils/media";
+import {
+  MAX_UPLOAD_SIZE_BYTES,
+  MAX_UPLOAD_SIZE_LABEL,
+  getUploadFileLabel,
+} from "../../../utils/upload";
 import { useProjectOperations } from "../../../hooks/useProjectOperations";
 import { useTask } from "../../../hooks/useTask";
 import TaskModalLeftPanel from "./TaskModalLeftPanel";
@@ -237,7 +242,26 @@ const TaskModal: React.FC<TaskModalProps> = ({
       return;
     }
     const fileList = Array.from(files);
-    setSelectedFiles((prev) => [...prev, ...fileList]);
+    const validFiles: File[] = [];
+    const invalidLabels = new Set<string>();
+
+    fileList.forEach((file) => {
+      if (file.size > MAX_UPLOAD_SIZE_BYTES) {
+        invalidLabels.add(getUploadFileLabel(file));
+      } else {
+        validFiles.push(file);
+      }
+    });
+
+    invalidLabels.forEach((label) => {
+      toast.error(
+        `${label} bạn chọn có kích thước > ${MAX_UPLOAD_SIZE_LABEL}. Vui lòng chọn ${label.toLowerCase()} < ${MAX_UPLOAD_SIZE_LABEL}.`
+      );
+    });
+
+    if (validFiles.length > 0) {
+      setSelectedFiles((prev) => [...prev, ...validFiles]);
+    }
     event.target.value = "";
   };
 
@@ -340,6 +364,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
           <TaskDetailRightPanel
             attachments={detailAttachments}
             taskId={task?.id}
+            taskTitle={task?.title}
             assignee={task?.assignee}
             className="max-h-[75vh]"
           />

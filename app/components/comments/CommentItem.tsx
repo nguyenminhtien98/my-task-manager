@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { v4 as uuidv4 } from "uuid";
+import toast from "react-hot-toast";
 import AvatarUser from "../common/AvatarUser";
 import { formatVietnameseDateTime } from "../../utils/date";
 import { CommentAttachment, PendingAttachment, TaskComment, TaskAttachment } from "./types";
@@ -10,6 +11,11 @@ import PendingAttachmentPreview from "./PendingAttachmentPreview";
 import { FiImage, FiPaperclip, FiPlay, FiX } from "react-icons/fi";
 import { useAuth } from "../../context/AuthContext";
 import type { UpdateCommentParams } from "@/app/hooks/useComment";
+import {
+  MAX_UPLOAD_SIZE_BYTES,
+  MAX_UPLOAD_SIZE_LABEL,
+  getUploadFileLabel,
+} from "../../utils/upload";
 
 const EDIT_EVENT_NAME = "comment-edit-start";
 
@@ -246,7 +252,30 @@ const CommentItem: React.FC<CommentItemProps> = ({
       return;
     }
 
-    const list = Array.from(files).map((file) => {
+    const fileArray = Array.from(files);
+    const validFiles: File[] = [];
+    const invalidLabels = new Set<string>();
+
+    fileArray.forEach((file) => {
+      if (file.size > MAX_UPLOAD_SIZE_BYTES) {
+        invalidLabels.add(getUploadFileLabel(file));
+      } else {
+        validFiles.push(file);
+      }
+    });
+
+    invalidLabels.forEach((label) => {
+      toast.error(
+        `${label} bạn chọn có kích thước > ${MAX_UPLOAD_SIZE_LABEL}. Vui lòng chọn ${label.toLowerCase()} < ${MAX_UPLOAD_SIZE_LABEL}.`
+      );
+    });
+
+    if (validFiles.length === 0) {
+      event.target.value = "";
+      return;
+    }
+
+    const list = validFiles.map((file) => {
       const mediaType: PendingAttachment["mediaType"] = file.type.startsWith("video")
         ? "video"
         : file.type.startsWith("image")

@@ -352,6 +352,24 @@ const HomePage: React.FC = () => {
     columns[st].sort((a, b) => b.order - a.order)
   );
 
+  const isTaskOwnedByCurrentUser = useCallback(
+    (task?: Task | null) => {
+      if (!task) return false;
+      const userId = user?.id ?? null;
+      if (task.assignee && typeof task.assignee === "object") {
+        const profile = task.assignee as BasicProfile;
+        if (userId && profile.$id === userId) return true;
+        return profile.name === currentUserName;
+      }
+      if (typeof task.assignee === "string") {
+        if (userId && task.assignee === userId) return true;
+        return task.assignee === currentUserName;
+      }
+      return false;
+    },
+    [user?.id, currentUserName]
+  );
+
   const handleDragEnd = async (
     event: DragEndEvent,
     fallbackStatus: TaskStatus | null = null
@@ -379,8 +397,8 @@ const HomePage: React.FC = () => {
 
     if (!isLeader) {
       const allowed: TaskStatus[] = ["doing", "done"];
-      const moving = allTasks.find((t) => t.id === active.id);
-      if (!moving || moving.assignee !== currentUserName) return;
+      const moving = allTasks.find((t) => t.id === String(active.id));
+      if (!isTaskOwnedByCurrentUser(moving)) return;
       if (
         !allowed.includes(targetStatus) &&
         !(sourceStatus === "bug" && allowed.includes(targetStatus))
@@ -388,11 +406,11 @@ const HomePage: React.FC = () => {
         return;
     }
 
-    const currentTask = allTasks.find((t) => t.id === active.id);
+    const currentTask = allTasks.find((t) => t.id === String(active.id));
     if (!currentTask) return;
 
     const tasksInTarget = allTasks.filter(
-      (t) => t.status === targetStatus && t.id !== active.id
+      (t) => t.status === targetStatus && t.id !== String(active.id)
     );
     const targetOrder = tasksInTarget.length;
 
@@ -459,6 +477,7 @@ const HomePage: React.FC = () => {
         <Board
           tasks={boardTasks}
           currentUser={currentUserName}
+          currentUserId={user?.id ?? null}
           isLeader={isLeader}
           onMove={handleDragEnd}
           onTaskClick={(t) => {

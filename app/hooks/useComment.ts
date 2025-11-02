@@ -11,6 +11,7 @@ import {
   TaskComment,
 } from "../components/comments/types";
 import { mapCommentDocument, RawCommentDocument } from "../utils/comment";
+import { createNotifications } from "../services/notificationService";
 
 interface CreateCommentParams {
   taskId: string;
@@ -25,6 +26,17 @@ interface UpdateCommentParams {
   content: string;
   retainedAttachments: CommentAttachment[];
   newAttachments: PendingAttachment[];
+}
+
+interface UseCommentOptions {
+  locked?: boolean;
+  taskTitle?: string;
+  projectId?: string;
+  projectName?: string;
+  assigneeId?: string;
+  assigneeName?: string;
+  leaderId?: string;
+  leaderName?: string;
 }
 
 const getCollectionInfo = () => {
@@ -45,7 +57,7 @@ const serializeAttachment = (attachment: CommentAttachment) =>
     mimeType: attachment.mimeType,
   });
 
-export const useComment = (taskId?: string, options?: { locked?: boolean }) => {
+export const useComment = (taskId?: string, options?: UseCommentOptions) => {
   const isLocked = options?.locked ?? false;
   const [comments, setComments] = useState<TaskComment[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -240,6 +252,54 @@ export const useComment = (taskId?: string, options?: { locked?: boolean }) => {
           }
           return [newComment, ...prev];
         });
+
+        const recipients = new Set<string>();
+        const notificationsPayload: Parameters<typeof createNotifications>[0] = [];
+        const taskTitle = options?.taskTitle ?? "";
+        const projectId = options?.projectId;
+
+        if (options?.leaderId && options.leaderId !== userId) {
+          if (!recipients.has(options.leaderId)) {
+            recipients.add(options.leaderId);
+            notificationsPayload.push({
+              recipientId: options.leaderId,
+              actorId: userId,
+              type: "task.comment.added",
+              scope: "task",
+              projectId,
+              taskId: targetTaskId,
+              metadata: {
+                actorName: userName,
+                taskTitle,
+                projectName: options?.projectName,
+              },
+            });
+          }
+        }
+
+        if (options?.assigneeId && options.assigneeId !== userId) {
+          if (!recipients.has(options.assigneeId)) {
+            recipients.add(options.assigneeId);
+            notificationsPayload.push({
+              recipientId: options.assigneeId,
+              actorId: userId,
+              type: "task.comment.added",
+              scope: "task",
+              projectId,
+              taskId: targetTaskId,
+              metadata: {
+                actorName: userName,
+                taskTitle,
+                projectName: options?.projectName,
+              },
+            });
+          }
+        }
+
+        if (notificationsPayload.length > 0) {
+          await createNotifications(notificationsPayload);
+        }
+
         toast.success("Đã gửi bình luận");
         return newComment;
       } catch (error) {
@@ -252,7 +312,7 @@ export const useComment = (taskId?: string, options?: { locked?: boolean }) => {
         setIsCreating(false);
       }
     },
-    [mergeComment, isLocked]
+    [mergeComment, isLocked, options]
   );
 
   const updateComment = useCallback(

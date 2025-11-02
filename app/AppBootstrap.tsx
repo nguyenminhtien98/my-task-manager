@@ -34,10 +34,14 @@ const AppBootstrap: React.FC<{ children: React.ReactNode }> = ({
   if (showSplash) {
     return (
       <div
+        suppressHydrationWarning
         className="fixed inset-0 flex min-h-screen items-center justify-center"
         style={{ background: splashBg }}
       >
-        <div className="w-12 h-12 border-4 border-black border-t-transparent rounded-full animate-spin"></div>
+        <div
+          suppressHydrationWarning
+          className="w-12 h-12 border-4 border-black border-t-transparent rounded-full animate-spin"
+        ></div>
       </div>
     );
   }

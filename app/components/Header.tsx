@@ -20,6 +20,7 @@ import {
 import ProjectMembersModal from "./modal/projectMemberModal";
 import ProjectManagerModal from "./modal/projectModal/ProjectManagerModal";
 import { useProjectTheme } from "../hooks/useProjectTheme";
+import NotificationBell from "./notifications/NotificationBell";
 
 const Header: React.FC<HeaderProps> = ({
   onCreateTask,
@@ -255,60 +256,63 @@ const Header: React.FC<HeaderProps> = ({
           </Button>
 
           {user ? (
-            <div
-              ref={menuRef}
-              className="relative flex items-center justify-center"
-            >
-              <AvatarUser
-                name={user.name}
-                avatarUrl={user.avatarUrl}
-                size={36}
-                showTooltip={false}
-                onClick={() => setShowMenu((prev) => !prev)}
-                title={`${currentProject?.leader.$id === user.id ? "Leader" : "User"
-                  }: ${user.name}`}
-              />
-              {showMenu && (
-                <div className="absolute right-0 top-full mt-2 w-48 rounded bg-white text-black shadow-lg z-[60]">
-                  <Button
-                    variant="ghost"
-                    onClick={() => {
-                      setIsEditProfileModalOpen(true);
-                      setShowMenu(false);
-                    }}
-                    className="w-full justify-start px-4 py-2 text-left text-[#111827]"
-                  >
-                    Hồ sơ của tôi
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    onClick={() => {
-                      setIsProjectManagerOpen(true);
-                      setShowMenu(false);
-                    }}
-                    className="w-full justify-start px-4 py-2 text-left text-[#111827]"
-                  >
-                    Quản lý dự án
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    onClick={handleOpenThemeModal}
-                    className="w-full justify-start px-4 py-2 text-left text-[#111827]"
-                  >
-                    Thay đổi màu nền
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    onClick={() => {
-                      logout();
-                      setShowMenu(false);
-                    }}
-                    className="w-full justify-start px-4 py-2 text-left text-[#111827]"
-                  >
-                    Đăng xuất
-                  </Button>
-                </div>
-              )}
+            <div className="flex items-center gap-3">
+              <NotificationBell />
+              <div
+                ref={menuRef}
+                className="relative flex items-center justify-center"
+              >
+                <AvatarUser
+                  name={user.name}
+                  avatarUrl={user.avatarUrl}
+                  size={36}
+                  showTooltip={false}
+                  onClick={() => setShowMenu((prev) => !prev)}
+                  title={`${currentProject?.leader.$id === user.id ? "Leader" : "User"
+                    }: ${user.name}`}
+                />
+                {showMenu && (
+                  <div className="absolute right-0 top-full mt-2 w-48 rounded bg-white text-black shadow-lg z-[60]">
+                    <Button
+                      variant="ghost"
+                      onClick={() => {
+                        setIsEditProfileModalOpen(true);
+                        setShowMenu(false);
+                      }}
+                      className="w-full justify-start px-4 py-2 text-left text-[#111827]"
+                    >
+                      Hồ sơ của tôi
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      onClick={() => {
+                        setIsProjectManagerOpen(true);
+                        setShowMenu(false);
+                      }}
+                      className="w-full justify-start px-4 py-2 text-left text-[#111827]"
+                    >
+                      Quản lý dự án
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      onClick={handleOpenThemeModal}
+                      className="w-full justify-start px-4 py-2 text-left text-[#111827]"
+                    >
+                      Thay đổi màu nền
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      onClick={() => {
+                        logout();
+                        setShowMenu(false);
+                      }}
+                      className="w-full justify-start px-4 py-2 text-left text-[#111827]"
+                    >
+                      Đăng xuất
+                    </Button>
+                  </div>
+                )}
+              </div>
             </div>
           ) : (
             <Button

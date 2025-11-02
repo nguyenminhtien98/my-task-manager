@@ -1,9 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { Query } from "appwrite";
 import { database, subscribeToRealtime } from "../appwrite";
 import { useAuth, type User } from "../context/AuthContext";
 import { uploadFilesToCloudinary } from "../utils/upload";
+import { createNotification } from "../services/notificationService";
 
 interface UpdateProfileOptions {
   name?: string;
@@ -54,6 +56,28 @@ export const useProfile = () => {
       setIsUpdating(true);
       try {
         let newAvatarUrl: string | undefined;
+
+        if (nameHasChanged && trimmedName) {
+          const existing = await database.listDocuments(
+            String(databaseId),
+            String(profileCollectionId),
+            [Query.equal("name", trimmedName), Query.limit(1)]
+          );
+
+          const conflict = existing.documents.some((doc) => {
+            const documentId =
+              typeof doc.$id === "string" ? doc.$id : (doc as { $id?: string }).$id;
+            return documentId && documentId !== user.id;
+          });
+
+          if (conflict) {
+            return {
+              success: false,
+              message: "Tên này đã tồn tại trong hệ thống.",
+            };
+          }
+        }
+
         if (avatarHasChanged && avatarFile) {
           const uploaded = await uploadFilesToCloudinary([avatarFile]);
           if (uploaded.length > 0 && uploaded[0].url) {
@@ -84,6 +108,34 @@ export const useProfile = () => {
           user.id,
           updateData
         );
+
+        const notificationPromises: Promise<unknown>[] = [];
+        if (nameHasChanged && trimmedName) {
+          notificationPromises.push(
+            createNotification({
+              recipientId: user.id,
+              actorId: user.id,
+              type: "profile.name.updated",
+              scope: "profile",
+              metadata: {
+                newValue: trimmedName,
+              },
+            })
+          );
+        }
+        if (newAvatarUrl) {
+          notificationPromises.push(
+            createNotification({
+              recipientId: user.id,
+              actorId: user.id,
+              type: "profile.avatar.updated",
+              scope: "profile",
+            })
+          );
+        }
+        if (notificationPromises.length > 0) {
+          await Promise.allSettled(notificationPromises);
+        }
 
         const updatedUser: User = {
           ...user,

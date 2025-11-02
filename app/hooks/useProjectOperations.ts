@@ -5,9 +5,20 @@ import { Query } from "appwrite";
 import { database, subscribeToRealtime } from "../appwrite";
 import { useProject } from "../context/ProjectContext";
 import { useAuth } from "../context/AuthContext";
-import { BasicProfile, Project, ProjectStatus } from "../types/Types";
+import {
+  BasicProfile,
+  Project,
+  ProjectStatus,
+  NotificationMetadata,
+} from "../types/Types";
 import { emitMembersChanged, onMembersChanged } from "../../lib/membersBus";
 import toast from "react-hot-toast";
+import {
+  createNotification,
+  createNotifications,
+  getProjectMemberIds,
+  CreateNotificationParams,
+} from "../services/notificationService";
 
 const ensureProjectStatus = (project: Project): Project => ({
   ...project,
@@ -136,26 +147,25 @@ export const useProjectOperations = () => {
       if (!events.length) return;
 
       const membershipData =
-        ((event.payload?.data as { project?: unknown } | undefined) ??
-          event.payload) ?? null;
+        (event.payload?.data as { project?: unknown } | undefined) ??
+        event.payload ??
+        null;
 
       const membershipProjectId =
         typeof membershipData?.project === "string"
           ? membershipData.project
           : undefined;
 
-      if (
-        membershipProjectId &&
-        membershipProjectId !== currentProjectId
-      ) {
+      if (membershipProjectId && membershipProjectId !== currentProjectId) {
         return;
       }
 
       if (
-        events.some((e) =>
-          e.endsWith(".create") ||
-          e.endsWith(".update") ||
-          e.endsWith(".delete")
+        events.some(
+          (e) =>
+            e.endsWith(".create") ||
+            e.endsWith(".update") ||
+            e.endsWith(".delete")
         )
       ) {
         refetch();
@@ -231,9 +241,11 @@ export const useProjectOperations = () => {
         const updatedProject = ensureProjectStatus(rawData as Project);
 
         const incomingLeader = (() => {
-          const value = (updatedProject as unknown as {
-            leader?: unknown;
-          }).leader;
+          const value = (
+            updatedProject as unknown as {
+              leader?: unknown;
+            }
+          ).leader;
           if (
             value &&
             typeof value === "object" &&
@@ -266,9 +278,7 @@ export const useProjectOperations = () => {
             status: updatedProject.status ?? currentProject.status ?? "active",
           };
           setCurrentProject(nextProject);
-          setCurrentProjectRole(
-            leader.$id === user.id ? "leader" : "user"
-          );
+          setCurrentProjectRole(leader.$id === user.id ? "leader" : "user");
         }
       }
     });
@@ -288,6 +298,9 @@ export const useProjectOperations = () => {
     async (email: string): Promise<{ success: boolean; message: string }> => {
       if (!currentProject) {
         return { success: false, message: "Chưa chọn dự án" };
+      }
+      if (!user) {
+        return { success: false, message: "Chưa đăng nhập" };
       }
       if ((currentProject.status ?? "active") === "closed") {
         return {
@@ -331,17 +344,49 @@ export const useProjectOperations = () => {
         if (membershipCheck.total > 0) {
           return { success: false, message: "User đã là thành viên của dự án" };
         }
-
-        await database.createDocument(
-          databaseId,
-          membershipsCollectionId,
-          "unique()",
-          {
-            project: currentProject.$id,
-            user: profile.$id,
+        const response = await fetch("/api/memberships/create", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            projectId: currentProject.$id,
+            userId: profile.$id,
             joinedAt: new Date().toISOString(),
-          }
-        );
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || "Tạo membership thất bại");
+        }
+
+        const notifications: CreateNotificationParams[] = [
+          {
+            recipientId: user.id,
+            actorId: user.id,
+            type: "project.member.added",
+            scope: "project",
+            projectId: currentProject.$id,
+            metadata: {
+              projectName: currentProject.name,
+              targetMemberName: profile.name,
+            } satisfies NotificationMetadata,
+          },
+          {
+            recipientId: profile.$id,
+            actorId: user.id,
+            type: "project.member.added",
+            scope: "project",
+            projectId: currentProject.$id,
+            metadata: {
+              projectName: currentProject.name,
+              actorName: user.name,
+              audience: "target" as const,
+              targetMemberName: profile.name,
+            } satisfies NotificationMetadata,
+          },
+        ];
+
+        await createNotifications(notifications);
 
         emitMembersChanged(currentProject.$id);
         refetch();
@@ -351,7 +396,7 @@ export const useProjectOperations = () => {
         return { success: false, message: "Thêm thành viên thất bại" };
       }
     },
-    [currentProject, refetch]
+    [currentProject, refetch, user]
   );
 
   const removeMember = useCallback(
@@ -361,12 +406,17 @@ export const useProjectOperations = () => {
       if (!currentProject) {
         return { success: false, message: "Chưa chọn dự án" };
       }
+      if (!user) {
+        return { success: false, message: "Chưa đăng nhập" };
+      }
       if ((currentProject.status ?? "active") === "closed") {
         return {
           success: false,
           message: "Dự án đã bị đóng, không thể xóa thành viên",
         };
       }
+
+      const member = members.find((m) => m.membershipId === membershipId);
 
       try {
         const databaseId = String(process.env.NEXT_PUBLIC_DATABASE_ID);
@@ -380,6 +430,38 @@ export const useProjectOperations = () => {
           membershipId
         );
 
+        const notifications: CreateNotificationParams[] = [
+          {
+            recipientId: user.id,
+            actorId: user.id,
+            type: "project.member.removed",
+            scope: "project",
+            projectId: currentProject.$id,
+            metadata: {
+              projectName: currentProject.name,
+              targetMemberName: member?.name ?? "thành viên",
+            } satisfies NotificationMetadata,
+          },
+        ];
+
+        if (member) {
+          notifications.push({
+            recipientId: member.$id,
+            actorId: user.id,
+            type: "project.member.removed",
+            scope: "project",
+            projectId: currentProject.$id,
+            metadata: {
+              projectName: currentProject.name,
+              actorName: user.name,
+              audience: "target" as const,
+              targetMemberName: member.name,
+            } satisfies NotificationMetadata,
+          });
+        }
+
+        await createNotifications(notifications);
+
         emitMembersChanged(currentProject.$id);
         refetch();
         return { success: true, message: "Đã xóa thành viên" };
@@ -388,7 +470,7 @@ export const useProjectOperations = () => {
         return { success: false, message: "Xóa thành viên thất bại" };
       }
     },
-    [currentProject, refetch]
+    [currentProject, members, refetch, user]
   );
 
   const createProject = useCallback(
@@ -427,15 +509,31 @@ export const useProjectOperations = () => {
             project: projectDocument.$id,
             user: user.id,
             joinedAt: new Date().toISOString(),
-          }
+          },
+          [
+            `read("user:${user.id}")`,
+            `update("user:${user.id}")`,
+            `delete("user:${user.id}")`,
+          ]
         );
+
+        await createNotification({
+          recipientId: user.id,
+          actorId: user.id,
+          type: "project.created",
+          scope: "project",
+          projectId: projectDocument.$id,
+          metadata: {
+            projectName: name,
+          },
+        });
 
         const createdProject: Project = ensureProjectStatus({
           $id: projectDocument.$id,
           name: projectDocument.name,
           leader: projectDocument.leader,
           $createdAt: projectDocument.$createdAt,
-           status: projectDocument.status ?? "active",
+          status: projectDocument.status ?? "active",
         });
 
         locallyCreatedProjectIdsRef.current.add(createdProject.$id);
@@ -485,12 +583,33 @@ export const useProjectOperations = () => {
       }
 
       try {
+        const projectDoc = await database.getDocument(
+          String(databaseId),
+          String(projectsCollectionId),
+          projectId
+        );
+        const projectName =
+          (projectDoc as Project | { name?: string }).name ?? "dự án";
+
+        const memberIdSet = new Set<string>();
         if (membershipsCollectionId) {
           const memberships = await database.listDocuments(
             String(databaseId),
             String(membershipsCollectionId),
             [Query.equal("project", projectId), Query.limit(200)]
           );
+          memberships.documents.forEach((membership) => {
+            const userField = (
+              membership as unknown as {
+                user?: string | { $id?: string };
+              }
+            ).user;
+            if (typeof userField === "string") {
+              memberIdSet.add(userField);
+            } else if (userField && typeof userField.$id === "string") {
+              memberIdSet.add(userField.$id);
+            }
+          });
           await Promise.all(
             memberships.documents.map((membership) =>
               database
@@ -525,6 +644,42 @@ export const useProjectOperations = () => {
                 })
             )
           );
+        }
+
+        const notifications: CreateNotificationParams[] = [
+          {
+            recipientId: user.id,
+            actorId: user.id,
+            type: "project.deleted",
+            scope: "project",
+            projectId,
+            metadata: {
+              projectName,
+              actorName: user.name,
+              audience: "actor" as const,
+            } satisfies NotificationMetadata,
+          },
+        ];
+
+        Array.from(memberIdSet)
+          .filter((memberId) => memberId && memberId !== user.id)
+          .forEach((memberId) => {
+            notifications.push({
+              recipientId: memberId,
+              actorId: user.id,
+              type: "project.deleted",
+              scope: "project",
+              projectId,
+              metadata: {
+                projectName,
+                actorName: user.name,
+                audience: "member" as const,
+              } satisfies NotificationMetadata,
+            });
+          });
+
+        if (notifications.length > 0) {
+          await createNotifications(notifications);
         }
 
         await database.deleteDocument(
@@ -601,6 +756,24 @@ export const useProjectOperations = () => {
           }
         );
 
+        const projectName =
+          currentProject?.$id === projectId
+            ? currentProject.name
+            : (
+                (await database
+                  .getDocument(
+                    String(databaseId),
+                    String(projectsCollectionId),
+                    projectId
+                  )
+                  .catch(() => null)) as Project | null
+              )?.name;
+        const memberIds = await getProjectMemberIds(projectId);
+        const notificationType =
+          status === "closed"
+            ? ("project.closed" as const)
+            : ("project.reopened" as const);
+
         setProjects((prev) =>
           prev.map((project) =>
             project.$id === projectId
@@ -623,10 +796,44 @@ export const useProjectOperations = () => {
           );
         }
 
+        const notifications: CreateNotificationParams[] = [
+          {
+            recipientId: user.id,
+            actorId: user.id,
+            type: notificationType,
+            scope: "project",
+            projectId,
+            metadata: {
+              projectName: projectName ?? currentProject?.name,
+              actorName: user.name,
+              audience: "actor" as const,
+            } satisfies NotificationMetadata,
+          },
+        ];
+
+        memberIds
+          .filter((memberId) => memberId && memberId !== user.id)
+          .forEach((memberId) => {
+            notifications.push({
+              recipientId: memberId,
+              actorId: user.id,
+              type: notificationType,
+              scope: "project",
+              projectId,
+              metadata: {
+                projectName: projectName ?? currentProject?.name,
+                actorName: user.name,
+                audience: "member" as const,
+              } satisfies NotificationMetadata,
+            });
+          });
+
+        if (notifications.length > 0) {
+          await createNotifications(notifications);
+        }
+
         toast.success(
-          status === "closed"
-            ? "Đã đóng dự án."
-            : "Đã mở lại dự án."
+          status === "closed" ? "Đã đóng dự án." : "Đã mở lại dự án."
         );
         return { success: true };
       } catch (error) {

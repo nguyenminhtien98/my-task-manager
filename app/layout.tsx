@@ -5,11 +5,13 @@ import { AuthProvider } from "./context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
 import { Toaster } from "react-hot-toast";
 import { ProjectProvider } from "./context/ProjectContext";
+import { FeedbackChatProvider } from "./context/FeedbackChatContext";
 import AppBootstrap from "./AppBootstrap";
 import {
   DEFAULT_LOGO_DATA_URL,
   DEFAULT_LOGO_SVG,
 } from "./utils/logoSvg";
+import FeedbackChatWidget from "./components/feedback/FeedbackChatWidget";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -101,15 +103,19 @@ export default function RootLayout({
         />
       </head>
       <body
+        suppressHydrationWarning
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <AuthProvider>
           <ProjectProvider>
             <ThemeProvider>
-              <AppBootstrap>
-                <Toaster position="top-right" />
-                {children}
-              </AppBootstrap>
+              <FeedbackChatProvider>
+                <AppBootstrap>
+                  <Toaster position="top-right" />
+                  {children}
+                  <FeedbackChatWidget />
+                </AppBootstrap>
+              </FeedbackChatProvider>
             </ThemeProvider>
           </ProjectProvider>
         </AuthProvider>

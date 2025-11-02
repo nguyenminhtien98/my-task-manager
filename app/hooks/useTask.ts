@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { database, subscribeToRealtime } from "../appwrite";
 import { useAuth } from "../context/AuthContext";
 import { useProject } from "../context/ProjectContext";
@@ -15,6 +15,7 @@ import {
 import { Permission, Role } from "appwrite";
 import toast from "react-hot-toast";
 import { uploadFilesToCloudinary } from "../utils/upload";
+import { createNotification } from "../services/notificationService";
 
 interface CreateTaskParams {
   data: CreateTaskFormValues;
@@ -50,6 +51,21 @@ export const useTask = () => {
   const { currentProject, isProjectClosed } = useProject();
   const closedMessage = "Dự án đã bị đóng, thao tác không khả dụng.";
   const locallyModifiedTaskIdsRef = useRef<Set<string>>(new Set());
+
+  const projectMeta = useMemo(
+    () => ({
+      id: currentProject?.$id ?? null,
+      name: currentProject?.name ?? null,
+      leaderId: currentProject?.leader?.$id ?? null,
+      leaderName: currentProject?.leader?.name ?? null,
+    }),
+    [
+      currentProject?.$id,
+      currentProject?.name,
+      currentProject?.leader?.$id,
+      currentProject?.leader?.name,
+    ]
+  );
   useEffect(() => {
     if (!user || !currentProject) return;
 
@@ -117,6 +133,8 @@ export const useTask = () => {
       }
 
       const { data, nextSeq, selectedFiles, isLeader, members } = params;
+      const projectId = projectMeta.id;
+      const projectName = projectMeta.name;
 
       let attachments: TaskAttachment[] = [];
       try {
@@ -139,8 +157,8 @@ export const useTask = () => {
         predictedHours: data.predictedHours,
         issueType: data.issueType!,
         priority: data.priority!,
-        projectId: currentProject ? currentProject.$id : "",
-        projectName: currentProject ? currentProject.name : "",
+        projectId: projectId ?? "",
+        projectName: projectName ?? "",
         completedBy: user.id,
         attachedFile: attachments,
       };
@@ -203,6 +221,29 @@ export const useTask = () => {
 
         locallyModifiedTaskIdsRef.current.add(createdId);
 
+        if (
+          isLeader &&
+          assigneeProfile?.$id &&
+          assigneeProfile.$id !== user.id
+        ) {
+          await Promise.allSettled([
+            createNotification({
+              recipientId: assigneeProfile.$id,
+              actorId: user.id,
+              type: "task.assigned",
+              scope: "task",
+              projectId: projectId ?? undefined,
+              taskId: createdId,
+              metadata: {
+                taskTitle: data.title,
+                actorName: user.name,
+                audience: "assignee" as const,
+                targetMemberName: assigneeProfile.name ?? "",
+              },
+            }),
+          ]);
+        }
+
         toast.success("Tạo Task thành công");
         return { success: true, task: newTask };
       } catch (e: unknown) {
@@ -214,7 +255,7 @@ export const useTask = () => {
         return { success: false, message: errorMessage };
       }
     },
-    [user, currentProject, isProjectClosed]
+    [user, projectMeta, isProjectClosed]
   );
 
   const updateTask = useCallback(
@@ -230,7 +271,6 @@ export const useTask = () => {
       }
 
       const { task, data } = params;
-
       const isTaskTaken =
         typeof task.assignee === "string"
           ? task.assignee.trim() !== ""
@@ -276,6 +316,7 @@ export const useTask = () => {
         locallyModifiedTaskIdsRef.current.add(task.id);
 
         const updatedTask = { ...task, ...updatedFields };
+
         toast.success("Cập nhật Task thành công");
         return { success: true, task: updatedTask };
       } catch (e: unknown) {
@@ -302,6 +343,7 @@ export const useTask = () => {
       }
 
       const { task } = params;
+      const { id: projectId, leaderId, leaderName } = projectMeta;
 
       try {
         await database.updateDocument(
@@ -318,6 +360,45 @@ export const useTask = () => {
           assignee: { $id: user.id, name: user.name },
         };
 
+        const notifications = [
+          createNotification({
+            recipientId: user.id,
+            actorId: user.id,
+            type: "task.assigned",
+            scope: "task",
+            projectId: projectId ?? undefined,
+            taskId: task.id,
+            metadata: {
+              taskTitle: task.title,
+              memberName: user.name,
+              audience: "assignee" as const,
+              event: "accepted",
+            },
+          }),
+        ];
+
+        if (leaderId && leaderId !== user.id) {
+          notifications.push(
+            createNotification({
+              recipientId: leaderId,
+              actorId: user.id,
+              type: "task.assigned",
+              scope: "task",
+              projectId: projectId ?? undefined,
+              taskId: task.id,
+              metadata: {
+                taskTitle: task.title,
+                memberName: user.name,
+                leaderName: leaderName ?? undefined,
+                audience: "leader" as const,
+                event: "accepted",
+              },
+            })
+          );
+        }
+
+        await Promise.allSettled(notifications);
+
         toast.success("Nhận task thành công");
         return { success: true, task: updatedTask };
       } catch (err: unknown) {
@@ -331,7 +412,7 @@ export const useTask = () => {
         return { success: false, message };
       }
     },
-    [user, isProjectClosed]
+    [user, projectMeta, isProjectClosed]
   );
 
   const deleteTask = useCallback(
@@ -382,6 +463,7 @@ export const useTask = () => {
       }
 
       const { task, status, order, completedBy } = params;
+      const { id: projectId, leaderId } = projectMeta;
 
       const updatePayload: Record<string, unknown> = {
         status,
@@ -416,6 +498,86 @@ export const useTask = () => {
               : task.completedBy,
         };
 
+        const assigneeInfo =
+          typeof task.assignee === "object" && task.assignee
+            ? (task.assignee as BasicProfile)
+            : typeof task.assignee === "string" && task.assignee
+            ? ({ $id: task.assignee } as BasicProfile)
+            : null;
+        const assigneeId = assigneeInfo?.$id;
+        const assigneeName =
+          assigneeInfo?.name ||
+          (typeof task.assignee === "object"
+            ? (task.assignee as BasicProfile)?.name
+            : undefined);
+        const actorIsLeader = leaderId === user.id;
+        const notifications: Promise<unknown>[] = [];
+
+        if (
+          !actorIsLeader &&
+          assigneeId === user.id &&
+          (status === "done" || status === "completed")
+        ) {
+          if (leaderId && leaderId !== user.id) {
+            notifications.push(
+              createNotification({
+                recipientId: leaderId,
+                actorId: user.id,
+                type: "task.completed",
+                scope: "task",
+                projectId: projectId ?? undefined,
+                taskId: task.id,
+                metadata: {
+                  taskTitle: task.title,
+                  memberName: user.name,
+                  audience: "leader" as const,
+                },
+              })
+            );
+          }
+        }
+
+        if (actorIsLeader && assigneeId && assigneeId !== user.id) {
+          if (status === "bug") {
+            notifications.push(
+              createNotification({
+                recipientId: assigneeId,
+                actorId: user.id,
+                type: "task.movedToBug",
+                scope: "task",
+                projectId: projectId ?? undefined,
+                taskId: task.id,
+                metadata: {
+                  taskTitle: task.title,
+                  actorName: user.name,
+                  audience: "assignee" as const,
+                },
+              })
+            );
+          } else if (status === "completed") {
+            notifications.push(
+              createNotification({
+                recipientId: assigneeId,
+                actorId: user.id,
+                type: "task.movedToCompleted",
+                scope: "task",
+                projectId: projectId ?? undefined,
+                taskId: task.id,
+                metadata: {
+                  taskTitle: task.title,
+                  memberName: assigneeName ?? "",
+                  actorName: user.name,
+                  audience: "assignee" as const,
+                },
+              })
+            );
+          }
+        }
+
+        if (notifications.length > 0) {
+          await Promise.allSettled(notifications);
+        }
+
         return { success: true, task: updatedTask };
       } catch (err: unknown) {
         const message =
@@ -426,7 +588,7 @@ export const useTask = () => {
         return { success: false, message };
       }
     },
-    [user, isProjectClosed]
+    [user, projectMeta, isProjectClosed]
   );
 
   return {

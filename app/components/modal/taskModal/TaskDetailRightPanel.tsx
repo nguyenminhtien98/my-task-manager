@@ -14,6 +14,7 @@ interface TaskDetailRightPanelProps {
   attachments: TaskAttachment[];
   className?: string;
   taskId?: string;
+  taskTitle?: string;
   assignee?: string | { $id: string; name: string };
 }
 
@@ -21,6 +22,7 @@ const TaskDetailRightPanel: React.FC<TaskDetailRightPanelProps> = ({
   attachments,
   className,
   taskId,
+  taskTitle,
   assignee,
 }) => {
   const [previewMedia, setPreviewMedia] = useState<TaskAttachment | null>(null);
@@ -28,11 +30,14 @@ const TaskDetailRightPanel: React.FC<TaskDetailRightPanelProps> = ({
   const { user } = useAuth();
   const { currentProject, isProjectClosed } = useProject();
   const leaderId = currentProject?.leader?.$id;
+  const assigneeIdValue =
+    typeof assignee === "object" ? assignee?.$id : assignee ?? undefined;
+  const assigneeNameValue =
+    typeof assignee === "object" ? assignee?.name : undefined;
   const canComment =
     !isProjectClosed &&
     !!user &&
-    (user.id === (typeof assignee === "object" ? assignee?.$id : assignee) ||
-      user.id === leaderId);
+    (user.id === assigneeIdValue || user.id === leaderId);
 
   const visualAttachments = useMemo(
     () =>
@@ -178,8 +183,11 @@ const TaskDetailRightPanel: React.FC<TaskDetailRightPanelProps> = ({
 
         <CommentSection
           taskId={taskId}
+          taskTitle={taskTitle}
           canComment={canComment}
           isLocked={isProjectClosed}
+          assigneeId={assigneeIdValue}
+          assigneeName={assigneeNameValue}
         />
       </div>
 

@@ -5,7 +5,13 @@ import { database, subscribeToRealtime } from "../appwrite";
 import { useProject } from "../context/ProjectContext";
 import { useTheme } from "../context/ThemeContext";
 import { DEFAULT_THEME_GRADIENT } from "../utils/themeColors";
-import { Project } from "../types/Types";
+import { Project, NotificationMetadata } from "../types/Types";
+import { useAuth } from "../context/AuthContext";
+import {
+  createNotifications,
+  getProjectMemberIds,
+  CreateNotificationParams,
+} from "../services/notificationService";
 
 interface SaveThemeResult {
   success: boolean;
@@ -15,6 +21,7 @@ interface SaveThemeResult {
 export const useProjectTheme = () => {
   const { currentProject, setCurrentProject, setProjects } = useProject();
   const { setTheme } = useTheme();
+  const { user } = useAuth();
   const [isSaving, setIsSaving] = useState(false);
 
   const currentProjectId = currentProject?.$id ?? null;
@@ -56,6 +63,43 @@ export const useProjectTheme = () => {
         });
         setTheme(gradient);
 
+        if (user) {
+          const memberIds = await getProjectMemberIds(currentProject.$id);
+          const notifications: CreateNotificationParams[] = [
+            {
+              recipientId: user.id,
+              actorId: user.id,
+              type: "project.themeColor.updated",
+              scope: "project",
+              projectId: currentProject.$id,
+              metadata: {
+                projectName: currentProject.name,
+                actorName: user.name,
+                audience: "actor" as const,
+              } satisfies NotificationMetadata,
+            },
+          ];
+
+          memberIds
+            .filter((memberId) => memberId && memberId !== user.id)
+            .forEach((memberId) => {
+              notifications.push({
+                recipientId: memberId,
+                actorId: user.id,
+                type: "project.themeColor.updated",
+                scope: "project",
+                projectId: currentProject.$id,
+                metadata: {
+                  projectName: currentProject.name,
+                  actorName: user.name,
+                  audience: "member" as const,
+                } satisfies NotificationMetadata,
+              });
+            });
+
+          await createNotifications(notifications);
+        }
+
         return { success: true };
       } catch (error) {
         console.error("Failed to update theme color:", error);
@@ -67,7 +111,7 @@ export const useProjectTheme = () => {
         setIsSaving(false);
       }
     },
-    [currentProject, setCurrentProject, setProjects, setTheme]
+    [currentProject, setCurrentProject, setProjects, setTheme, user]
   );
 
   useEffect(() => {

@@ -22,6 +22,9 @@ import { useProjectOperations } from "@/app/hooks/useProjectOperations";
 import { database } from "@/app/appwrite";
 import toast from "react-hot-toast";
 import Button from "../../common/Button";
+import { useAuth } from "@/app/context/AuthContext";
+import { useProject } from "@/app/context/ProjectContext";
+import { createNotification } from "@/app/services/notificationService";
 
 interface TaskModalLeftPanelProps {
   mode: "create" | "detail";
@@ -82,6 +85,8 @@ const TaskModalLeftPanel: React.FC<TaskModalLeftPanelProps> = ({
   isProjectClosed,
 }) => {
   const { members, isLoading: isMembersLoading } = useProjectOperations();
+  const { user } = useAuth();
+  const { currentProject } = useProject();
   const memberNames = React.useMemo(
     () => members.map((m) => m.name),
     [members]
@@ -311,6 +316,31 @@ const TaskModalLeftPanel: React.FC<TaskModalLeftPanelProps> = ({
                           onUpdate(enrichedTask);
                         } else {
                           console.warn("");
+                        }
+
+                        if (
+                          user &&
+                          currentProject &&
+                          task &&
+                          member.$id &&
+                          member.$id !== user.id
+                        ) {
+                          await Promise.allSettled([
+                            createNotification({
+                              recipientId: member.$id,
+                              actorId: user.id,
+                              type: "task.assigned",
+                              scope: "task",
+                              projectId: currentProject.$id,
+                              taskId: task.id,
+                              metadata: {
+                                taskTitle: task.title,
+                                actorName: user.name,
+                                audience: "assignee",
+                                targetMemberName: member.name,
+                              },
+                            }),
+                          ]);
                         }
 
                         toast.success("Đã gán thành viên cho task");

@@ -7,7 +7,6 @@ import { useAuth } from "../../context/AuthContext";
 import { account, database } from "../../appwrite";
 import { OAuthProvider } from "appwrite";
 import toast from "react-hot-toast";
-import { DEFAULT_THEME_GRADIENT } from "../../utils/themeColors";
 import { useUserValidation } from "../../hooks/useUserValidation";
 
 const LoginRegisterModal: React.FC<{
@@ -107,7 +106,6 @@ const LoginRegisterModal: React.FC<{
             name: data.name,
             email: data.email,
             role: "user",
-            themeColor: DEFAULT_THEME_GRADIENT,
           }
         );
 

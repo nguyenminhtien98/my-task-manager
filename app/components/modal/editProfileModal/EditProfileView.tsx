@@ -13,6 +13,9 @@ interface EditProfileViewProps {
   onSaveChanges: (newName: string) => void;
   onClose: () => void;
   isSaving: boolean;
+  nameError?: string | null;
+  disableSave?: boolean;
+  onNameChange?: (value: string) => void;
 }
 
 const EditProfileView: React.FC<EditProfileViewProps> = ({
@@ -22,6 +25,9 @@ const EditProfileView: React.FC<EditProfileViewProps> = ({
   onSaveChanges,
   onClose,
   isSaving,
+  nameError,
+  disableSave = false,
+  onNameChange,
 }) => {
   const [isEditingName, setIsEditingName] = useState(false);
   const [editedName, setEditedName] = useState(user.name);
@@ -77,7 +83,10 @@ const EditProfileView: React.FC<EditProfileViewProps> = ({
             <input
               type="text"
               value={editedName}
-              onChange={(e) => setEditedName(e.target.value)}
+              onChange={(e) => {
+                setEditedName(e.target.value);
+                onNameChange?.(e.target.value);
+              }}
               className="text-base font-medium text-black bg-transparent border-none focus:ring-0 p-0 w-full"
               autoFocus
               onKeyDown={handleNameEditKeyDown}
@@ -106,6 +115,9 @@ const EditProfileView: React.FC<EditProfileViewProps> = ({
             </button>
           )}
         </div>
+        {nameError ? (
+          <div className="text-sm text-red-500">{nameError}</div>
+        ) : null}
         <div className="text-base text-gray-800">
           {user.email || "(Chưa có email)"}
         </div>
@@ -129,7 +141,9 @@ const EditProfileView: React.FC<EditProfileViewProps> = ({
           className="bg-black text-white"
           onClick={handleSaveClick}
           disabled={
-            isSaving || (user.name === editedName && !pendingAvatarFile)
+            isSaving ||
+            disableSave ||
+            (user.name === editedName && !pendingAvatarFile)
           }
         >
           {isSaving ? "Đang lưu..." : "Lưu"}

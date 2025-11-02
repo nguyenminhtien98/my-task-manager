@@ -6,7 +6,7 @@ import { useAuth } from "@/app/context/AuthContext";
 import { Project } from "@/app/types/Types";
 import Button from "@/app/components/common/Button";
 import FreeScrollSlider from "@/app/components/common/FreeScrollSlider";
-import ItemCardProject from "@/app/components/ItemCardProject";
+import ItemCardProject from "@/app/components/modal/projectModal/ItemCardProject";
 
 interface ScreenSelectProjectProps {
   onSelect: (p: Project) => void;
@@ -41,11 +41,10 @@ const ScreenSelectProject: React.FC<ScreenSelectProjectProps> = ({
         <FreeScrollSlider gap={4}>
           <Button
             onClick={() => setLeaderFilter("__all")}
-            className={`px-1 py-1 whitespace-nowrap ${
-              leaderFilter === "__all"
+            className={`px-1 py-1 whitespace-nowrap ${leaderFilter === "__all"
                 ? "bg-black text-white"
                 : "bg-black/10 text-black"
-            }`}
+              }`}
           >
             Tất cả
           </Button>
@@ -53,11 +52,10 @@ const ScreenSelectProject: React.FC<ScreenSelectProjectProps> = ({
             <Button
               key={ldr.id}
               onClick={() => setLeaderFilter(ldr.id)}
-              className={`px-1 py-1 whitespace-nowrap ${
-                leaderFilter === ldr.id
+              className={`px-1 py-1 whitespace-nowrap ${leaderFilter === ldr.id
                   ? "bg-black text-white"
                   : "bg-black/10 text-black"
-              }`}
+                }`}
             >
               {ldr.name}
             </Button>

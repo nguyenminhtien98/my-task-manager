@@ -5,6 +5,86 @@ export type TaskStatus = "list" | "doing" | "done" | "completed" | "bug";
 export type IssueType = "Bug" | "Improvement" | "Feature";
 export type Priority = "High" | "Medium" | "Low";
 
+export type NotificationType =
+  | "system.welcome"
+  | "profile.avatar.updated"
+  | "profile.name.updated"
+  | "profile.info.updated"
+  | "project.created"
+  | "project.member.added"
+  | "project.member.removed"
+  | "project.deleted"
+  | "project.closed"
+  | "project.reopened"
+  | "project.themeColor.updated"
+  | "task.created"
+  | "task.updated"
+  | "task.assigned"
+  | "task.completed"
+  | "task.movedToBug"
+  | "task.movedToCompleted"
+  | "task.comment.added";
+
+export type NotificationScope = "system" | "profile" | "project" | "task";
+
+export type NotificationStatus = "unread" | "read" | "archived";
+
+export interface NotificationMessageSegment {
+  type: "text" | "action";
+  content: string;
+  actionKey?: string;
+}
+
+export interface NotificationMessage {
+  segments: NotificationMessageSegment[];
+  plainText: string;
+}
+
+export interface NotificationMetadata {
+  audience?: "actor" | "target" | "member" | "leader" | "assignee";
+  actorName?: string;
+  recipientName?: string;
+  projectName?: string;
+  projectId?: string;
+  taskTitle?: string;
+  taskId?: string;
+  field?: string;
+  fieldLabel?: string;
+  newValue?: string;
+  oldValue?: string;
+  targetMemberName?: string;
+  leaderName?: string;
+  memberName?: string;
+  commentPreview?: string;
+  statusLabel?: string;
+  event?: string;
+  [key: string]: unknown;
+}
+
+export interface NotificationRecord {
+  id: string;
+  type: NotificationType;
+  scope: NotificationScope;
+  status: NotificationStatus;
+  title?: string | null;
+  message: NotificationMessage;
+  metadata?: NotificationMetadata;
+  createdAt: string;
+  updatedAt?: string;
+  seenAt?: string | null;
+  readAt?: string | null;
+  actor?: BasicProfile | null;
+  recipient?: BasicProfile | null;
+  project?: {
+    $id: string;
+    name?: string | null;
+  } | null;
+  task?: {
+    $id: string;
+    title?: string | null;
+  } | null;
+}
+
 export interface BasicProfile {
   $id: string;
   name: string;
@@ -132,6 +212,7 @@ export interface ColumnProps {
   label: string;
   tasks: Task[];
   currentUserName: string;
+  currentUserId?: string | null;
   isLeader: boolean;
   isProjectClosed: boolean;
   onTaskClick: (task: Task) => void;
@@ -187,16 +268,11 @@ export interface AssigneeDropdownProps {
 export interface BoardProps {
   tasks: Task[];
   currentUser: string;
+  currentUserId?: string | null;
   isLeader: boolean;
   onMove: (e: DragEndEvent, fallbackStatus?: TaskStatus | null) => void;
   onTaskClick: (t: Task) => void;
   isProjectClosed: boolean;
-}
-
-export interface LeaderAssigneeOptionsProps {
-  leaderName: string;
-  onMemberAdded: (memberName: string) => void;
-  existingUsers: string[];
 }
 
 export interface ProjectFormValues {

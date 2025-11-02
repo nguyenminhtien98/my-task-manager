@@ -57,3 +57,17 @@ select {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+@keyframes feedback-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.08);
+  }
+}
+
+.animate-feedback-pulse {
+  animation: feedback-pulse 2s ease-in-out infinite;
+}

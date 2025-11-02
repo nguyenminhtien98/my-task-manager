@@ -27,6 +27,7 @@ const LABELS: Record<TaskStatus, string> = {
 export default function Board({
     tasks,
     currentUser,
+    currentUserId,
     isLeader,
     onMove,
     onTaskClick,
@@ -121,6 +122,7 @@ export default function Board({
                         label={LABELS[status]}
                         tasks={columns[status]}
                         currentUserName={currentUser}
+                        currentUserId={currentUserId}
                         isLeader={isLeader}
                         isProjectClosed={isProjectClosed}
                         onTaskClick={onTaskClick}

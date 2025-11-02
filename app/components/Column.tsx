@@ -7,13 +7,14 @@ import {
 } from "@dnd-kit/sortable";
 import { useDroppable } from "@dnd-kit/core";
 import TaskCard from "./TaskCard";
-import { ColumnProps } from "../types/Types";
+import { ColumnProps, BasicProfile } from "../types/Types";
 
 export default function Column({
   status,
   label,
   tasks,
   currentUserName,
+  currentUserId,
   isLeader,
   isProjectClosed,
   onTaskClick,
@@ -41,22 +42,36 @@ export default function Column({
         strategy={verticalListSortingStrategy}
         disabled={isProjectClosed}
       >
-        {tasks.map((task, index) => (
-          <TaskCard
-            key={task.id}
-            task={task}
-            onClick={() => onTaskClick(task)}
-            customClass={index !== 0 ? "mt-[10px]" : ""}
-            isDraggable={
-              !isProjectClosed &&
-              task.status !== "completed" &&
-              (isLeader ||
-                (typeof task.assignee === "object"
-                  ? task?.assignee?.name === currentUserName
-                  : task.assignee === currentUserName))
+        {tasks.map((task, index) => {
+          const isOwnedByCurrentUser = () => {
+            if (isLeader) return true;
+            const userId = currentUserId ?? undefined;
+            if (task.assignee && typeof task.assignee === "object") {
+              const profile = task.assignee as BasicProfile;
+              if (userId && profile.$id === userId) return true;
+              return profile.name === currentUserName;
             }
+            if (typeof task.assignee === "string") {
+              if (userId && task.assignee === userId) return true;
+              return task.assignee === currentUserName;
+            }
+            return false;
+          };
+          const canDrag =
+            !isProjectClosed &&
+            task.status !== "completed" &&
+            (isLeader || isOwnedByCurrentUser());
+
+          return (
+            <TaskCard
+              key={task.id}
+              task={task}
+              onClick={() => onTaskClick(task)}
+              customClass={index !== 0 ? "mt-[10px]" : ""}
+              isDraggable={canDrag}
           />
-        ))}
+          );
+        })}
       </SortableContext>
     </div>
   );

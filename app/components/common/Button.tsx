@@ -41,52 +41,63 @@ const Button: React.FC<ButtonProps> = ({
       .map((token) => token.trim())
       .filter(Boolean) ?? [];
 
-  const hasBgClass = classTokens.some((token) => token.startsWith("bg-") || token.startsWith("bg["));
-  const hasTextClass = classTokens.some((token) => token.startsWith("text-") || token.startsWith("text["));
+  const hasBgClass = classTokens.some(
+    (token) => token.startsWith("bg-") || token.startsWith("bg[")
+  );
+  const hasTextClass = classTokens.some(
+    (token) => token.startsWith("text-") || token.startsWith("text[")
+  );
 
   const inlineStyle: React.CSSProperties = { ...style };
+  const hasInlineBackground =
+    typeof inlineStyle.background !== "undefined" ||
+    typeof inlineStyle.backgroundColor !== "undefined" ||
+    typeof inlineStyle.backgroundImage !== "undefined";
+  const hasInlineTextColor = typeof inlineStyle.color !== "undefined";
 
-  if (variant === "solid") {
-    if (backgroundColor && !hasBgClass) {
-      inlineStyle.backgroundColor = backgroundColor;
-    } else if (!hasBgClass) {
-      inlineStyle.backgroundColor = "#2563eb";
+  if (backgroundColor) {
+    inlineStyle.backgroundColor = backgroundColor;
+    if (inlineStyle.background) {
+      delete inlineStyle.background;
     }
+  }
 
-    if (textColor && !hasTextClass) {
-      inlineStyle.color = textColor;
-    } else if (!hasTextClass) {
-      inlineStyle.color = "#ffffff";
-    }
-  } else {
-    if (backgroundColor && !hasBgClass) {
-      inlineStyle.backgroundColor = backgroundColor;
-    }
-
-    if (textColor && !hasTextClass) {
-      inlineStyle.color = textColor;
-    } else if (!hasTextClass) {
-      inlineStyle.color = "#111827";
-    }
+  if (textColor) {
+    inlineStyle.color = textColor;
   }
 
   if (disabled) {
-    if (!hasBgClass && !backgroundColor) {
+    if (!hasBgClass && !backgroundColor && !hasInlineBackground) {
       inlineStyle.backgroundColor = "rgba(0,0,0,0.4)";
     }
-    if (!hasTextClass && !textColor) {
+    if (!hasTextClass && !textColor && !hasInlineTextColor) {
       inlineStyle.color = "#ffffff";
     }
   }
 
+  const defaultBgClass =
+    variant === "solid" && !hasBgClass && !backgroundColor && !hasInlineBackground
+      ? "bg-[#2563eb]"
+      : variant === "ghost"
+        ? "bg-transparent"
+        : "";
+
+  const defaultTextClass =
+    variant === "solid" && !hasTextClass && !textColor && !hasInlineTextColor
+      ? "text-white"
+      : variant === "ghost" && !hasTextClass && !textColor && !hasInlineTextColor
+        ? "text-[#111827]"
+        : "";
+
   const classes = [
     baseClasses,
-    variant === "ghost" ? "bg-transparent" : "",
+    defaultBgClass,
+    defaultTextClass,
     !disabled
       ? effectiveHover
       : hasBgClass
-      ? "cursor-not-allowed opacity-80"
-      : disabledClasses,
+        ? "cursor-not-allowed opacity-80"
+        : disabledClasses,
     className,
   ]
     .filter(Boolean)

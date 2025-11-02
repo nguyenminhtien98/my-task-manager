@@ -6,12 +6,21 @@ import CommentList from "./CommentList";
 import { CommentSectionProps, TaskAttachment } from "./types";
 import MediaPreviewModal from "../common/MediaPreviewModal";
 import { useComment } from "@/app/hooks/useComment";
+import { useProject } from "@/app/context/ProjectContext";
 
 const CommentSection: React.FC<CommentSectionProps> = ({
   taskId,
   canComment = true,
   isLocked = false,
+  taskTitle,
+  assigneeId,
+  assigneeName,
 }) => {
+  const { currentProject } = useProject();
+  const projectId = currentProject?.$id;
+  const projectName = currentProject?.name;
+  const leaderId = currentProject?.leader?.$id;
+  const leaderName = currentProject?.leader?.name;
   const {
     comments,
     isLoading,
@@ -19,7 +28,16 @@ const CommentSection: React.FC<CommentSectionProps> = ({
     createComment,
     updateComment,
     deleteComment,
-  } = useComment(taskId, { locked: isLocked });
+  } = useComment(taskId, {
+    locked: isLocked,
+    taskTitle,
+    projectId,
+    projectName,
+    assigneeId,
+    assigneeName,
+    leaderId,
+    leaderName,
+  });
   const [previewMedia, setPreviewMedia] = useState<TaskAttachment | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 

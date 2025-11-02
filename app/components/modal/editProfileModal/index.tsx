@@ -7,6 +7,11 @@ import ModalComponent from "../../common/ModalComponent";
 import EditProfileView from "./EditProfileView";
 import AvatarEditView from "./AvatarEditView";
 import { useProfile } from "@/app/hooks/useProfile";
+import {
+  MAX_UPLOAD_SIZE_BYTES,
+  MAX_UPLOAD_SIZE_LABEL,
+  getUploadFileLabel,
+} from "../../../utils/upload";
 
 interface EditProfileModalProps {
   isOpen: boolean;
@@ -18,14 +23,20 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onClose }) 
   const [view, setView] = useState<"profile" | "avatar">("profile");
   const [imgSrc, setImgSrc] = useState("");
   const [newAvatarFile, setNewAvatarFile] = useState<File | null>(null);
+  const [nameError, setNameError] = useState<string | null>(null);
+  const [isNameLocked, setIsNameLocked] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { isUpdating, updateProfile } = useProfile();
+
+  const DUPLICATE_NAME_MESSAGE = "Tên này đã tồn tại trong hệ thống.";
 
   const handleClose = () => {
     setTimeout(() => {
       setView("profile");
       setImgSrc("");
       setNewAvatarFile(null);
+      setNameError(null);
+      setIsNameLocked(false);
     }, 300);
     onClose();
   };
@@ -38,6 +49,14 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onClose }) 
   const onFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
+      if (file.size > MAX_UPLOAD_SIZE_BYTES) {
+        const label = getUploadFileLabel(file);
+        toast.error(
+          `${label} bạn chọn có kích thước > ${MAX_UPLOAD_SIZE_LABEL}. Vui lòng chọn ${label.toLowerCase()} < ${MAX_UPLOAD_SIZE_LABEL}.`
+        );
+        e.target.value = "";
+        return;
+      }
       const reader = new FileReader();
       reader.addEventListener("load", () => {
         setImgSrc(reader.result?.toString() || "");
@@ -49,7 +68,13 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onClose }) 
   };
 
   const handleAvatarCropped = (croppedImageBlob: Blob) => {
-    const avatarFile = new File([croppedImageBlob], "avatar.png", { type: "image/png" });
+    const avatarFile = new File([croppedImageBlob], "avatar.jpg", { type: "image/jpeg" });
+    if (avatarFile.size > MAX_UPLOAD_SIZE_BYTES) {
+      toast.error(
+        `Ảnh bạn chọn có kích thước > ${MAX_UPLOAD_SIZE_LABEL}. Vui lòng chọn ảnh < ${MAX_UPLOAD_SIZE_LABEL}.`
+      );
+      return;
+    }
     setNewAvatarFile(avatarFile);
     setView("profile");
   };
@@ -71,9 +96,26 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onClose }) 
 
     if (result.success) {
       toast.success(result.message);
+      setNameError(null);
+      setIsNameLocked(false);
       handleClose();
     } else {
-      toast.error(result.message);
+      if (result.message === DUPLICATE_NAME_MESSAGE) {
+        setNameError(result.message);
+        setIsNameLocked(true);
+      } else {
+        toast.error(result.message);
+      }
+    }
+  };
+
+  const handleNameInputChange = (_value: string) => {
+    void _value;
+    if (nameError) {
+      setNameError(null);
+    }
+    if (isNameLocked) {
+      setIsNameLocked(false);
     }
   };
 
@@ -106,6 +148,9 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onClose }) 
           onSaveChanges={handleUpdateProfile}
           onClose={handleClose}
           isSaving={isUpdating}
+          nameError={nameError}
+          disableSave={isNameLocked}
+          onNameChange={handleNameInputChange}
         />
       ) : (
         <AvatarEditView

@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Project } from "../types/Types";
+import { Project } from "../../../types/Types";
 
 interface ItemCardProjectProps {
   data: Project;

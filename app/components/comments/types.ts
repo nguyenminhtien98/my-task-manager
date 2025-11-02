@@ -38,6 +38,9 @@ export interface CommentSectionProps {
   taskId?: string;
   canComment?: boolean;
   isLocked?: boolean;
+  taskTitle?: string;
+  assigneeId?: string;
+  assigneeName?: string;
 }
 
 export type { TaskAttachment };

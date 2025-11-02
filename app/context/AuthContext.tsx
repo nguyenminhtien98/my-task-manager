@@ -8,6 +8,8 @@ import React, {
   useEffect,
 } from "react";
 import { account, database } from "../appwrite";
+import { AppwriteException } from "appwrite";
+import { ensureWelcomeNotification } from "../services/notificationService";
 
 export interface User {
   id: string;
@@ -71,7 +73,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
           role: profile.role,
         };
         persistUser(u);
+        await ensureWelcomeNotification(u.id, u.name);
       } catch (err) {
+        if (err instanceof AppwriteException && err.code === 404) {
+          console.warn("Profile chưa được tạo, sẽ thử lại sau khi hoàn tất đăng ký.");
+          return;
+        }
         console.error("Login error fetching profile:", err);
         throw err;
       }

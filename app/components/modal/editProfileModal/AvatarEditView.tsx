@@ -76,11 +76,14 @@ const AvatarEditView: React.FC<AvatarEditViewProps> = ({
         throw new Error("No 2d context");
       }
 
-      const pixelRatio = window.devicePixelRatio;
-      canvas.width = crop.width * pixelRatio * scaleX;
-      canvas.height = crop.height * pixelRatio * scaleY;
+      const croppedWidth = crop.width * scaleX;
+      const croppedHeight = crop.height * scaleY;
+      const MAX_SIZE = 512;
+      const outputSize = Math.min(MAX_SIZE, croppedWidth, croppedHeight);
+      canvas.width = outputSize;
+      canvas.height = outputSize;
 
-      ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.imageSmoothingQuality = "high";
 
       ctx.drawImage(
@@ -91,8 +94,8 @@ const AvatarEditView: React.FC<AvatarEditViewProps> = ({
         crop.height * scaleY,
         0,
         0,
-        crop.width * scaleX,
-        crop.height * scaleY
+        outputSize,
+        outputSize
       );
     }
   };
@@ -101,12 +104,21 @@ const AvatarEditView: React.FC<AvatarEditViewProps> = ({
     if (!previewCanvasRef.current || isSaving) {
       return;
     }
-    previewCanvasRef.current.toBlob((blob) => {
-      if (blob) {
-        onSave(blob);
-      }
-    }, "image/png");
+    previewCanvasRef.current.toBlob(
+      (blob) => {
+        if (blob) {
+          onSave(blob);
+        }
+      },
+      "image/jpeg",
+      0.85
+    );
   };
+
+  React.useEffect(() => {
+    updatePreview();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [completedCrop]);
 
   return (
     <div className="flex flex-col gap-6 p-1">
@@ -117,7 +129,6 @@ const AvatarEditView: React.FC<AvatarEditViewProps> = ({
           onChange={(_, percentCrop) => setCrop(percentCrop)}
           onComplete={(c) => {
             setCompletedCrop(c);
-            updatePreview();
           }}
           aspect={aspect}
           circularCrop

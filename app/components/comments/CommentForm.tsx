@@ -4,11 +4,17 @@ import React, { Fragment, useEffect, useRef, useState } from "react";
 import { Transition } from "@headlessui/react";
 import { FiImage, FiPaperclip } from "react-icons/fi";
 import { v4 as uuidv4 } from "uuid";
+import toast from "react-hot-toast";
 import { useAuth } from "../../context/AuthContext";
 import PendingAttachmentPreview from "./PendingAttachmentPreview";
 import { PendingAttachment } from "./types";
 import type { TaskComment } from "./types";
 import type { CreateCommentParams } from "@/app/hooks/useComment";
+import {
+  MAX_UPLOAD_SIZE_BYTES,
+  MAX_UPLOAD_SIZE_LABEL,
+  getUploadFileLabel,
+} from "../../utils/upload";
 
 interface CommentFormProps {
   taskId: string;
@@ -70,7 +76,30 @@ const CommentForm: React.FC<CommentFormProps> = ({ taskId, onSubmit, isSubmittin
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
-    const list = Array.from(files).map((file) => {
+    const fileArray = Array.from(files);
+    const validFiles: File[] = [];
+    const invalidLabels = new Set<string>();
+
+    fileArray.forEach((file) => {
+      if (file.size > MAX_UPLOAD_SIZE_BYTES) {
+        invalidLabels.add(getUploadFileLabel(file));
+      } else {
+        validFiles.push(file);
+      }
+    });
+
+    invalidLabels.forEach((label) => {
+      toast.error(
+        `${label} bạn chọn có kích thước > ${MAX_UPLOAD_SIZE_LABEL}. Vui lòng chọn ${label.toLowerCase()} < ${MAX_UPLOAD_SIZE_LABEL}.`
+      );
+    });
+
+    if (validFiles.length === 0) {
+      event.target.value = "";
+      return;
+    }
+
+    const list = validFiles.map((file) => {
       const mediaType: PendingAttachment["mediaType"] = file.type.startsWith("video")
         ? "video"
         : file.type.startsWith("image")
