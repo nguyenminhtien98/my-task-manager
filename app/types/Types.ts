@@ -23,7 +23,10 @@ export type NotificationType =
   | "task.completed"
   | "task.movedToBug"
   | "task.movedToCompleted"
-  | "task.comment.added";
+  | "task.comment.added"
+  | "task.deleted"
+  | "feedback.message.fromUser"
+  | "feedback.message.fromAdmin";
 
 export type NotificationScope = "system" | "profile" | "project" | "task";
 
@@ -41,7 +44,13 @@ export interface NotificationMessage {
 }
 
 export interface NotificationMetadata {
-  audience?: "actor" | "target" | "member" | "leader" | "assignee";
+  audience?:
+    | "actor"
+    | "target"
+    | "member"
+    | "leader"
+    | "assignee"
+    | "creator";
   actorName?: string;
   recipientName?: string;
   projectName?: string;

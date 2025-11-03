@@ -32,6 +32,9 @@ const ScreenProjectDetail: React.FC<ScreenProjectDetailProps> = ({
   const [selectedUserCounts, setSelectedUserCounts] = useState<
     Record<string, number>
   >({});
+  const [overallCounts, setOverallCounts] = useState<Record<string, number>>(
+    {}
+  );
   const [isDeleting, setIsDeleting] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [projectData, setProjectData] = useState<Project>(project);
@@ -140,6 +143,28 @@ const ScreenProjectDetail: React.FC<ScreenProjectDetailProps> = ({
     };
     fetchSelectedUserTasks();
   }, [projectId, selectedUserForLeader]);
+
+  useEffect(() => {
+    const fetchOverallCounts = async () => {
+      try {
+        const res = await database.listDocuments(
+          String(process.env.NEXT_PUBLIC_DATABASE_ID),
+          String(process.env.NEXT_PUBLIC_COLLECTION_ID_TASKS),
+          [Query.equal("projectId", projectId), Query.limit(200)]
+        );
+        const docs = res.documents as unknown as Task[];
+        const counts: Record<string, number> = {};
+        docs.forEach((task) => {
+          const status = (task.status as string) ?? "unknown";
+          counts[status] = (counts[status] ?? 0) + 1;
+        });
+        setOverallCounts(counts);
+      } catch {
+        setOverallCounts({});
+      }
+    };
+    fetchOverallCounts();
+  }, [projectId]);
 
   const handleDeleteProject = async () => {
     if (!isLeader || isDeleting) return;
@@ -286,11 +311,41 @@ const ScreenProjectDetail: React.FC<ScreenProjectDetailProps> = ({
       </div>
 
       {/* Member view: các task của bạn */}
-      {!isLeader && (
+      {isLeader ? (
         <div className="rounded-lg border border-black/10 p-4">
           <div className="mb-3 text-sm font-semibold text-gray-800">
-            Các task của bạn -{" "}
-            {Object.values(myTaskCounts).reduce((a, b) => a + b, 0)} task
+            {selectedUserForLeader
+              ? `Các task của ${selectedUserForLeader.name} - ${Object.values(selectedUserCounts).reduce(
+                  (a, b) => a + b,
+                  0
+                )} task`
+              : `Tổng số task của dự án - ${Object.values(overallCounts).reduce(
+                  (a, b) => a + b,
+                  0
+                )} task`}
+          </div>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {(selectedUserForLeader ? selectedUserCounts : overallCounts)
+              ? statusOrder.map((s) => (
+                  <div
+                    key={s.key}
+                    className="flex items-center justify-between rounded-md bg-black/5 px-3 py-2 text-sm text-gray-800"
+                  >
+                    <span>{s.label}</span>
+                    <span className="font-semibold">
+                      {(selectedUserForLeader
+                        ? selectedUserCounts
+                        : overallCounts)[s.key] ?? 0}
+                    </span>
+                  </div>
+                ))
+              : null}
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-lg border border-black/10 p-4">
+          <div className="mb-3 text-sm font-semibold text-gray-800">
+            Các task của bạn - {Object.values(myTaskCounts).reduce((a, b) => a + b, 0)} task
           </div>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {statusOrder.map((s) => (
@@ -301,29 +356,6 @@ const ScreenProjectDetail: React.FC<ScreenProjectDetailProps> = ({
                 <span>{s.label}</span>
                 <span className="font-semibold">
                   {myTaskCounts[s.key] ?? 0}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Leader view: các task của user được chọn */}
-      {isLeader && selectedUserForLeader && (
-        <div className="rounded-lg border border-black/10 p-4">
-          <div className="mb-3 text-sm font-semibold text-gray-800">
-            Các task của {selectedUserForLeader.name} -{" "}
-            {Object.values(selectedUserCounts).reduce((a, b) => a + b, 0)} task
-          </div>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {statusOrder.map((s) => (
-              <div
-                key={s.key}
-                className="flex items-center justify-between rounded-md bg-black/5 px-3 py-2 text-sm text-gray-800"
-              >
-                <span>{s.label}</span>
-                <span className="font-semibold">
-                  {selectedUserCounts[s.key] ?? 0}
                 </span>
               </div>
             ))}

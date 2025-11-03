@@ -69,6 +69,9 @@ const isNotificationType = (value: unknown): value is NotificationType => {
       "task.movedToBug",
       "task.movedToCompleted",
       "task.comment.added",
+      "task.deleted",
+      "feedback.message.fromUser",
+      "feedback.message.fromAdmin",
     ].includes(value)
   );
 };
@@ -82,8 +85,7 @@ const isNotificationScope = (value: unknown): value is NotificationScope => {
 
 const isNotificationStatus = (value: unknown): value is NotificationStatus => {
   return (
-    typeof value === "string" &&
-    ["unread", "read", "archived"].includes(value)
+    typeof value === "string" && ["unread", "read", "archived"].includes(value)
   );
 };
 
@@ -108,7 +110,9 @@ const normalizeProfile = (
   return null;
 };
 
-const normalizeMetadata = (metadata: unknown): NotificationMetadata | undefined => {
+const normalizeMetadata = (
+  metadata: unknown
+): NotificationMetadata | undefined => {
   if (!metadata) return undefined;
   if (typeof metadata === "string") {
     try {
@@ -144,14 +148,14 @@ export const mapNotificationDocument = (
     typeof doc.project === "string"
       ? { $id: doc.project, name: undefined }
       : doc.project
-        ? { $id: doc.project.$id ?? "unknown", name: doc.project.name }
-        : null;
+      ? { $id: doc.project.$id ?? "unknown", name: doc.project.name }
+      : null;
   const task =
     typeof doc.task === "string"
       ? { $id: doc.task, title: undefined }
       : doc.task
-        ? { $id: doc.task.$id ?? "unknown", title: doc.task.title }
-        : null;
+      ? { $id: doc.task.$id ?? "unknown", title: doc.task.title }
+      : null;
 
   const messageContext: NotificationMessageContext = {
     type,

@@ -58,6 +58,9 @@ interface TaskModalLeftPanelProps {
     values?: Partial<CreateTaskFormValues & Partial<TaskDetailFormValues>>
   ) => void;
   isProjectClosed: boolean;
+  canDeleteTask?: boolean;
+  onDeleteTask?: () => void;
+  isDeleting?: boolean;
 }
 
 const TaskModalLeftPanel: React.FC<TaskModalLeftPanelProps> = ({
@@ -83,6 +86,9 @@ const TaskModalLeftPanel: React.FC<TaskModalLeftPanelProps> = ({
   onUpdate,
   reset,
   isProjectClosed,
+  canDeleteTask = false,
+  onDeleteTask,
+  isDeleting = false,
 }) => {
   const { members, isLoading: isMembersLoading } = useProjectOperations();
   const { user } = useAuth();
@@ -434,39 +440,52 @@ const TaskModalLeftPanel: React.FC<TaskModalLeftPanelProps> = ({
         </div>
       </div>
 
-        <div className="flex justify-end space-x-4">
-          {showReceiveButton ? (
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        {canDeleteTask && (
+          <Button
+            type="button"
+            onClick={() => onDeleteTask?.()}
+            disabled={isDeleting}
+            className={`bg-red-600 px-4 py-2 text-white ${
+              isDeleting ? "cursor-not-allowed opacity-70" : ""
+            }`}
+          >
+            {isDeleting ? "Đang xóa..." : "Xóa task"}
+          </Button>
+        )}
+
+        {showReceiveButton ? (
+          <Button
+            onClick={handleReceive}
+            className="rounded bg-green-500 px-4 py-2 text-white"
+          >
+            Nhận Task
+          </Button>
+        ) : (
+          (mode === "create" ||
+            (mode === "detail" &&
+              Object.keys(dirtyFields).filter((k) => k !== "assignee").length >
+                0)) && (
             <Button
-              onClick={handleReceive}
-              className="rounded bg-green-500 px-4 py-2 text-white"
+              type="submit"
+              disabled={isSubmitting || !isValid}
+              className={`rounded px-4 py-2 text-white ${
+                isSubmitting || !isValid
+                  ? "bg-gray-400 cursor-not-allowed"
+                  : "bg-black"
+              }`}
             >
-              Nhận Task
+              {isSubmitting
+                ? mode === "create"
+                  ? "Đang tạo..."
+                  : "Đang lưu..."
+                : mode === "create"
+                ? "Tạo"
+                : "Lưu"}
             </Button>
-          ) : (
-            (mode === "create" ||
-              (mode === "detail" &&
-                Object.keys(dirtyFields).filter((k) => k !== "assignee").length >
-                  0)) && (
-              <Button
-                type="submit"
-                disabled={isSubmitting || !isValid}
-                className={`rounded px-4 py-2 text-white ${
-                  isSubmitting || !isValid
-                    ? "bg-gray-400 cursor-not-allowed"
-                    : "bg-black"
-                }`}
-              >
-                {isSubmitting
-                  ? mode === "create"
-                    ? "Đang tạo..."
-                    : "Đang lưu..."
-                  : mode === "create"
-                  ? "Tạo"
-                  : "Lưu"}
-              </Button>
-            )
-          )}
-        </div>
+          )
+        )}
+      </div>
       </fieldset>
     </form>
   );

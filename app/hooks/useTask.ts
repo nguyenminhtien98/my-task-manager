@@ -92,11 +92,23 @@ export const useTask = () => {
         return;
       }
 
+      const resolveProfileId = (value: unknown): string | undefined => {
+        if (!value) return undefined;
+        if (typeof value === "string") return value;
+        if (typeof value === "object") {
+          const maybe = value as { $id?: string };
+          if (maybe.$id && typeof maybe.$id === "string") {
+            return maybe.$id;
+          }
+        }
+        return undefined;
+      };
+
       const doc: Task = {
         ...(raw as unknown as Task),
         id: raw.$id || (raw as unknown as Task).id,
         assignee: raw.assignee as string | BasicProfile,
-        completedBy: raw.completedBy as string,
+        completedBy: resolveProfileId(raw.completedBy),
       };
 
       if (doc.projectId !== currentProject.$id) return;
@@ -415,8 +427,24 @@ export const useTask = () => {
     [user, projectMeta, isProjectClosed]
   );
 
+  const resolveProfileId = useCallback((value: unknown): string | undefined => {
+    if (!value) return undefined;
+    if (typeof value === "string") return value;
+    if (typeof value === "object") {
+      const maybe = value as { $id?: string; user_id?: string };
+      if (maybe.$id && typeof maybe.$id === "string") {
+        return maybe.$id;
+      }
+      if (maybe.user_id && typeof maybe.user_id === "string") {
+        return maybe.user_id;
+      }
+    }
+    return undefined;
+  }, []);
+
   const deleteTask = useCallback(
-    async (taskId: string): Promise<{ success: boolean; message?: string }> => {
+    async (task: Task): Promise<{ success: boolean; message?: string }> => {
+      const taskId = task.id;
       if (!user) {
         return { success: false, message: "Chưa đăng nhập" };
       }
@@ -434,6 +462,26 @@ export const useTask = () => {
 
         locallyModifiedTaskIdsRef.current.add(taskId);
 
+        const creatorId = resolveProfileId(task.completedBy);
+        if (creatorId && creatorId !== user.id) {
+          try {
+            await createNotification({
+              recipientId: creatorId,
+              actorId: user.id,
+              type: "task.deleted",
+              scope: "task",
+              projectId: projectMeta.id ?? undefined,
+              metadata: {
+                taskTitle: task.title,
+                actorName: user.name,
+                audience: "creator" as const,
+              },
+            });
+          } catch (err) {
+            console.error("Failed to send delete task notification:", err);
+          }
+        }
+
         toast.success("Xóa Task thành công");
         return { success: true };
       } catch (err: unknown) {
@@ -447,7 +495,7 @@ export const useTask = () => {
         return { success: false, message };
       }
     },
-    [user, isProjectClosed]
+    [user, isProjectClosed, projectMeta.id, resolveProfileId]
   );
 
   const moveTask = useCallback(

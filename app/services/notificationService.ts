@@ -151,6 +151,8 @@ export const createNotification = async ({
       serializedMetadata
     );
 
+
+
     const permissions = [
       Permission.read(Role.user(recipientId)),
       Permission.update(Role.user(recipientId)),
@@ -240,7 +242,7 @@ export const ensureWelcomeNotification = async (
   try {
     const { databaseId, collectionId } = getIds();
     const existing = await database.listDocuments(databaseId, collectionId, [
-      Query.equal("recipient.$id", recipientId),
+      Query.equal("recipient.$id", [recipientId]),
       Query.equal("type", "system.welcome"),
       Query.limit(1),
     ]);

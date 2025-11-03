@@ -16,6 +16,7 @@ interface AvatarUserProps {
   style?: CSSProperties;
   showTooltip?: boolean;
   children?: ReactNode;
+  status?: "online" | "offline";
 }
 
 const COLOR_PALETTE = [
@@ -59,6 +60,7 @@ const AvatarUser: React.FC<AvatarUserProps> = ({
   style,
   showTooltip = true,
   children,
+  status,
 }) => {
   const initial = getInitial(name);
   const palette = getPaletteForInitial(initial);
@@ -72,7 +74,8 @@ const AvatarUser: React.FC<AvatarUserProps> = ({
   const sharedClasses = [
     "relative",
     "inline-flex items-center justify-center",
-    "overflow-hidden rounded-full",
+    "overflow-visible",
+    "rounded-full",
     "font-semibold uppercase",
     "cursor-pointer",
     className,
@@ -80,8 +83,7 @@ const AvatarUser: React.FC<AvatarUserProps> = ({
     .filter(Boolean)
     .join(" ");
 
-  const dynamicStyle: CSSProperties = {
-    ...elementStyle,
+  const innerStyle: CSSProperties = {
     fontSize,
     backgroundColor: avatarUrl ? undefined : palette.background,
     color: avatarUrl ? undefined : palette.color,
@@ -99,17 +101,30 @@ const AvatarUser: React.FC<AvatarUserProps> = ({
     initial
   );
 
-  const AvatarElement = onClick ? 'button' : 'span';
+  const AvatarElement = onClick ? "button" : "span";
 
   const avatarNode = (
     <AvatarElement
-      type={onClick ? 'button' : undefined}
+      type={onClick ? "button" : undefined}
       onClick={onClick}
       className={sharedClasses}
-      style={dynamicStyle}
+      style={elementStyle}
     >
-      {content}
+      <span
+        className="flex h-full w-full items-center justify-center overflow-hidden rounded-full"
+        style={innerStyle}
+      >
+        {content}
+      </span>
       {children}
+      {status && (
+        <span
+          className={`absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white shadow-sm ${status === "online" ? "bg-emerald-500" : "bg-gray-400"
+            }`}
+          style={{ transform: "translate(0%, 0%)" }}
+          aria-hidden="true"
+        />
+      )}
     </AvatarElement>
   );
 

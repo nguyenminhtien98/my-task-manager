@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { useForm, SubmitHandler } from "react-hook-form";
 import ModalComponent from "../../common/ModalComponent";
 import {
@@ -98,6 +98,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
   }, [isLeader]);
 
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [isDeleting, setIsDeleting] = useState(false);
   const {
     control,
     register,
@@ -110,36 +111,36 @@ const TaskModal: React.FC<TaskModalProps> = ({
     defaultValues:
       mode === "create"
         ? {
-            issueType: "Feature",
-            priority: "Medium",
-            assignee: isLeader
-              ? ""
-              : user
+          issueType: "Feature",
+          priority: "Medium",
+          assignee: isLeader
+            ? ""
+            : user
               ? { $id: user.id, name: user.name }
               : "",
-            title: "",
-            description: "",
-            startDate: "",
-            endDate: "",
-            predictedHours: 0,
-            attachments: [] as TaskAttachment[],
-          }
+          title: "",
+          description: "",
+          startDate: "",
+          endDate: "",
+          predictedHours: 0,
+          attachments: [] as TaskAttachment[],
+        }
         : {
-            title: task?.title || "",
-            description: task?.description || "",
-            assignee: task?.assignee || "",
-            startDate: task?.startDate || "",
-            endDate: task?.endDate || "",
-            predictedHours: task?.predictedHours || 0,
-            issueType: task?.issueType || "Feature",
-            priority: task?.priority || "Medium",
-            attachments: initialAttachments,
-          },
+          title: task?.title || "",
+          description: task?.description || "",
+          assignee: task?.assignee || "",
+          startDate: task?.startDate || "",
+          endDate: task?.endDate || "",
+          predictedHours: task?.predictedHours || 0,
+          issueType: task?.issueType || "Feature",
+          priority: task?.priority || "Medium",
+          attachments: initialAttachments,
+        },
     mode: "onChange",
   });
 
   const { addMember: addProjectMember, members } = useProjectOperations();
-  const { createTask, updateTask, receiveTask } = useTask();
+  const { createTask, updateTask, receiveTask, deleteTask } = useTask();
 
   const watchedAssigneeRaw = watch("assignee");
   const watchedAssigneeId = getAssigneeId(watchedAssigneeRaw);
@@ -170,6 +171,22 @@ const TaskModal: React.FC<TaskModalProps> = ({
     return false;
   }, [task?.assignee]);
 
+  const canDeleteTask = useMemo(() => {
+    if (!task || !user || mode !== "detail") return false;
+    if (task.status === "completed") return false;
+    if (isLeader) return true;
+    const completed = task.completedBy as unknown;
+    if (!completed) return false;
+    if (typeof completed === "string") {
+      return completed === user.id;
+    }
+    if (typeof completed === "object" && completed !== null) {
+      const maybeProfile = completed as { $id?: string };
+      return maybeProfile.$id === user.id;
+    }
+    return false;
+  }, [isLeader, mode, task, user]);
+
   const showReceive =
     mode === "detail" && !isLeader && !hasAssigneeDetail && !watchedAssigneeId;
 
@@ -182,6 +199,16 @@ const TaskModal: React.FC<TaskModalProps> = ({
       toast.error(result.message);
     }
   };
+
+  const handleDeleteTask = useCallback(async () => {
+    if (!task || isDeleting) return;
+    setIsDeleting(true);
+    const result = await deleteTask(task);
+    setIsDeleting(false);
+    if (result.success) {
+      setIsOpen(false);
+    }
+  }, [deleteTask, isDeleting, setIsOpen, task]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -269,6 +296,8 @@ const TaskModal: React.FC<TaskModalProps> = ({
     setSelectedFiles((prev) => prev.filter((file) => file.name !== name));
   };
 
+  console.log("task", task)
+
   const onSubmitCreate: SubmitHandler<CreateTaskFormValues> = async (data) => {
     if (!isValid || !nextSeq) return;
 
@@ -337,6 +366,9 @@ const TaskModal: React.FC<TaskModalProps> = ({
       onUpdate={onUpdate}
       reset={reset}
       isProjectClosed={isProjectClosed}
+      canDeleteTask={canDeleteTask}
+      onDeleteTask={handleDeleteTask}
+      isDeleting={isDeleting}
     />
   );
 

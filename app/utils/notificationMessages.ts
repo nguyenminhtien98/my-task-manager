@@ -70,10 +70,7 @@ const getTaskTitle = (
     ? context.metadata?.taskTitle
     : undefined);
 
-const truncateText = (
-  value: unknown,
-  limit?: number
-): string | undefined => {
+const truncateText = (value: unknown, limit?: number): string | undefined => {
   if (typeof value !== "string") return undefined;
   if (!limit || limit <= 0 || value.length <= limit) return value;
   const trimmed = value.slice(0, limit).trimEnd();
@@ -139,8 +136,7 @@ const prepareContext = (
       keys.forEach((key) => {
         const value = metadata[key];
         if (typeof value === "string") {
-          const truncated =
-            truncateText(value, truncateNameLength) ?? value;
+          const truncated = truncateText(value, truncateNameLength) ?? value;
           if (truncated !== value) {
             metadata[key] = truncated;
             hasChanges = true;
@@ -195,9 +191,7 @@ const messageBuilders: Record<
         ? context.metadata.newValue
         : null) ?? "";
     const suffix = newValue ? ` thành ${newValue}.` : ".";
-    return createMessage([
-      text(`Bạn vừa thay đổi ${label} của bạn${suffix}`),
-    ]);
+    return createMessage([text(`Bạn vừa thay đổi ${label} của bạn${suffix}`)]);
   },
   "project.created": (context) => {
     const projectName = getProjectName(context) ?? "dự án mới";
@@ -224,7 +218,9 @@ const messageBuilders: Record<
       ]);
     }
     return createMessage([
-      text(`Chúc mừng bạn đã thêm thành viên ${target} vào dự án ${projectName} thành công.`),
+      text(
+        `Chúc mừng bạn đã thêm thành viên ${target} vào dự án ${projectName} thành công.`
+      ),
     ]);
   },
   "project.member.removed": (context) => {
@@ -246,9 +242,7 @@ const messageBuilders: Record<
       ]);
     }
     return createMessage([
-      text(
-        `Bạn vừa xoá thành viên ${target} khỏi dự án ${projectName}.`
-      ),
+      text(`Bạn vừa xoá thành viên ${target} khỏi dự án ${projectName}.`),
     ]);
   },
   "project.deleted": (context) => {
@@ -261,9 +255,7 @@ const messageBuilders: Record<
       "Leader";
     const audience = getAudience(context.metadata);
     if (audience === "actor") {
-      return createMessage([
-        text(`Bạn vừa xoá dự án ${projectName}.`),
-      ]);
+      return createMessage([text(`Bạn vừa xoá dự án ${projectName}.`)]);
     }
     return createMessage([
       text(`Dự án ${projectName} đã bị xoá bởi ${actor}.`),
@@ -279,9 +271,7 @@ const messageBuilders: Record<
       "Leader";
     const audience = getAudience(context.metadata);
     if (audience === "actor") {
-      return createMessage([
-        text(`Bạn vừa đóng dự án ${projectName}.`),
-      ]);
+      return createMessage([text(`Bạn vừa đóng dự án ${projectName}.`)]);
     }
     return createMessage([
       text(`Dự án ${projectName} đã được ${actor} đóng lại.`),
@@ -297,9 +287,7 @@ const messageBuilders: Record<
       "Leader";
     const audience = getAudience(context.metadata);
     if (audience === "actor") {
-      return createMessage([
-        text(`Bạn vừa mở lại dự án ${projectName}.`),
-      ]);
+      return createMessage([text(`Bạn vừa mở lại dự án ${projectName}.`)]);
     }
     return createMessage([
       text(`Dự án ${projectName} vừa được ${actor} mở lại.`),
@@ -331,9 +319,7 @@ const messageBuilders: Record<
     const taskTitle = getTaskTitle(context) ?? "task";
     const fieldLabel = getFieldLabel(context.metadata);
     return createMessage([
-      text(
-        `Bạn đã cập nhật ${fieldLabel} của task ${taskTitle} thành công.`
-      ),
+      text(`Bạn đã cập nhật ${fieldLabel} của task ${taskTitle} thành công.`),
     ]);
   },
   "task.assigned": (context) => {
@@ -399,9 +385,7 @@ const messageBuilders: Record<
         text(`Chúc mừng bạn! Task ${taskTitle} của bạn đã hoàn thành.`),
       ]);
     }
-    return createMessage([
-      text(`${member} đã hoàn thành task ${taskTitle}.`),
-    ]);
+    return createMessage([text(`${member} đã hoàn thành task ${taskTitle}.`)]);
   },
   "task.movedToBug": (context) => {
     const taskTitle = getTaskTitle(context) ?? "task";
@@ -447,8 +431,44 @@ const messageBuilders: Record<
         ? context.metadata.actorName
         : undefined) ??
       "Thành viên";
+    return createMessage([text(`${actor} vừa bình luận task ${taskTitle}.`)]);
+  },
+  "task.deleted": (context) => {
+    const taskTitle = getTaskTitle(context) ?? "task";
+    const actor =
+      context.actorName ??
+      (typeof context.metadata?.actorName === "string"
+        ? context.metadata.actorName
+        : undefined) ??
+      "Một thành viên";
+    const audience = getAudience(context.metadata);
+    if (audience === "creator") {
+      return createMessage([
+        text(`${actor} vừa xóa task ${taskTitle} của bạn.`),
+      ]);
+    }
+    return createMessage([text(`Bạn vừa xóa task ${taskTitle}.`)]);
+  },
+
+  "feedback.message.fromUser": (context) => {
+    const actor =
+      context.actorName ??
+      (typeof context.metadata?.actorName === "string"
+        ? context.metadata.actorName
+        : undefined) ??
+      "Người dùng";
+    return createMessage([text(`${actor} vừa gửi tin nhắn feedback cho bạn.`)]);
+  },
+
+  "feedback.message.fromAdmin": (context) => {
+    const actor =
+      context.actorName ??
+      (typeof context.metadata?.actorName === "string"
+        ? context.metadata.actorName
+        : undefined) ??
+      "My Task Manager";
     return createMessage([
-      text(`${actor} vừa bình luận task ${taskTitle}.`),
+      text(`${actor} vừa trả lời tin nhắn feedback của bạn.`),
     ]);
   },
 };
@@ -459,13 +479,12 @@ export const buildNotificationMessage = (
 ): NotificationMessage => {
   const builder = messageBuilders[context.type];
   if (builder) {
-    const preparedContext =
-      options ? prepareContext(context, options) : context;
+    const preparedContext = options
+      ? prepareContext(context, options)
+      : context;
     return builder(preparedContext);
   }
-  return createMessage([
-    text("Bạn có một thông báo mới."),
-  ]);
+  return createMessage([text("Bạn có một thông báo mới.")]);
 };
 
 export const buildNotificationMessageFromRecord = (

@@ -4,22 +4,34 @@ import React, { Fragment } from "react";
 import { Dialog, Transition } from "@headlessui/react";
 import Image from "next/image";
 import { detectMediaTypeFromUrl } from "../../utils/media";
-import { TaskAttachment } from "../../types/Types";
+
+interface MediaAttachment {
+  url: string;
+  type?: "image" | "video" | "file";
+  name?: string;
+}
 
 interface MediaPreviewModalProps {
   isOpen: boolean;
   onClose: () => void;
-  media?: TaskAttachment | null;
+  media?: MediaAttachment | null;
 }
 
 const MediaPreviewModal: React.FC<MediaPreviewModalProps> = ({ isOpen, onClose, media }) => {
   if (!media) return null;
 
   const type = media.type ?? detectMediaTypeFromUrl(media.url);
+  const name = media.name ?? "Tệp đính kèm";
 
   return (
     <Transition appear show={isOpen} as={Fragment}>
-      <Dialog as="div" className="relative z-[1400]" onClose={onClose}>
+      <Dialog
+        as="div"
+        className="relative z-[1400]"
+        onClose={onClose}
+        data-feedback-media-modal="true"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
         <Transition.Child
           as={Fragment}
           enter="ease-out duration-200"
@@ -29,10 +41,22 @@ const MediaPreviewModal: React.FC<MediaPreviewModalProps> = ({ isOpen, onClose, 
           leaveFrom="opacity-100"
           leaveTo="opacity-0"
         >
-          <div className="fixed inset-0 bg-black/80" />
+          <div
+            className="fixed inset-0 bg-black/80"
+            data-feedback-media-modal="true"
+            onMouseDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation();
+              onClose();
+            }}
+          />
         </Transition.Child>
 
-        <div className="fixed inset-0 flex items-center justify-center p-4">
+        <div
+          className="fixed inset-0 flex items-center justify-center p-4"
+          data-feedback-media-modal="true"
+          onMouseDown={(event) => event.stopPropagation()}
+        >
           <Transition.Child
             as={Fragment}
             enter="ease-out duration-200"
@@ -42,7 +66,11 @@ const MediaPreviewModal: React.FC<MediaPreviewModalProps> = ({ isOpen, onClose, 
             leaveFrom="opacity-100 scale-100"
             leaveTo="opacity-0 scale-95"
           >
-            <Dialog.Panel className="relative flex h-full w-full items-center justify-center">
+            <Dialog.Panel
+              className="relative flex h-full w-full items-center justify-center"
+              data-feedback-media-modal="true"
+              onMouseDown={(event) => event.stopPropagation()}
+            >
               <button
                 type="button"
                 onClick={onClose}
@@ -59,7 +87,7 @@ const MediaPreviewModal: React.FC<MediaPreviewModalProps> = ({ isOpen, onClose, 
                   : (
                     <Image
                       src={media.url}
-                      alt={media.name}
+                      alt={name}
                       width={1200}
                       height={800}
                       className="max-h-[80vh] w-auto rounded-lg object-contain"

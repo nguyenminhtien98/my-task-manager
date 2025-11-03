@@ -42,3 +42,27 @@ export const formatRelativeTimeFromNow = (isoString?: string) => {
   const diffYears = Math.round(diffMonths / 12);
   return `${diffYears} năm trước`;
 };
+
+export const diffInMinutes = (
+  a: Date | string | number,
+  b: Date | string | number
+) => {
+  const toDate = (value: Date | string | number) => {
+    if (value instanceof Date) return value;
+    if (typeof value === "number") return new Date(value);
+    return new Date(value);
+  };
+
+  const dateA = toDate(a);
+  const dateB = toDate(b);
+
+  if (
+    Number.isNaN(dateA.getTime()) ||
+    Number.isNaN(dateB.getTime())
+  ) {
+    return 0;
+  }
+
+  const diffMs = dateA.getTime() - dateB.getTime();
+  return Math.floor(diffMs / (60 * 1000));
+};

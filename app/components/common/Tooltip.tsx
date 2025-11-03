@@ -7,6 +7,8 @@ interface TooltipProps {
   children: React.ReactNode;
   offsetX?: number;
   offsetY?: number;
+  delayIn?: number;
+  delayOut?: number;
   className?: string;
   style?: CSSProperties;
 }
@@ -16,19 +18,49 @@ const Tooltip: React.FC<TooltipProps> = ({
   children,
   offsetX = 0,
   offsetY = 8,
+  delayIn = 150,
+  delayOut = 100,
   className,
   style,
 }) => {
   const [isVisible, setIsVisible] = useState(false);
+  const timeoutRef = React.useRef<number | null>(null);
+
+  const clearTimer = () => {
+    if (timeoutRef.current) {
+      window.clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+  };
+
+  const show = () => {
+    clearTimer();
+    timeoutRef.current = window.setTimeout(() => {
+      setIsVisible(true);
+      timeoutRef.current = null;
+    }, delayIn);
+  };
+
+  const hide = () => {
+    clearTimer();
+    timeoutRef.current = window.setTimeout(() => {
+      setIsVisible(false);
+      timeoutRef.current = null;
+    }, delayOut);
+  };
+
+  React.useEffect(() => {
+    return () => clearTimer();
+  }, []);
 
   return (
     <div
       className={`relative inline-flex ${className ?? ""}`}
       style={style}
-      onMouseEnter={() => setIsVisible(true)}
-      onMouseLeave={() => setIsVisible(false)}
-      onFocus={() => setIsVisible(true)}
-      onBlur={() => setIsVisible(false)}
+      onMouseEnter={show}
+      onMouseLeave={hide}
+      onFocus={show}
+      onBlur={hide}
     >
       {children}
       <div

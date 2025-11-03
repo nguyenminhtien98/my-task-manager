@@ -46,11 +46,25 @@ type RawTaskDocument = Record<string, unknown> & {
   projectId?: string;
 };
 
+const resolveProfileId = (value: unknown): string | undefined => {
+  if (!value) return undefined;
+  if (typeof value === "string") return value;
+  if (typeof value === "object") {
+    const maybe = value as { $id?: string; user_id?: string };
+    if (maybe.$id && typeof maybe.$id === "string") {
+      return maybe.$id;
+    }
+    if (maybe.user_id && typeof maybe.user_id === "string") {
+      return maybe.user_id;
+    }
+  }
+  return undefined;
+};
+
 const mapTaskDocument = (raw: RawTaskDocument): Task => {
   const id = typeof raw.$id === "string" ? raw.$id : (raw.id as string);
   const assignee = raw.assignee as string | BasicProfile | undefined;
-  const completedBy =
-    typeof raw.completedBy === "string" ? raw.completedBy : undefined;
+  const completedBy = resolveProfileId(raw.completedBy);
   const attachedFile = Array.isArray(raw.attachedFile)
     ? (raw.attachedFile as Task["attachedFile"])
     : undefined;
@@ -86,6 +100,21 @@ const HomePage: React.FC = () => {
   ] = useState(false);
   const [hasLoaded, setHasLoaded] = useState<boolean>(false);
   const { moveTask } = useTask();
+
+  useEffect(() => {
+    const handleOpenLoginModal = () => setLoginModalOpen(true);
+    const listener = () => handleOpenLoginModal();
+    window.addEventListener(
+      "open-login-modal",
+      listener as EventListener
+    );
+    return () => {
+      window.removeEventListener(
+        "open-login-modal",
+        listener as EventListener
+      );
+    };
+  }, []);
 
   const memberMap = useMemo(() => {
     const map = new Map<string, BasicProfile>();

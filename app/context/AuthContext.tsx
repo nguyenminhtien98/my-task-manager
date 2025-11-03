@@ -10,6 +10,7 @@ import React, {
 import { account, database } from "../appwrite";
 import { AppwriteException } from "appwrite";
 import { ensureWelcomeNotification } from "../services/notificationService";
+import { updateUserPresence } from "../services/feedbackService";
 
 export interface User {
   id: string;
@@ -88,6 +89,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
 
   const logout = useCallback(async () => {
     try {
+      if (user?.id) {
+        await updateUserPresence(user.id, false).catch(() => undefined);
+      }
       await account.deleteSession("current");
       // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars
     } catch (error: any) {
@@ -97,7 +101,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
         window.sessionStorage.removeItem("activeProjectId");
       }
     }
-  }, [persistUser]);
+  }, [persistUser, user]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -128,6 +132,53 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
       cancelled = true;
     };
   }, [login, persistUser, user]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const userId = user?.id;
+    if (!userId) return;
+
+    const markOnline = () => {
+      if (document.visibilityState !== "visible") return;
+      void updateUserPresence(userId, true).catch(() => undefined);
+    };
+
+    const markOffline = () => {
+      void updateUserPresence(userId, false).catch(() => undefined);
+    };
+
+    if (document.visibilityState === "visible") {
+      markOnline();
+    } else {
+      markOffline();
+    }
+
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        markOnline();
+      }
+    }, 30000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        markOnline();
+      } else {
+        markOffline();
+      }
+    };
+
+    window.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("beforeunload", markOffline);
+    window.addEventListener("pagehide", markOffline);
+
+    return () => {
+      window.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("beforeunload", markOffline);
+      window.removeEventListener("pagehide", markOffline);
+      window.clearInterval(interval);
+      markOffline();
+    };
+  }, [user?.id]);
 
   return (
     <AuthContext.Provider
