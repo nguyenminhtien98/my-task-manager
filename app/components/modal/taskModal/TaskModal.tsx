@@ -10,7 +10,7 @@ import {
 } from "../../../types/Types";
 import { useAuth } from "../../../context/AuthContext";
 import { useProject } from "../../../context/ProjectContext";
-import { database } from "../../../appwrite";
+import { database } from "../../../../lib/appwrite";
 import toast from "react-hot-toast";
 import {
   detectMediaTypeFromUrl,
@@ -295,8 +295,6 @@ const TaskModal: React.FC<TaskModalProps> = ({
   const handleRemoveFile = (name: string) => {
     setSelectedFiles((prev) => prev.filter((file) => file.name !== name));
   };
-
-  console.log("task", task)
 
   const onSubmitCreate: SubmitHandler<CreateTaskFormValues> = async (data) => {
     if (!isValid || !nextSeq) return;

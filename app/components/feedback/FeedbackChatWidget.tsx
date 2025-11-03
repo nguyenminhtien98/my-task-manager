@@ -304,18 +304,10 @@ const FeedbackChatWidget: React.FC = () => {
     };
   }, [conversations, currentUserId, isAdmin]);
 
-  // ✅ FIX 1: Remove isOpen from dependency - subscription luôn active
   useEffect(() => {
     if (!currentUserId) return;
 
-    console.log('🔌 Starting conversation subscription for:', currentUserId);
-
     const unsubscribe = subscribeConversations(currentUserId, (conversation) => {
-      console.log('📨 Realtime conversation update:', {
-        id: conversation.$id,
-        unreadBy: conversation.unreadBy,
-        lastMessage: conversation.lastMessage?.slice(0, 30),
-      });
 
       setConversations((prev) => {
         const index = prev.findIndex((item) => item.$id === conversation.$id);
@@ -327,14 +319,6 @@ const FeedbackChatWidget: React.FC = () => {
           (a, b) => conversationSortValue(b) - conversationSortValue(a)
         );
 
-        console.log(
-          "📊 Updated conversations:",
-          sorted.map((c) => ({
-            id: c.$id,
-            unreadBy: c.unreadBy,
-          }))
-        );
-
         return sorted;
       });
 
@@ -343,10 +327,9 @@ const FeedbackChatWidget: React.FC = () => {
     });
 
     return () => {
-      console.log('🔌 Unsubscribing conversation subscription');
       unsubscribe();
     };
-  }, [currentUserId, enrichProfiles]); // ❌ KHÔNG có isOpen
+  }, [currentUserId, enrichProfiles]);
 
   const selectedConversation = useMemo(() => {
     if (!selectedConversationId) return null;
@@ -393,14 +376,8 @@ const FeedbackChatWidget: React.FC = () => {
     };
   }, [isOpen, otherParticipant]);
 
-  // ✅ FIX 2: Delay markConversationRead để subscription kết nối xong
   useEffect(() => {
     if (!isOpen || !selectedConversationId || !currentUserId) return;
-
-    console.log('🔓 Opening conversation:', {
-      conversationId: selectedConversationId,
-      currentUserId,
-    });
 
     setMessages([]);
     setMessagesCursor(null);
@@ -417,10 +394,8 @@ const FeedbackChatWidget: React.FC = () => {
           setMessages(data);
           setMessagesCursor(cursor);
 
-          // ✅ DELAY markConversationRead 500ms để user thấy badge
           setTimeout(() => {
             if (!cancelled) {
-              console.log('📖 Marking conversation as read after delay');
               void markConversationRead(selectedConversationId, currentUserId);
               setConversations((prev) =>
                 prev.map((conversation) => {
@@ -529,14 +504,14 @@ const FeedbackChatWidget: React.FC = () => {
 
   const buildMessageSummary = useCallback(
     (content: string, attachments?: UploadedFileInfo[]) => {
-    const trimmed = content.trim();
-    if (trimmed.length > 0) return trimmed;
-    if (!attachments || attachments.length === 0) return "";
-    const first = attachments[0];
-    if (first.type === "image") return "Đã gửi một ảnh";
-    if (first.type === "video") return "Đã gửi một video";
-    return "Đã gửi một tệp";
-  }, []);
+      const trimmed = content.trim();
+      if (trimmed.length > 0) return trimmed;
+      if (!attachments || attachments.length === 0) return "";
+      const first = attachments[0];
+      if (first.type === "image") return "Đã gửi một ảnh";
+      if (first.type === "video") return "Đã gửi một video";
+      return "Đã gửi một tệp";
+    }, []);
 
   const resolveConversationId = useCallback(async (): Promise<string | null> => {
     if (selectedConversationId) return selectedConversationId;
@@ -568,8 +543,8 @@ const FeedbackChatWidget: React.FC = () => {
         const exists = prev.some((item) => item.$id === conversation.$id);
         const merged = exists
           ? prev.map((item) =>
-              item.$id === conversation.$id ? conversation : item
-            )
+            item.$id === conversation.$id ? conversation : item
+          )
           : [...prev, conversation];
 
         return merged.sort(
@@ -644,7 +619,11 @@ const FeedbackChatWidget: React.FC = () => {
         });
       } catch (error) {
         console.error("Không thể gửi tin nhắn:", error);
-        toast.error("Không thể gửi tin nhắn");
+        if (error instanceof Error && error.message) {
+          toast.error(error.message);
+        } else {
+          toast.error("Không thể gửi tin nhắn");
+        }
       } finally {
         setIsSending(false);
       }
@@ -716,9 +695,8 @@ const FeedbackChatWidget: React.FC = () => {
           />
           <div
             ref={panelRef}
-            className={`absolute bottom-6 ${
-              bubblePosition.side === "left" ? "left-6" : "right-6"
-            }`}
+            className={`absolute bottom-6 ${bubblePosition.side === "left" ? "left-6" : "right-6"
+              }`}
           >
             {showListView ? (
               <FeedbackConversationList

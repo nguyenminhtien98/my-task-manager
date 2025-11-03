@@ -54,13 +54,6 @@ const NotificationList: React.FC<NotificationListProps> = ({
     setActiveView("detail");
   };
 
-  console.log('All notifications:', filteredNotifications.map(n => ({
-    id: n.id,
-    type: n.type,
-    message: n.message.plainText,
-    createdAt: n.createdAt
-  })));
-
   const handleBack = () => {
     setActiveView("main");
     setSelectedNotification(null);

@@ -1,7 +1,7 @@
 "use client";
 
 import { Models, Query, Permission, Role } from "appwrite";
-import { database, subscribeToRealtime } from "../appwrite";
+import { database, subscribeToRealtime } from "../../lib/appwrite";
 import type { UploadedFileInfo } from "../utils/upload";
 
 const getConversationCollectionIds = () => {
@@ -47,6 +47,12 @@ export interface ConversationMessageDocument extends Models.Document {
 export interface PresenceDocument extends Models.Document {
   isOnline?: boolean;
   lastSeenAt?: string | null;
+  lastFeedbackActionAt?: string | null;
+  feedbackStrikeCount?: number;
+  feedbackCooldownUntil?: string | null;
+  feedbackWindowStart?: string | null;
+  feedbackWindowCount?: number;
+  feedbackLastViolationAt?: string | null;
 }
 
 export const ONLINE_STATUS_STALE_MS = 60000;
@@ -57,7 +63,10 @@ type ConversationMessageRawDocument = Models.Document & Record<string, unknown>;
 const extractIdFromValue = (value: unknown): string | null => {
   if (!value) return null;
   if (typeof value === "string") return value;
-  if (typeof value === "object" && "$id" in (value as Record<string, unknown>)) {
+  if (
+    typeof value === "object" &&
+    "$id" in (value as Record<string, unknown>)
+  ) {
     const idValue = (value as { $id?: unknown }).$id;
     return typeof idValue === "string" ? idValue : null;
   }
@@ -202,8 +211,7 @@ const normalizePresenceDocument = (
   const normalized: PresenceDocument = { ...doc };
   const lastSeenMs = doc.lastSeenAt ? new Date(doc.lastSeenAt).getTime() : 0;
   const now = Date.now();
-  const isRecent =
-    lastSeenMs > 0 && now - lastSeenMs <= ONLINE_STATUS_STALE_MS;
+  const isRecent = lastSeenMs > 0 && now - lastSeenMs <= ONLINE_STATUS_STALE_MS;
   normalized.isOnline = Boolean(doc.isOnline && isRecent);
   return normalized;
 };
@@ -275,7 +283,10 @@ export const ensureConversationExists = async (
       conv.participants.includes(userId)
   );
   if (existing) return existing;
-  return createConversation({ userIds: [userId, partnerId], createdBy: userId });
+  return createConversation({
+    userIds: [userId, partnerId],
+    createdBy: userId,
+  });
 };
 
 export const fetchConversationMessages = async (
@@ -306,8 +317,7 @@ export const fetchConversationMessages = async (
   const docs = (res.documents as ConversationMessageRawDocument[]).map(
     normalizeMessageDocument
   );
-  const nextCursor =
-    docs.length > 0 ? docs[docs.length - 1].$id ?? null : null;
+  const nextCursor = docs.length > 0 ? docs[docs.length - 1].$id ?? null : null;
   return { messages: docs, cursor: nextCursor };
 };
 
@@ -355,6 +365,19 @@ export const sendConversationMessage = async ({
   if (!trimmedContent && safeAttachments.length === 0) {
     throw new Error("Tin nhắn trống");
   }
+
+  const extractErrorMessage = (raw: string | null): string => {
+    if (!raw) return "";
+    try {
+      const parsed = JSON.parse(raw) as { error?: string; message?: string };
+      if (typeof parsed?.error === "string") return parsed.error;
+      if (typeof parsed?.message === "string") return parsed.message;
+    } catch {
+      /* ignore */
+    }
+    return raw;
+  };
+
   const response = await fetch("/api/feedback/messages", {
     method: "POST",
     headers: {
@@ -370,7 +393,9 @@ export const sendConversationMessage = async ({
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(errorText || "Không thể gửi tin nhắn");
+    const message =
+      extractErrorMessage(errorText) || "Không thể gửi tin nhắn";
+    throw new Error(message);
   }
 
   const message = (await response.json()) as ConversationMessageRawDocument;
@@ -429,22 +454,13 @@ export const markMessageSeen = async (
   const existingId = extractIdFromValue(rawSeen);
   if (existingId === userId) return;
 
-  await database.updateDocument(
-    databaseId,
-    messageCollectionId,
-    messageId,
-    {
-      seenBy: userId,
-    }
-  );
+  await database.updateDocument(databaseId, messageCollectionId, messageId, {
+    seenBy: userId,
+  });
 };
 
-export const updateUserPresence = async (
-  userId: string,
-  isOnline: boolean
-) => {
-  const { databaseId, presenceCollectionId } =
-    getConversationCollectionIds();
+export const updateUserPresence = async (userId: string, isOnline: boolean) => {
+  const { databaseId, presenceCollectionId } = getConversationCollectionIds();
   const payload = {
     isOnline,
     lastSeenAt: new Date().toISOString(),
@@ -516,8 +532,7 @@ export const updateUserPresence = async (
 export const fetchUserPresence = async (
   userId: string
 ): Promise<PresenceDocument | null> => {
-  const { databaseId, presenceCollectionId } =
-    getConversationCollectionIds();
+  const { databaseId, presenceCollectionId } = getConversationCollectionIds();
   try {
     const doc = await database.getDocument(
       databaseId,
@@ -577,8 +592,7 @@ export const subscribeUserPresence = (
   userId: string,
   callback: RealtimeCallback<PresenceDocument>
 ) => {
-  const { databaseId, presenceCollectionId } =
-    getConversationCollectionIds();
+  const { databaseId, presenceCollectionId } = getConversationCollectionIds();
   const channel = `databases.${databaseId}.collections.${presenceCollectionId}.documents`;
   return subscribeToRealtime([channel], (response: unknown) => {
     const payload = response as {
@@ -601,6 +615,8 @@ export interface ProfileDocument extends Models.Document {
   email?: string;
   avatarUrl?: string | null;
   role?: string;
+  suspendedUntil?: string | null;
+  suspensionReason?: string | null;
 }
 
 export const fetchProfilesByIds = async (

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { database, subscribeToRealtime } from "../appwrite";
+import { database, subscribeToRealtime } from "../../lib/appwrite";
 import { useProject } from "../context/ProjectContext";
 import { useTheme } from "../context/ThemeContext";
 import { DEFAULT_THEME_GRADIENT } from "../utils/themeColors";
@@ -116,8 +116,7 @@ export const useProjectTheme = () => {
 
   useEffect(() => {
     const databaseId = process.env.NEXT_PUBLIC_DATABASE_ID;
-    const projectsCollectionId =
-      process.env.NEXT_PUBLIC_COLLECTION_ID_PROJECTS;
+    const projectsCollectionId = process.env.NEXT_PUBLIC_COLLECTION_ID_PROJECTS;
 
     if (!databaseId || !projectsCollectionId || !currentProjectId) {
       return;
@@ -180,13 +179,13 @@ export const useProjectTheme = () => {
               ...rawData,
               leader,
               status:
-                (rawData as Project).status ?? currentProject.status ?? "active",
+                (rawData as Project).status ??
+                currentProject.status ??
+                "active",
             };
           }
           setCurrentProject(nextCurrentProject);
-          setTheme(
-            nextCurrentProject.themeColor ?? DEFAULT_THEME_GRADIENT
-          );
+          setTheme(nextCurrentProject.themeColor ?? DEFAULT_THEME_GRADIENT);
         } else if (incomingLeader && !nextCurrentProject) {
           // Update cached list entry if it wasn't found during map (e.g. project list empty)
           setProjects((prev) => {
@@ -216,9 +215,10 @@ export const useProjectTheme = () => {
     setTheme,
   ]);
 
-  const isRealtimeActive = useMemo(() => Boolean(currentProjectId), [
-    currentProjectId,
-  ]);
+  const isRealtimeActive = useMemo(
+    () => Boolean(currentProjectId),
+    [currentProjectId]
+  );
 
   return {
     isSaving,

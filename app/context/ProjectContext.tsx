@@ -8,7 +8,7 @@ import React, {
   useCallback,
   useRef,
 } from "react";
-import { database, subscribeToRealtime } from "../appwrite";
+import { database, subscribeToRealtime } from "../../lib/appwrite";
 import { Query } from "appwrite";
 import { Project, ProjectContextType } from "../types/Types";
 import { useAuth } from "./AuthContext";
@@ -357,11 +357,11 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({
           prev.map((p) =>
             p.$id === updatedProject.$id
               ? {
-                  ...p,
-                  ...updatedProject,
-                  leader: incomingLeader ?? p.leader,
-                  status: updatedProject.status ?? p.status ?? "active",
-                }
+                ...p,
+                ...updatedProject,
+                leader: incomingLeader ?? p.leader,
+                status: updatedProject.status ?? p.status ?? "active",
+              }
               : p
           )
         );

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { Query } from "appwrite";
-import { database, subscribeToRealtime } from "../appwrite";
+import { database, subscribeToRealtime } from "../../lib/appwrite";
 import { uploadFilesToCloudinary } from "../utils/upload";
 import {
   CommentAttachment,
@@ -12,6 +12,7 @@ import {
 } from "../components/comments/types";
 import { mapCommentDocument, RawCommentDocument } from "../utils/comment";
 import { createNotifications } from "../services/notificationService";
+import { checkUserActionAllowed } from "../utils/moderation";
 
 interface CreateCommentParams {
   taskId: string;
@@ -191,6 +192,7 @@ export const useComment = (taskId?: string, options?: UseCommentOptions) => {
       }
 
       try {
+        await checkUserActionAllowed(userId);
         const { databaseId, collectionId } = getCollectionInfo();
 
         isCreatingRef.current = true;
@@ -254,7 +256,8 @@ export const useComment = (taskId?: string, options?: UseCommentOptions) => {
         });
 
         const recipients = new Set<string>();
-        const notificationsPayload: Parameters<typeof createNotifications>[0] = [];
+        const notificationsPayload: Parameters<typeof createNotifications>[0] =
+          [];
         const taskTitle = options?.taskTitle ?? "";
         const projectId = options?.projectId;
 

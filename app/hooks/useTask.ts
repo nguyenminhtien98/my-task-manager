@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import { database, subscribeToRealtime } from "../appwrite";
+import { database, subscribeToRealtime } from "../../lib/appwrite";
 import { useAuth } from "../context/AuthContext";
 import { useProject } from "../context/ProjectContext";
 import {
@@ -16,6 +16,7 @@ import { Permission, Role } from "appwrite";
 import toast from "react-hot-toast";
 import { uploadFilesToCloudinary } from "../utils/upload";
 import { createNotification } from "../services/notificationService";
+import { checkUserActionAllowed } from "../utils/moderation";
 
 interface CreateTaskParams {
   data: CreateTaskFormValues;
@@ -66,6 +67,13 @@ export const useTask = () => {
       currentProject?.leader?.name,
     ]
   );
+
+  const ensureUserActionAllowed = useCallback(async () => {
+    if (!user?.id) {
+      throw new Error("Chưa đăng nhập");
+    }
+    await checkUserActionAllowed(user.id);
+  }, [user?.id]);
   useEffect(() => {
     if (!user || !currentProject) return;
 
@@ -212,6 +220,7 @@ export const useTask = () => {
       } as Record<string, unknown>;
 
       try {
+        await ensureUserActionAllowed();
         const created = await database.createDocument(
           process.env.NEXT_PUBLIC_DATABASE_ID!,
           process.env.NEXT_PUBLIC_COLLECTION_ID_TASKS!,
@@ -267,7 +276,7 @@ export const useTask = () => {
         return { success: false, message: errorMessage };
       }
     },
-    [user, projectMeta, isProjectClosed]
+    [ensureUserActionAllowed, isProjectClosed, projectMeta, user]
   );
 
   const updateTask = useCallback(
@@ -318,6 +327,8 @@ export const useTask = () => {
       }
 
       try {
+        await ensureUserActionAllowed();
+
         await database.updateDocument(
           process.env.NEXT_PUBLIC_DATABASE_ID!,
           process.env.NEXT_PUBLIC_COLLECTION_ID_TASKS!,
@@ -332,14 +343,16 @@ export const useTask = () => {
         toast.success("Cập nhật Task thành công");
         return { success: true, task: updatedTask };
       } catch (e: unknown) {
+        if (!(e instanceof Error && e.message?.includes("hạn chế"))) {
+          console.error("Lỗi cập nhật:", e);
+        }
         const err = e as { message?: string };
-        console.error("Lỗi cập nhật:", e);
         const errorMessage = err?.message || "Cập nhật Task thất bại";
         toast.error(errorMessage);
         return { success: false, message: errorMessage };
       }
     },
-    [user, isProjectClosed]
+    [ensureUserActionAllowed, isProjectClosed, user]
   );
 
   const receiveTask = useCallback(
@@ -358,6 +371,8 @@ export const useTask = () => {
       const { id: projectId, leaderId, leaderName } = projectMeta;
 
       try {
+        await ensureUserActionAllowed();
+
         await database.updateDocument(
           String(process.env.NEXT_PUBLIC_DATABASE_ID),
           String(process.env.NEXT_PUBLIC_COLLECTION_ID_TASKS),
@@ -414,6 +429,11 @@ export const useTask = () => {
         toast.success("Nhận task thành công");
         return { success: true, task: updatedTask };
       } catch (err: unknown) {
+        if (
+          !(err instanceof Error && err.message?.includes("hạn chế"))
+        ) {
+          console.error("Failed to receive task:", err);
+        }
         const message =
           typeof err === "object" &&
           err &&
@@ -424,7 +444,7 @@ export const useTask = () => {
         return { success: false, message };
       }
     },
-    [user, projectMeta, isProjectClosed]
+    [ensureUserActionAllowed, isProjectClosed, projectMeta, user]
   );
 
   const resolveProfileId = useCallback((value: unknown): string | undefined => {
@@ -454,6 +474,8 @@ export const useTask = () => {
       }
 
       try {
+        await ensureUserActionAllowed();
+
         await database.deleteDocument(
           String(process.env.NEXT_PUBLIC_DATABASE_ID),
           String(process.env.NEXT_PUBLIC_COLLECTION_ID_TASKS),
@@ -485,6 +507,9 @@ export const useTask = () => {
         toast.success("Xóa Task thành công");
         return { success: true };
       } catch (err: unknown) {
+        if (!(err instanceof Error && err.message?.includes("hạn chế"))) {
+          console.error("Failed to delete task:", err);
+        }
         const message =
           typeof err === "object" &&
           err &&
@@ -495,7 +520,13 @@ export const useTask = () => {
         return { success: false, message };
       }
     },
-    [user, isProjectClosed, projectMeta.id, resolveProfileId]
+    [
+      ensureUserActionAllowed,
+      isProjectClosed,
+      projectMeta.id,
+      resolveProfileId,
+      user,
+    ]
   );
 
   const moveTask = useCallback(
@@ -525,6 +556,8 @@ export const useTask = () => {
       }
 
       try {
+        await ensureUserActionAllowed();
+
         await database.updateDocument(
           String(process.env.NEXT_PUBLIC_DATABASE_ID),
           String(process.env.NEXT_PUBLIC_COLLECTION_ID_TASKS),
@@ -628,15 +661,19 @@ export const useTask = () => {
 
         return { success: true, task: updatedTask };
       } catch (err: unknown) {
+        if (
+          !(err instanceof Error && err.message?.includes("hạn chế"))
+        ) {
+          console.error("Failed to move task:", err);
+        }
         const message =
           typeof err === "object" && err && "message" in err
             ? String((err as { message?: unknown }).message)
             : "Cập nhật trạng thái thất bại";
-        toast.error(message);
         return { success: false, message };
       }
     },
-    [user, projectMeta, isProjectClosed]
+    [ensureUserActionAllowed, isProjectClosed, projectMeta, user]
   );
 
   return {

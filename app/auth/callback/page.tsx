@@ -2,7 +2,7 @@
 
 import { useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { account, database } from "../../appwrite";
+import { account, database } from "../../../lib/appwrite";
 import { useAuth } from "../../context/AuthContext";
 import { Query, AppwriteException } from "appwrite";
 import toast from "react-hot-toast";

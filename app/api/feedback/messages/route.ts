@@ -1,7 +1,13 @@
 "use server";
 
 import { NextResponse } from "next/server";
-import { Client, Databases, Permission, Role, Query } from "node-appwrite";
+import { Permission, Role, Query } from "node-appwrite";
+import { getServerAppwriteClients } from "@/lib/serverAppwrite";
+import {
+  enforceFeedbackRateLimit,
+  FeedbackRateLimitError,
+  FeedbackSuspendedError,
+} from "@/lib/feedbackModeration";
 
 interface AttachmentPayload {
   url: string;
@@ -18,49 +24,6 @@ interface MessagePayload {
   attachments?: AttachmentPayload[];
 }
 
-const getClient = () => {
-  const endpoint = process.env.NEXT_PUBLIC_APPWRITE_URL;
-  const projectId = process.env.NEXT_PUBLIC_PROJECT_ID;
-  const apiKey = process.env.APPWRITE_API_KEY;
-  const databaseId = process.env.NEXT_PUBLIC_DATABASE_ID;
-  const conversationCollectionId =
-    process.env.NEXT_PUBLIC_COLLECTION_ID_CONVERSATIONS;
-  const messageCollectionId =
-    process.env.NEXT_PUBLIC_COLLECTION_ID_CONVERSATION_MESSAGES;
-  const profileCollectionId = process.env.NEXT_PUBLIC_COLLECTION_ID_PROFILE;
-  const notificationsCollectionId =
-    process.env.NEXT_PUBLIC_COLLECTION_ID_NOTIFICATIONS;
-
-  if (
-    !endpoint ||
-    !projectId ||
-    !apiKey ||
-    !databaseId ||
-    !conversationCollectionId ||
-    !messageCollectionId ||
-    !profileCollectionId ||
-    !notificationsCollectionId
-  ) {
-    throw new Error("Thiếu cấu hình Appwrite cho feedback messages");
-  }
-
-  const client = new Client()
-    .setEndpoint(endpoint)
-    .setProject(projectId)
-    .setKey(apiKey);
-
-  const databases = new Databases(client);
-
-  return {
-    databases,
-    databaseId,
-    conversationCollectionId,
-    messageCollectionId,
-    profileCollectionId,
-    notificationsCollectionId,
-  };
-};
-
 export async function POST(request: Request) {
   try {
     const payload = (await request.json()) as MessagePayload;
@@ -70,9 +33,7 @@ export async function POST(request: Request) {
     const trimmedContent = rawContent.trim();
 
     const rawAttachments =
-      payload && Array.isArray(payload.attachments)
-        ? payload.attachments
-        : [];
+      payload && Array.isArray(payload.attachments) ? payload.attachments : [];
 
     const attachments: AttachmentPayload[] = [];
     for (const raw of rawAttachments) {
@@ -120,12 +81,12 @@ export async function POST(request: Request) {
       trimmedContent.length > 0
         ? trimmedContent
         : attachments.length > 0
-          ? attachments[0].type === "image"
-            ? "Đã gửi một ảnh"
-            : attachments[0].type === "video"
-              ? "Đã gửi một video"
-              : "Đã gửi một tệp"
-          : "";
+        ? attachments[0].type === "image"
+          ? "Đã gửi một ảnh"
+          : attachments[0].type === "video"
+          ? "Đã gửi một video"
+          : "Đã gửi một tệp"
+        : "";
 
     const attachmentsForStorage = attachments.map((item) => {
       const type: "image" | "video" | "file" =
@@ -186,7 +147,27 @@ export async function POST(request: Request) {
       messageCollectionId,
       profileCollectionId,
       notificationsCollectionId,
-    } = getClient();
+      presenceCollectionId,
+    } = getServerAppwriteClients();
+
+    try {
+      await enforceFeedbackRateLimit({
+        databases,
+        databaseId,
+        presenceCollectionId,
+        profileCollectionId,
+        notificationsCollectionId,
+        userId: senderId,
+      });
+    } catch (error) {
+      if (error instanceof FeedbackSuspendedError) {
+        return NextResponse.json({ error: error.message }, { status: 423 });
+      }
+      if (error instanceof FeedbackRateLimitError) {
+        return NextResponse.json({ error: error.message }, { status: 429 });
+      }
+      throw error;
+    }
 
     const conversation = await databases.getDocument(
       databaseId,
@@ -248,14 +229,6 @@ export async function POST(request: Request) {
     const recipientIds = participants.filter((id) => id !== senderId);
     const unreadBy = recipientIds;
 
-    console.log("💬 Creating message:", {
-      conversationId,
-      senderId,
-      recipientIds,
-      unreadBy,
-      attachments: attachments.length,
-    });
-
     const permissions = participants.flatMap((id) => [
       Permission.read(Role.user(id)),
       Permission.update(Role.user(id)),
@@ -271,8 +244,6 @@ export async function POST(request: Request) {
     if (attachmentsJson) {
       documentData.attachments = attachmentsJson;
     }
-
-    console.log("🗂️ Payload for message create:", documentData);
 
     const created = await databases.createDocument(
       databaseId,
@@ -292,12 +263,6 @@ export async function POST(request: Request) {
         unreadBy,
       }
     );
-
-    console.log("✅ Updated conversation:", {
-      conversationId,
-      lastMessage: messageSummary.slice(0, 60),
-      unreadBy,
-    });
 
     try {
       const profileResponse = await databases.listDocuments(

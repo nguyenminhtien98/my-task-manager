@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { Project, BasicProfile, Task, ProjectStatus } from "@/app/types/Types";
-import { database } from "@/app/appwrite";
+import { database } from "@/lib/appwrite";
 import { Query } from "appwrite";
 import { formatVietnameseDateTime } from "@/app/utils/date";
 import HoverPopover from "@/app/components/common/HoverPopover";
@@ -59,8 +59,8 @@ const ScreenProjectDetail: React.FC<ScreenProjectDetailProps> = ({
       ? "Đang mở..."
       : "Mở dự án"
     : isUpdatingStatus
-    ? "Đang đóng..."
-    : "Đóng dự án";
+      ? "Đang đóng..."
+      : "Đóng dự án";
 
   useEffect(() => {
     const fetchMembers = async () => {
@@ -316,29 +316,29 @@ const ScreenProjectDetail: React.FC<ScreenProjectDetailProps> = ({
           <div className="mb-3 text-sm font-semibold text-gray-800">
             {selectedUserForLeader
               ? `Các task của ${selectedUserForLeader.name} - ${Object.values(selectedUserCounts).reduce(
-                  (a, b) => a + b,
-                  0
-                )} task`
+                (a, b) => a + b,
+                0
+              )} task`
               : `Tổng số task của dự án - ${Object.values(overallCounts).reduce(
-                  (a, b) => a + b,
-                  0
-                )} task`}
+                (a, b) => a + b,
+                0
+              )} task`}
           </div>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {(selectedUserForLeader ? selectedUserCounts : overallCounts)
               ? statusOrder.map((s) => (
-                  <div
-                    key={s.key}
-                    className="flex items-center justify-between rounded-md bg-black/5 px-3 py-2 text-sm text-gray-800"
-                  >
-                    <span>{s.label}</span>
-                    <span className="font-semibold">
-                      {(selectedUserForLeader
-                        ? selectedUserCounts
-                        : overallCounts)[s.key] ?? 0}
-                    </span>
-                  </div>
-                ))
+                <div
+                  key={s.key}
+                  className="flex items-center justify-between rounded-md bg-black/5 px-3 py-2 text-sm text-gray-800"
+                >
+                  <span>{s.label}</span>
+                  <span className="font-semibold">
+                    {(selectedUserForLeader
+                      ? selectedUserCounts
+                      : overallCounts)[s.key] ?? 0}
+                  </span>
+                </div>
+              ))
               : null}
           </div>
         </div>

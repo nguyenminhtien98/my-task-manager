@@ -7,7 +7,7 @@ import React, {
   useCallback,
   useEffect,
 } from "react";
-import { account, database } from "../appwrite";
+import { account, database } from "../../lib/appwrite";
 import { AppwriteException } from "appwrite";
 import { ensureWelcomeNotification } from "../services/notificationService";
 import { updateUserPresence } from "../services/feedbackService";

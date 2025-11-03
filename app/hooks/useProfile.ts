@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Query } from "appwrite";
-import { database, subscribeToRealtime } from "../appwrite";
+import { database, subscribeToRealtime } from "../../lib/appwrite";
 import { useAuth, type User } from "../context/AuthContext";
 import { uploadFilesToCloudinary } from "../utils/upload";
 import { createNotification } from "../services/notificationService";
@@ -30,8 +30,7 @@ export const useProfile = () => {
         return { success: false, message: "Chưa đăng nhập" };
       }
 
-      const trimmedName =
-        typeof name === "string" ? name.trim() : undefined;
+      const trimmedName = typeof name === "string" ? name.trim() : undefined;
       const nameHasChanged =
         trimmedName !== undefined && trimmedName.length > 0
           ? trimmedName !== user.name
@@ -43,8 +42,7 @@ export const useProfile = () => {
       }
 
       const databaseId = process.env.NEXT_PUBLIC_DATABASE_ID;
-      const profileCollectionId =
-        process.env.NEXT_PUBLIC_COLLECTION_ID_PROFILE;
+      const profileCollectionId = process.env.NEXT_PUBLIC_COLLECTION_ID_PROFILE;
 
       if (!databaseId || !profileCollectionId) {
         return {
@@ -66,7 +64,9 @@ export const useProfile = () => {
 
           const conflict = existing.documents.some((doc) => {
             const documentId =
-              typeof doc.$id === "string" ? doc.$id : (doc as { $id?: string }).$id;
+              typeof doc.$id === "string"
+                ? doc.$id
+                : (doc as { $id?: string }).$id;
             return documentId && documentId !== user.id;
           });
 
@@ -163,8 +163,7 @@ export const useProfile = () => {
     if (!userId) return;
 
     const databaseId = process.env.NEXT_PUBLIC_DATABASE_ID;
-    const profileCollectionId =
-      process.env.NEXT_PUBLIC_COLLECTION_ID_PROFILE;
+    const profileCollectionId = process.env.NEXT_PUBLIC_COLLECTION_ID_PROFILE;
 
     if (!databaseId || !profileCollectionId) {
       return;
@@ -197,16 +196,13 @@ export const useProfile = () => {
 
         const next: User = {
           ...user,
-          name:
-            typeof rawData.name === "string" ? rawData.name : user.name,
+          name: typeof rawData.name === "string" ? rawData.name : user.name,
           avatarUrl:
             typeof rawData.avatarUrl === "string"
               ? rawData.avatarUrl
               : user.avatarUrl,
-          email:
-            typeof rawData.email === "string" ? rawData.email : user.email,
-          role:
-            typeof rawData.role === "string" ? rawData.role : user.role,
+          email: typeof rawData.email === "string" ? rawData.email : user.email,
+          role: typeof rawData.role === "string" ? rawData.role : user.role,
         };
 
         setUser(next);

@@ -1,6 +1,6 @@
 "use client";
 
-import { database } from "../appwrite";
+import { database } from "../../lib/appwrite";
 import { Permission, Role, Query, Models } from "appwrite";
 import {
   NotificationMetadata,
@@ -150,8 +150,6 @@ export const createNotification = async ({
       finalMessage,
       serializedMetadata
     );
-
-
 
     const permissions = [
       Permission.read(Role.user(recipientId)),

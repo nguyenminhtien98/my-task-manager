@@ -7,7 +7,7 @@ import TaskModal from "./modal/taskModal/TaskModal";
 import { Task, TaskStatus, BasicProfile } from "../types/Types";
 import { useAuth } from "../context/AuthContext";
 import { DragEndEvent } from "@dnd-kit/core";
-import { database, subscribeToRealtime } from "../appwrite";
+import { database, subscribeToRealtime } from "../../lib/appwrite";
 import toast from "react-hot-toast";
 import { useProject } from "../context/ProjectContext";
 import ProjectModal from "./modal/ProjectModal";

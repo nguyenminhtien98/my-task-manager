@@ -72,6 +72,8 @@ const isNotificationType = (value: unknown): value is NotificationType => {
       "task.deleted",
       "feedback.message.fromUser",
       "feedback.message.fromAdmin",
+      "system.moderation.rateLimit",
+      "system.moderation.suspended",
     ].includes(value)
   );
 };

@@ -19,7 +19,7 @@ import {
 import IssueTypeDropdown from "../../CustomDropdown/IssueTypeDropdown";
 import PriorityDropdown from "../../CustomDropdown/PriorityDropdown";
 import { useProjectOperations } from "@/app/hooks/useProjectOperations";
-import { database } from "@/app/appwrite";
+import { database } from "@/lib/appwrite";
 import toast from "react-hot-toast";
 import Button from "../../common/Button";
 import { useAuth } from "@/app/context/AuthContext";
@@ -108,7 +108,7 @@ const TaskModalLeftPanel: React.FC<TaskModalLeftPanelProps> = ({
       const obj = a as { $id?: string; name?: string };
       return Boolean(
         (obj.$id && obj.$id.trim() !== "") ||
-          (obj.name && obj.name.trim() !== "")
+        (obj.name && obj.name.trim() !== "")
       );
     }
     return false;
@@ -122,118 +122,155 @@ const TaskModalLeftPanel: React.FC<TaskModalLeftPanelProps> = ({
         </div>
       )}
       <fieldset disabled={isProjectClosed} className="space-y-4">
-      <div>
-        <label className="block text-sm font-semibold text-sub">Tiêu đề</label>
-        <input
-          placeholder="Nhập tiêu đề"
-          {...register("title", { required: "Tiêu đề không được để trống" })}
-          disabled={mode === "detail"}
-          className="mt-1 w-full rounded border border-black bg-white p-2 text-black"
-        />
-        {errors.title && (
-          <p className="text-red-500 text-sm">{errors.title.message}</p>
-        )}
-      </div>
-
-      <div>
-        <label className="block text-sm font-semibold text-sub">
-          Nội dung chi tiết
-        </label>
-        <textarea
-          placeholder="Mô tả chi tiết"
-          {...register("description", {
-            required: "Nội dung không được để trống",
-          })}
-          disabled={mode === "detail"}
-          className="mt-1 w-full rounded border border-black bg-white p-2 text-black"
-        />
-        {errors.description && (
-          <p className="text-red-500 text-sm">{errors.description.message}</p>
-        )}
-      </div>
-
-      {showAttachmentSection && (
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => document.getElementById("task-media-input")?.click()}
-            className="text-sm font-semibold text-sub underline hover:cursor-pointer"
-          >
-            Đính kèm tệp tin{selectedFiles.length > 0 ? ":" : ""}
-          </button>
-          {selectedFiles.length > 0 && (
-            <div className="flex flex-wrap items-center gap-2">
-              {selectedFileNames.map((name) => (
-                <span
-                  key={name}
-                  className="group relative inline-flex items-center rounded bg-gray-200 px-2 py-1 text-sm text-gray-700"
-                >
-                  {name}
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveFile(name)}
-                    className="ml-2 hidden h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white group-hover:flex hover:bg-black"
-                    title="Xóa tệp"
-                  >
-                    ×
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
-          <input
-            id="task-media-input"
-            type="file"
-            multiple
-            accept="*/*"
-            className="hidden"
-            onChange={handleFileChange}
-          />
-        </div>
-      )}
-
-      <div className="flex gap-4">
-        <div className="flex-1">
-          <label className="mb-1 block text-sm font-semibold text-sub">
-            Issue Type
-          </label>
-          <Controller
-            control={control}
-            name="issueType"
-            render={({ field }) => (
-              <IssueTypeDropdown
-                value={(field.value as IssueType) ?? "Feature"}
-                onChange={(v: string) => field.onChange(v as IssueType)}
-                disabled={mode === "detail"}
-              />
-            )}
-          />
-        </div>
-        <div className="flex-1">
-          <label className="mb-1 block text-sm font-semibold text-sub">
-            Priority
-          </label>
-          <Controller
-            control={control}
-            name="priority"
-            render={({ field }) => (
-              <PriorityDropdown
-                value={(field.value as Priority) ?? "Medium"}
-                onChange={(v: string) => field.onChange(v as Priority)}
-                disabled={mode === "detail"}
-              />
-            )}
-          />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
-          <label className="mb-1 block text-sm font-semibold text-sub">
-            Người thực hiện
+          <label className="block text-sm font-semibold text-sub">Tiêu đề</label>
+          <input
+            placeholder="Nhập tiêu đề"
+            {...register("title", { required: "Tiêu đề không được để trống" })}
+            disabled={mode === "detail"}
+            className="mt-1 w-full rounded border border-black bg-white p-2 text-black"
+          />
+          {errors.title && (
+            <p className="text-red-500 text-sm">{errors.title.message}</p>
+          )}
+        </div>
+
+        <div>
+          <label className="block text-sm font-semibold text-sub">
+            Nội dung chi tiết
           </label>
-          {mode === "create" ? (
-            isLeader ? (
+          <textarea
+            placeholder="Mô tả chi tiết"
+            {...register("description", {
+              required: "Nội dung không được để trống",
+            })}
+            disabled={mode === "detail"}
+            className="mt-1 w-full rounded border border-black bg-white p-2 text-black"
+          />
+          {errors.description && (
+            <p className="text-red-500 text-sm">{errors.description.message}</p>
+          )}
+        </div>
+
+        {showAttachmentSection && (
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => document.getElementById("task-media-input")?.click()}
+              className="text-sm font-semibold text-sub underline hover:cursor-pointer"
+            >
+              Đính kèm tệp tin{selectedFiles.length > 0 ? ":" : ""}
+            </button>
+            {selectedFiles.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2">
+                {selectedFileNames.map((name) => (
+                  <span
+                    key={name}
+                    className="group relative inline-flex items-center rounded bg-gray-200 px-2 py-1 text-sm text-gray-700"
+                  >
+                    {name}
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveFile(name)}
+                      className="ml-2 hidden h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white group-hover:flex hover:bg-black"
+                      title="Xóa tệp"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <input
+              id="task-media-input"
+              type="file"
+              multiple
+              accept="*/*"
+              className="hidden"
+              onChange={handleFileChange}
+            />
+          </div>
+        )}
+
+        <div className="flex gap-4">
+          <div className="flex-1">
+            <label className="mb-1 block text-sm font-semibold text-sub">
+              Issue Type
+            </label>
+            <Controller
+              control={control}
+              name="issueType"
+              render={({ field }) => (
+                <IssueTypeDropdown
+                  value={(field.value as IssueType) ?? "Feature"}
+                  onChange={(v: string) => field.onChange(v as IssueType)}
+                  disabled={mode === "detail"}
+                />
+              )}
+            />
+          </div>
+          <div className="flex-1">
+            <label className="mb-1 block text-sm font-semibold text-sub">
+              Priority
+            </label>
+            <Controller
+              control={control}
+              name="priority"
+              render={({ field }) => (
+                <PriorityDropdown
+                  value={(field.value as Priority) ?? "Medium"}
+                  onChange={(v: string) => field.onChange(v as Priority)}
+                  disabled={mode === "detail"}
+                />
+              )}
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-sm font-semibold text-sub">
+              Người thực hiện
+            </label>
+            {mode === "create" ? (
+              isLeader ? (
+                <Controller
+                  control={control}
+                  name="assignee"
+                  render={({ field }) =>
+                    isMembersLoading ? (
+                      <div className="text-sm text-gray-600">
+                        Đang tải thành viên...
+                      </div>
+                    ) : assigneeOptions.length === 0 ? (
+                      <div className="text-sm text-gray-500">
+                        Chưa có thành viên nào.
+                      </div>
+                    ) : (
+                      <select
+                        value={typeof field.value === "string" ? field.value : ""}
+                        onChange={(e) => field.onChange(e.target.value)}
+                        className="w-full h-10 rounded border border-black bg-white px-3 text-black"
+                      >
+                        <option value="">-- Bỏ chọn --</option>
+                        {assigneeOptions.map((n) => (
+                          <option key={n} value={n}>
+                            {n}
+                          </option>
+                        ))}
+                      </select>
+                    )
+                  }
+                />
+              ) : (
+                <input
+                  {...register("assignee")}
+                  value={userName}
+                  disabled
+                  className="w-full h-10 rounded border border-black bg-gray-100 px-3 text-black"
+                />
+              )
+            ) : isLeader && !hasAssignee ? (
               <Controller
                 control={control}
                 name="assignee"
@@ -249,7 +286,75 @@ const TaskModalLeftPanel: React.FC<TaskModalLeftPanelProps> = ({
                   ) : (
                     <select
                       value={typeof field.value === "string" ? field.value : ""}
-                      onChange={(e) => field.onChange(e.target.value)}
+                      onChange={async (e) => {
+                        const name = e.target.value;
+                        const member = members.find((m) => m.name === name);
+                        if (!member || !task) return;
+                        try {
+                          await database.updateDocument(
+                            String(process.env.NEXT_PUBLIC_DATABASE_ID),
+                            String(process.env.NEXT_PUBLIC_COLLECTION_ID_TASKS),
+                            task.id,
+                            { assignee: member.$id }
+                          );
+
+                          const enrichedTask: Task = {
+                            ...task,
+                            assignee: {
+                              $id: member.$id,
+                              name: member.name,
+                              email: member.email,
+                              avatarUrl: member.avatarUrl,
+                            },
+                          };
+
+                          field.onChange(name);
+
+                          if (typeof reset === "function") {
+                            reset({
+                              ...enrichedTask,
+                              startDate: enrichedTask?.startDate ?? "",
+                              endDate: enrichedTask?.endDate ?? "",
+                            });
+                          }
+
+                          if (typeof onUpdate === "function") {
+                            onUpdate(enrichedTask);
+                          } else {
+                            console.warn("");
+                          }
+
+                          if (
+                            user &&
+                            currentProject &&
+                            task &&
+                            member.$id &&
+                            member.$id !== user.id
+                          ) {
+                            await Promise.allSettled([
+                              createNotification({
+                                recipientId: member.$id,
+                                actorId: user.id,
+                                type: "task.assigned",
+                                scope: "task",
+                                projectId: currentProject.$id,
+                                taskId: task.id,
+                                metadata: {
+                                  taskTitle: task.title,
+                                  actorName: user.name,
+                                  audience: "assignee",
+                                  targetMemberName: member.name,
+                                },
+                              }),
+                            ]);
+                          }
+
+                          toast.success("Đã gán thành viên cho task");
+                        } catch (err) {
+                          console.error(err);
+                          toast.error("Gán thành viên thất bại");
+                        }
+                      }}
                       className="w-full h-10 rounded border border-black bg-white px-3 text-black"
                     >
                       <option value="">-- Bỏ chọn --</option>
@@ -264,228 +369,121 @@ const TaskModalLeftPanel: React.FC<TaskModalLeftPanelProps> = ({
               />
             ) : (
               <input
-                {...register("assignee")}
-                value={userName}
+                {...register("assignee.name")}
                 disabled
-                className="w-full h-10 rounded border border-black bg-gray-100 px-3 text-black"
+                placeholder="Chưa set"
+                className="w-full rounded border border-black bg-gray-100 p-2 text-black"
               />
-            )
-          ) : isLeader && !hasAssignee ? (
-            <Controller
-              control={control}
-              name="assignee"
-              render={({ field }) =>
-                isMembersLoading ? (
-                  <div className="text-sm text-gray-600">
-                    Đang tải thành viên...
-                  </div>
-                ) : assigneeOptions.length === 0 ? (
-                  <div className="text-sm text-gray-500">
-                    Chưa có thành viên nào.
-                  </div>
-                ) : (
-                  <select
-                    value={typeof field.value === "string" ? field.value : ""}
-                    onChange={async (e) => {
-                      const name = e.target.value;
-                      const member = members.find((m) => m.name === name);
-                      if (!member || !task) return;
-                      try {
-                        await database.updateDocument(
-                          String(process.env.NEXT_PUBLIC_DATABASE_ID),
-                          String(process.env.NEXT_PUBLIC_COLLECTION_ID_TASKS),
-                          task.id,
-                          { assignee: member.$id }
-                        );
-
-                        const enrichedTask: Task = {
-                          ...task,
-                          assignee: {
-                            $id: member.$id,
-                            name: member.name,
-                            email: member.email,
-                            avatarUrl: member.avatarUrl,
-                          },
-                        };
-
-                        field.onChange(name);
-
-                        if (typeof reset === "function") {
-                          reset({
-                            ...enrichedTask,
-                            startDate: enrichedTask?.startDate ?? "",
-                            endDate: enrichedTask?.endDate ?? "",
-                          });
-                        }
-
-                        if (typeof onUpdate === "function") {
-                          onUpdate(enrichedTask);
-                        } else {
-                          console.warn("");
-                        }
-
-                        if (
-                          user &&
-                          currentProject &&
-                          task &&
-                          member.$id &&
-                          member.$id !== user.id
-                        ) {
-                          await Promise.allSettled([
-                            createNotification({
-                              recipientId: member.$id,
-                              actorId: user.id,
-                              type: "task.assigned",
-                              scope: "task",
-                              projectId: currentProject.$id,
-                              taskId: task.id,
-                              metadata: {
-                                taskTitle: task.title,
-                                actorName: user.name,
-                                audience: "assignee",
-                                targetMemberName: member.name,
-                              },
-                            }),
-                          ]);
-                        }
-
-                        toast.success("Đã gán thành viên cho task");
-                      } catch (err) {
-                        console.error(err);
-                        toast.error("Gán thành viên thất bại");
-                      }
-                    }}
-                    className="w-full h-10 rounded border border-black bg-white px-3 text-black"
-                  >
-                    <option value="">-- Bỏ chọn --</option>
-                    {assigneeOptions.map((n) => (
-                      <option key={n} value={n}>
-                        {n}
-                      </option>
-                    ))}
-                  </select>
-                )
-              }
-            />
-          ) : (
+            )}
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-sub">
+              Giờ dự kiến (h)
+            </label>
             <input
-              {...register("assignee.name")}
-              disabled
-              placeholder="Chưa set"
-              className="w-full rounded border border-black bg-gray-100 p-2 text-black"
+              type="number"
+              placeholder="Số giờ"
+              {...register("predictedHours", {
+                valueAsNumber: true,
+              })}
+              disabled={
+                mode === "detail"
+                  ? !isTaken || task?.status === "completed"
+                  : false
+              }
+              className="mt-1 w-full rounded border border-black bg-white p-2 text-black"
             />
-          )}
+            {errors.predictedHours && (
+              <p className="text-red-500 text-sm">
+                {errors.predictedHours.message}
+              </p>
+            )}
+          </div>
         </div>
-        <div>
-          <label className="block text-sm font-semibold text-sub">
-            Giờ dự kiến (h)
-          </label>
-          <input
-            type="number"
-            placeholder="Số giờ"
-            {...register("predictedHours", {
-              valueAsNumber: true,
-            })}
-            disabled={
-              mode === "detail"
-                ? !isTaken || task?.status === "completed"
-                : false
-            }
-            className="mt-1 w-full rounded border border-black bg-white p-2 text-black"
-          />
-          {errors.predictedHours && (
-            <p className="text-red-500 text-sm">
-              {errors.predictedHours.message}
-            </p>
-          )}
-        </div>
-      </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div>
-          <label className="block text-sm font-semibold text-sub">
-            Ngày bắt đầu
-          </label>
-          <input
-            type="date"
-            {...register("startDate", {})}
-            disabled={
-              mode === "detail"
-                ? !isTaken || task?.status === "completed"
-                : false
-            }
-            className="mt-1 w-full rounded border border-black bg-white p-2 text-black"
-          />
-          {errors.startDate && (
-            <p className="text-red-500 text-sm">{errors.startDate.message}</p>
-          )}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label className="block text-sm font-semibold text-sub">
+              Ngày bắt đầu
+            </label>
+            <input
+              type="date"
+              {...register("startDate", {})}
+              disabled={
+                mode === "detail"
+                  ? !isTaken || task?.status === "completed"
+                  : false
+              }
+              className="mt-1 w-full rounded border border-black bg-white p-2 text-black"
+            />
+            {errors.startDate && (
+              <p className="text-red-500 text-sm">{errors.startDate.message}</p>
+            )}
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-sub">
+              Ngày kết thúc
+            </label>
+            <input
+              type="date"
+              {...register("endDate", {})}
+              disabled={
+                mode === "detail"
+                  ? !isTaken || task?.status === "completed"
+                  : false
+              }
+              className="mt-1 w-full rounded border border-black bg-white p-2 text-black"
+            />
+            {errors.endDate && (
+              <p className="text-red-500 text-sm">{errors.endDate.message}</p>
+            )}
+          </div>
         </div>
-        <div>
-          <label className="block text-sm font-semibold text-sub">
-            Ngày kết thúc
-          </label>
-          <input
-            type="date"
-            {...register("endDate", {})}
-            disabled={
-              mode === "detail"
-                ? !isTaken || task?.status === "completed"
-                : false
-            }
-            className="mt-1 w-full rounded border border-black bg-white p-2 text-black"
-          />
-          {errors.endDate && (
-            <p className="text-red-500 text-sm">{errors.endDate.message}</p>
-          )}
-        </div>
-      </div>
 
-      <div className="flex flex-wrap items-center justify-end gap-2">
-        {canDeleteTask && (
-          <Button
-            type="button"
-            onClick={() => onDeleteTask?.()}
-            disabled={isDeleting}
-            className={`bg-red-600 px-4 py-2 text-white ${
-              isDeleting ? "cursor-not-allowed opacity-70" : ""
-            }`}
-          >
-            {isDeleting ? "Đang xóa..." : "Xóa task"}
-          </Button>
-        )}
-
-        {showReceiveButton ? (
-          <Button
-            onClick={handleReceive}
-            className="rounded bg-green-500 px-4 py-2 text-white"
-          >
-            Nhận Task
-          </Button>
-        ) : (
-          (mode === "create" ||
-            (mode === "detail" &&
-              Object.keys(dirtyFields).filter((k) => k !== "assignee").length >
-                0)) && (
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {canDeleteTask && (
             <Button
-              type="submit"
-              disabled={isSubmitting || !isValid}
-              className={`rounded px-4 py-2 text-white ${
-                isSubmitting || !isValid
-                  ? "bg-gray-400 cursor-not-allowed"
-                  : "bg-black"
-              }`}
+              type="button"
+              onClick={() => onDeleteTask?.()}
+              disabled={isDeleting}
+              className={`bg-red-600 px-4 py-2 text-white ${isDeleting ? "cursor-not-allowed opacity-70" : ""
+                }`}
             >
-              {isSubmitting
-                ? mode === "create"
-                  ? "Đang tạo..."
-                  : "Đang lưu..."
-                : mode === "create"
-                ? "Tạo"
-                : "Lưu"}
+              {isDeleting ? "Đang xóa..." : "Xóa task"}
             </Button>
-          )
-        )}
-      </div>
+          )}
+
+          {showReceiveButton ? (
+            <Button
+              onClick={handleReceive}
+              className="rounded bg-green-500 px-4 py-2 text-white"
+            >
+              Nhận Task
+            </Button>
+          ) : (
+            (mode === "create" ||
+              (mode === "detail" &&
+                Object.keys(dirtyFields).filter((k) => k !== "assignee").length >
+                0)) && (
+              <Button
+                type="submit"
+                disabled={isSubmitting || !isValid}
+                className={`rounded px-4 py-2 text-white ${isSubmitting || !isValid
+                    ? "bg-gray-400 cursor-not-allowed"
+                    : "bg-black"
+                  }`}
+              >
+                {isSubmitting
+                  ? mode === "create"
+                    ? "Đang tạo..."
+                    : "Đang lưu..."
+                  : mode === "create"
+                    ? "Tạo"
+                    : "Lưu"}
+              </Button>
+            )
+          )}
+        </div>
       </fieldset>
     </form>
   );

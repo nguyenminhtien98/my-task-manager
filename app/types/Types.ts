@@ -26,7 +26,9 @@ export type NotificationType =
   | "task.comment.added"
   | "task.deleted"
   | "feedback.message.fromUser"
-  | "feedback.message.fromAdmin";
+  | "feedback.message.fromAdmin"
+  | "system.moderation.rateLimit"
+  | "system.moderation.suspended";
 
 export type NotificationScope = "system" | "profile" | "project" | "task";
 

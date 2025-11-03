@@ -4,10 +4,12 @@ import ModalComponent from "../common/ModalComponent";
 import { useForm } from "react-hook-form";
 import { FormUserValues } from "../../types/Types";
 import { useAuth } from "../../context/AuthContext";
-import { account, database } from "../../appwrite";
+import { account, database } from "../../../lib/appwrite";
 import { OAuthProvider } from "appwrite";
 import toast from "react-hot-toast";
 import { useUserValidation } from "../../hooks/useUserValidation";
+import Button from "../common/Button";
+import { FcGoogle } from "react-icons/fc";
 
 const LoginRegisterModal: React.FC<{
   isOpen: boolean;
@@ -77,7 +79,7 @@ const LoginRegisterModal: React.FC<{
 
     if (isLogin) {
       try {
-        await account.deleteSession("current").catch(() => {});
+        await account.deleteSession("current").catch(() => { });
         await account.createEmailPasswordSession(data.email, data.password);
         const userInfo = await account.get();
         await login(userInfo.$id, userInfo.name);
@@ -131,11 +133,16 @@ const LoginRegisterModal: React.FC<{
           type="button"
           onClick={handleGoogleLogin}
           disabled={isGoogleLoading}
-          className={`w-full flex items-center justify-center gap-2 rounded bg-red-500 px-4 py-2 text-white hover:bg-red-600 ${
-            isGoogleLoading ? "opacity-70 cursor-not-allowed" : "cursor-pointer"
-          }`}
+          className={`flex w-full items-center justify-center gap-3 rounded-lg border border-black/10 bg-black/80 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-black focus:outline-none focus-visible:ring-2 focus-visible:ring-black/40 ${isGoogleLoading ? "cursor-not-allowed opacity-70" : "cursor-pointer"}`}
         >
-          {isGoogleLoading ? "Đang mở Google..." : "Đăng nhập với Google"}
+          {isGoogleLoading ? (
+            "Đang mở Google..."
+          ) : (
+            <>
+              <FcGoogle className="text-lg" />
+              <span>Đăng nhập với Google</span>
+            </>
+          )}
         </button>
 
         <div className="flex items-center gap-2">
@@ -319,23 +326,22 @@ const LoginRegisterModal: React.FC<{
             </button>
           )}
 
-          <button
+          <Button
             type="submit"
             disabled={!canSubmit}
-            className={`px-4 py-2 rounded text-white ${
-              !canSubmit
-                ? "bg-gray-400 cursor-not-allowed"
-                : "bg-blue-600 hover:bg-blue-700"
-            }`}
+            className={`px-4 py-2 rounded text-white ${!canSubmit
+              ? "bg-gray-400 cursor-not-allowed"
+              : "bg-black"
+              }`}
           >
             {isLogin
               ? isSubmitting
-                ? "Đang đăng nhập..."
+                ? "..."
                 : "Đăng nhập"
               : isSubmitting
-              ? "Đăng ký..."
-              : "Đăng ký"}
-          </button>
+                ? "..."
+                : "Đăng ký"}
+          </Button>
         </div>
       </form>
     </ModalComponent>

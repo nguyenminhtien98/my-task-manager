@@ -257,9 +257,7 @@ const FeedbackConversationDetail: React.FC<FeedbackConversationDetailProps> = ({
       <div className="flex items-center justify-between border-b border-black/10 px-4 py-3">
         <div className="flex flex-col">
           <span className="text-sm font-semibold text-[#111827]">
-            {otherProfile
-              ? `Feedback - ${otherProfile.name ?? "Người dùng"}`
-              : "Feedback"}
+            Feedback
           </span>
           <span className="flex items-center gap-1 text-xs text-gray-500">
             {presenceDisplay.isOnline ? (
@@ -306,77 +304,77 @@ const FeedbackConversationDetail: React.FC<FeedbackConversationDetailProps> = ({
       ) : (
         <>
           <div className="flex-1 space-y-3 overflow-y-auto px-3 py-3 no-scrollbar max-h-[calc(100vh-220px)]">
-        {!conversationId ? (
-          <div className="flex h-full items-center justify-center text-sm text-gray-500">
-            Chọn cuộc hội thoại
+            {!conversationId ? (
+              <div className="flex h-full items-center justify-center text-sm text-gray-500">
+                Chọn cuộc hội thoại
+              </div>
+            ) : messages.length === 0 ? (
+              <div className="flex h-full items-center justify-center text-sm text-gray-500">
+                Hãy gửi tin nhắn đầu tiên.
+              </div>
+            ) : (
+              messages.map((message, index) => {
+                const prev = messages[index - 1];
+                const next = messages[index + 1];
+                const grouping = computeMessageGrouping(
+                  message.senderId,
+                  prev?.senderId,
+                  next?.senderId
+                );
+                const showDivider = needDivider(prev, message);
+                const isOwn = message.senderId === currentUserId;
+
+                const showSeenAvatars =
+                  isOwn && message.$id === lastSeenMessageId;
+                const seenAvatars = showSeenAvatars && message.seenBy
+                  ? message.seenBy
+                    .filter((id) => id !== currentUserId)
+                    .map((id) => ({
+                      id,
+                      name: otherProfile?.name,
+                      avatarUrl: otherProfile?.avatarUrl,
+                    }))
+                  : [];
+                const attachments = message.attachments ?? [];
+
+                return (
+                  <React.Fragment key={message.$id}>
+                    {showDivider && (
+                      <div className="my-2 text-center text-xs text-gray-400">
+                        {formatVietnameseDateTime(message.$createdAt)}
+                      </div>
+                    )}
+                    <FeedbackMessageItem
+                      id={message.$id}
+                      isOwn={isOwn}
+                      content={message.content}
+                      createdAt={message.$createdAt}
+                      grouping={grouping}
+                      avatarUrl={otherProfile?.avatarUrl}
+                      displayName={otherProfile?.name}
+                      showAvatar={!isOwn && (grouping === "single" || grouping === "end")}
+                      showBrandAvatar={!isOwn && Boolean(isCounterpartAdmin)}
+                      seenAvatars={seenAvatars}
+                      attachments={attachments}
+                      onPreviewMedia={(media) => {
+                        setPreviewMedia(media);
+                        setIsPreviewOpen(true);
+                      }}
+                    />
+                  </React.Fragment>
+                );
+              })
+            )}
+            <div ref={messageEndRef} />
           </div>
-        ) : messages.length === 0 ? (
-          <div className="flex h-full items-center justify-center text-sm text-gray-500">
-            Hãy gửi tin nhắn đầu tiên.
-          </div>
-        ) : (
-          messages.map((message, index) => {
-            const prev = messages[index - 1];
-            const next = messages[index + 1];
-            const grouping = computeMessageGrouping(
-              message.senderId,
-              prev?.senderId,
-              next?.senderId
-            );
-            const showDivider = needDivider(prev, message);
-            const isOwn = message.senderId === currentUserId;
 
-            const showSeenAvatars =
-              isOwn && message.$id === lastSeenMessageId;
-            const seenAvatars = showSeenAvatars && message.seenBy
-              ? message.seenBy
-                  .filter((id) => id !== currentUserId)
-                  .map((id) => ({
-                    id,
-                    name: otherProfile?.name,
-                    avatarUrl: otherProfile?.avatarUrl,
-                  }))
-              : [];
-            const attachments = message.attachments ?? [];
-
-            return (
-              <React.Fragment key={message.$id}>
-                {showDivider && (
-                  <div className="my-2 text-center text-xs text-gray-400">
-                    {formatVietnameseDateTime(message.$createdAt)}
-                  </div>
-                )}
-                <FeedbackMessageItem
-                  id={message.$id}
-                  isOwn={isOwn}
-                  content={message.content}
-                  createdAt={message.$createdAt}
-                  grouping={grouping}
-                  avatarUrl={otherProfile?.avatarUrl}
-                  displayName={otherProfile?.name}
-                  showAvatar={!isOwn && (grouping === "single" || grouping === "end")}
-                  showBrandAvatar={!isOwn && Boolean(isCounterpartAdmin)}
-                  seenAvatars={seenAvatars}
-                  attachments={attachments}
-                  onPreviewMedia={(media) => {
-                    setPreviewMedia(media);
-                    setIsPreviewOpen(true);
-                  }}
-                />
-              </React.Fragment>
-            );
-          })
-        )}
-        <div ref={messageEndRef} />
-      </div>
-
-          <div className="border-t border-black/10 bg-gray-50 px-1 py-3">
-            <div className="flex items-center gap-2">
+          <div className="w-full border-t border-black/10 bg-gray-50 p-2">
+            <div className="flex w-full items-center gap-1">
               <button
                 type="button"
                 onClick={handleMediaClick}
                 disabled={isUploadingMedia}
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-black/70 text-white transition hover:bg-black focus:outline-none focus-visible:ring-2 focus-visible:ring-black/30 disabled:cursor-not-allowed disabled:opacity-60"
+                className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-black/70 text-white transition hover:bg-black focus:outline-none focus-visible:ring-2 focus-visible:ring-black/30 disabled:cursor-not-allowed disabled:opacity-60"
                 title="Đính kèm hình ảnh/video"
               >
                 <FiImage />
@@ -394,21 +392,21 @@ const FeedbackConversationDetail: React.FC<FeedbackConversationDetailProps> = ({
                 }}
                 placeholder="Góp ý cho chúng tôi..."
                 autoComplete="off"
-                className="flex-1 rounded-full bg-black/70 px-4 py-2 text-sm text-white placeholder:text-white/60 focus:outline-none disabled:bg-black/40"
+                className="flex-1 min-w-0 rounded-full bg-black/70 px-4 py-2 text-sm text-white placeholder:text-white/60 focus:outline-none disabled:bg-black/40"
               />
-          <Button
-            type="button"
-            className="bg-black text-white !rounded-lg !px-3 !py-2"
-            disabled={
-              !conversationId ||
-              isSending ||
-              isUploadingMedia ||
-              !draft.trim()
-            }
-            onClick={() => void handleSend()}
-          >
-            {isSending || isUploadingMedia ? "..." : "Gửi"}
-          </Button>
+              <Button
+                type="button"
+                className="bg-black text-white !rounded-lg !px-3 !py-2 flex-shrink-0"
+                disabled={
+                  !conversationId ||
+                  isSending ||
+                  isUploadingMedia ||
+                  !draft.trim()
+                }
+                onClick={() => void handleSend()}
+              >
+                {isSending || isUploadingMedia ? "..." : "Gửi"}
+              </Button>
             </div>
             <input
               ref={fileInputRef}

@@ -2,7 +2,7 @@
 
 import { useCallback } from "react";
 import { Query } from "appwrite";
-import { database } from "../appwrite";
+import { database } from "../../lib/appwrite";
 
 export interface ValidationResult {
   exists: boolean;

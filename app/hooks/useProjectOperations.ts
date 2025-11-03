@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Query } from "appwrite";
-import { database, subscribeToRealtime } from "../appwrite";
+import { database, subscribeToRealtime } from "../../lib/appwrite";
 import { useProject } from "../context/ProjectContext";
 import { useAuth } from "../context/AuthContext";
 import {
@@ -11,7 +11,7 @@ import {
   ProjectStatus,
   NotificationMetadata,
 } from "../types/Types";
-import { emitMembersChanged, onMembersChanged } from "../../lib/membersBus";
+import { emitMembersChanged, onMembersChanged } from "../utils/membersBus";
 import toast from "react-hot-toast";
 import {
   createNotification,
@@ -19,6 +19,7 @@ import {
   getProjectMemberIds,
   CreateNotificationParams,
 } from "../services/notificationService";
+import { checkUserActionAllowed } from "../utils/moderation";
 
 const ensureProjectStatus = (project: Project): Project => ({
   ...project,
@@ -50,6 +51,13 @@ export const useProjectOperations = () => {
 
   const refetch = useCallback(() => setVersion((v) => v + 1), []);
 
+  const ensureUserActionAllowed = useCallback(async () => {
+    if (!user?.id) {
+      throw new Error("Chưa đăng nhập");
+    }
+    await checkUserActionAllowed(user.id);
+  }, [user?.id]);
+
   useEffect(() => {
     if (!currentProject) {
       setMembers([]);
@@ -59,6 +67,8 @@ export const useProjectOperations = () => {
     const fetchMembers = async () => {
       setIsLoading(true);
       try {
+        await ensureUserActionAllowed();
+
         const databaseId = String(process.env.NEXT_PUBLIC_DATABASE_ID);
         const membershipsCollectionId = String(
           process.env.NEXT_PUBLIC_COLLECTION_ID_PROJECT_MEMBERSHIPS
@@ -107,7 +117,7 @@ export const useProjectOperations = () => {
     };
 
     fetchMembers();
-  }, [currentProject, version]);
+  }, [currentProject, ensureUserActionAllowed, version]);
 
   useEffect(() => {
     if (!currentProject) return;
@@ -310,6 +320,8 @@ export const useProjectOperations = () => {
       }
 
       try {
+        await ensureUserActionAllowed();
+
         const databaseId = String(process.env.NEXT_PUBLIC_DATABASE_ID);
         const membershipsCollectionId = String(
           process.env.NEXT_PUBLIC_COLLECTION_ID_PROJECT_MEMBERSHIPS
@@ -392,11 +404,19 @@ export const useProjectOperations = () => {
         refetch();
         return { success: true, message: "Đã thêm thành viên thành công" };
       } catch (error) {
-        console.error("Failed to add member:", error);
-        return { success: false, message: "Thêm thành viên thất bại" };
+        if (
+          !(error instanceof Error && error.message?.includes("khóa"))
+        ) {
+          console.error("Failed to add member:", error);
+        }
+        const message =
+          error instanceof Error
+            ? error.message || "Thêm thành viên thất bại"
+            : "Thêm thành viên thất bại";
+        return { success: false, message };
       }
     },
-    [currentProject, refetch, user]
+    [currentProject, ensureUserActionAllowed, refetch, user]
   );
 
   const removeMember = useCallback(
@@ -419,6 +439,8 @@ export const useProjectOperations = () => {
       const member = members.find((m) => m.membershipId === membershipId);
 
       try {
+        await ensureUserActionAllowed();
+
         const databaseId = String(process.env.NEXT_PUBLIC_DATABASE_ID);
         const membershipsCollectionId = String(
           process.env.NEXT_PUBLIC_COLLECTION_ID_PROJECT_MEMBERSHIPS
@@ -466,11 +488,19 @@ export const useProjectOperations = () => {
         refetch();
         return { success: true, message: "Đã xóa thành viên" };
       } catch (error) {
-        console.error("Failed to remove member:", error);
-        return { success: false, message: "Xóa thành viên thất bại" };
+        if (
+          !(error instanceof Error && error.message?.includes("khóa"))
+        ) {
+          console.error("Failed to remove member:", error);
+        }
+        const message =
+          error instanceof Error
+            ? error.message || "Xóa thành viên thất bại"
+            : "Xóa thành viên thất bại";
+        return { success: false, message };
       }
     },
-    [currentProject, members, refetch, user]
+    [currentProject, ensureUserActionAllowed, members, refetch, user]
   );
 
   const createProject = useCallback(
@@ -482,6 +512,7 @@ export const useProjectOperations = () => {
       }
 
       try {
+        await ensureUserActionAllowed();
         const databaseId = String(process.env.NEXT_PUBLIC_DATABASE_ID);
         const projectsCollectionId = String(
           process.env.NEXT_PUBLIC_COLLECTION_ID_PROJECTS
@@ -558,7 +589,7 @@ export const useProjectOperations = () => {
         return { success: false, message: errorMessage };
       }
     },
-    [user, setCurrentProject, setCurrentProjectRole, setProjects]
+    [ensureUserActionAllowed, setCurrentProject, setCurrentProjectRole, setProjects, user]
   );
 
   const deleteProject = useCallback(
@@ -583,6 +614,7 @@ export const useProjectOperations = () => {
       }
 
       try {
+        await ensureUserActionAllowed();
         const projectDoc = await database.getDocument(
           String(databaseId),
           String(projectsCollectionId),
@@ -707,18 +739,26 @@ export const useProjectOperations = () => {
         toast.success("Đã xóa dự án.");
         return { success: true };
       } catch (error) {
-        console.error("Failed to delete project:", error);
-        const errorMsg = "Xóa dự án thất bại.";
-        toast.error(errorMsg);
-        return { success: false, message: errorMsg };
+        if (
+          !(error instanceof Error && error.message?.includes("hạn chế"))
+        ) {
+          console.error("Failed to delete project:", error);
+        }
+        const message =
+          error instanceof Error
+            ? error.message || "Xóa dự án thất bại."
+            : "Xóa dự án thất bại.";
+        toast.error(message);
+        return { success: false, message };
       }
     },
     [
-      user,
       currentProject,
-      setProjects,
+      ensureUserActionAllowed,
       setCurrentProject,
       setCurrentProjectRole,
+      setProjects,
+      user,
     ]
   );
 
@@ -747,6 +787,8 @@ export const useProjectOperations = () => {
       }
 
       try {
+        await ensureUserActionAllowed();
+
         await database.updateDocument(
           String(databaseId),
           String(projectsCollectionId),
@@ -837,7 +879,11 @@ export const useProjectOperations = () => {
         );
         return { success: true };
       } catch (error) {
-        console.error("Failed to update project status:", error);
+        if (
+          !(error instanceof Error && error.message?.includes("hạn chế"))
+        ) {
+          console.error("Failed to update project status:", error);
+        }
         const message =
           error instanceof Error
             ? error.message || "Cập nhật trạng thái dự án thất bại."
@@ -847,6 +893,7 @@ export const useProjectOperations = () => {
       }
     },
     [
+      ensureUserActionAllowed,
       user,
       currentProject,
       setProjects,

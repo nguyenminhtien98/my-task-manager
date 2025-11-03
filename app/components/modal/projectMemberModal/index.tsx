@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { Query } from "appwrite";
-import { database } from "../../../appwrite";
+import { database } from "../../../../lib/appwrite";
 import ModalComponent from "../../common/ModalComponent";
 import ProjectMemberListView from "./ProjectMemberListView";
 import ProjectMemberProfileView from "./ProjectMemberProfileView";

@@ -3,11 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Query } from "appwrite";
 import toast from "react-hot-toast";
-import { database, subscribeToRealtime } from "../appwrite";
-import {
-  NotificationRecord,
-  NotificationStatus,
-} from "../types/Types";
+import { database, subscribeToRealtime } from "../../lib/appwrite";
+import { NotificationRecord, NotificationStatus } from "../types/Types";
 import {
   mapNotificationDocument,
   RawNotificationDocument,
@@ -30,9 +27,7 @@ interface UseNotificationsOptions {
   recipientId?: string | null;
 }
 
-export const useNotifications = ({
-  recipientId,
-}: UseNotificationsOptions) => {
+export const useNotifications = ({ recipientId }: UseNotificationsOptions) => {
   const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isFetchingMore, setIsFetchingMore] = useState(false);
@@ -163,16 +158,14 @@ export const useNotifications = ({
       const events = payload.events;
       let raw =
         payload.payload?.data ??
-        ((payload.payload as unknown) as RawNotificationDocument);
+        (payload.payload as unknown as RawNotificationDocument);
       if (!raw || !raw.$id) {
         raw = payload.payload as unknown as RawNotificationDocument;
       }
       if (!raw || !raw.$id) return;
 
       const docRecipient =
-        typeof raw.recipient === "string"
-          ? raw.recipient
-          : raw.recipient?.$id;
+        typeof raw.recipient === "string" ? raw.recipient : raw.recipient?.$id;
       if (docRecipient !== recipientId) return;
 
       if (events.some((event) => event.endsWith(".delete"))) {
@@ -246,9 +239,7 @@ export const useNotifications = ({
                   ...item,
                   status,
                   readAt:
-                    status === "read"
-                      ? new Date().toISOString()
-                      : item.readAt,
+                    status === "read" ? new Date().toISOString() : item.readAt,
                 }
               : item
           )

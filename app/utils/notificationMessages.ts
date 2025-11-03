@@ -471,6 +471,32 @@ const messageBuilders: Record<
       text(`${actor} vừa trả lời tin nhắn feedback của bạn.`),
     ]);
   },
+
+  "system.moderation.rateLimit": (context) => {
+    const customMessage =
+      typeof context.metadata?.message === "string"
+        ? context.metadata.message
+        : null;
+    return createMessage([
+      text(
+        customMessage ??
+          "Hệ thống nghi ngờ bạn đang spam. Vui lòng thử lại sau một lúc."
+      ),
+    ]);
+  },
+
+  "system.moderation.suspended": (context) => {
+    const customMessage =
+      typeof context.metadata?.message === "string"
+        ? context.metadata.message
+        : null;
+    return createMessage([
+      text(
+        customMessage ??
+          "Tài khoản của bạn đã bị khóa vì spam. Liên hệ với chúng tôi để được hỗ trợ."
+      ),
+    ]);
+  },
 };
 
 export const buildNotificationMessage = (
