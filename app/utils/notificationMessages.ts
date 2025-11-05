@@ -450,6 +450,16 @@ const messageBuilders: Record<
     return createMessage([text(`Bạn vừa xóa task ${taskTitle}.`)]);
   },
 
+  "project.chat.message": (context) => {
+    const actor =
+      context.actorName ??
+      (typeof context.metadata?.actorName === "string"
+        ? context.metadata.actorName
+        : undefined) ??
+      "Thành viên";
+    return createMessage([text(`${actor} đã gửi tin nhắn cho bạn.`)]);
+  },
+
   "feedback.message.fromUser": (context) => {
     const actor =
       context.actorName ??

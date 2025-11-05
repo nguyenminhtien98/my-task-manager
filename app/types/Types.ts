@@ -25,6 +25,7 @@ export type NotificationType =
   | "task.movedToCompleted"
   | "task.comment.added"
   | "task.deleted"
+  | "project.chat.message"
   | "feedback.message.fromUser"
   | "feedback.message.fromAdmin"
   | "system.moderation.rateLimit"

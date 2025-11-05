@@ -1,6 +1,12 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { FiImage, FiX, FiChevronLeft } from "react-icons/fi";
 import toast from "react-hot-toast";
 import Button from "../common/Button";
@@ -11,6 +17,7 @@ import {
   ConversationMessageDocument,
   PresenceDocument,
   ONLINE_STATUS_STALE_MS,
+  ConversationType,
 } from "../../services/feedbackService";
 import {
   formatVietnameseDateTime,
@@ -25,6 +32,7 @@ import {
 } from "../../utils/upload";
 import type { UploadedFileInfo } from "../../utils/upload";
 import MediaPreviewModal from "../common/MediaPreviewModal";
+import ChatMessageSkeleton from "../loading/ChatMessageSkeleton";
 
 interface FeedbackConversationDetailProps {
   conversationId: string | null;
@@ -46,6 +54,13 @@ interface FeedbackConversationDetailProps {
   isAdminView?: boolean;
   onClose?: () => void;
   isOpen?: boolean;
+  conversationType?: ConversationType;
+  isLoading?: boolean;
+  pendingMessages?: Array<{
+    id: string;
+    content: string;
+    attachments?: UploadedFileInfo[];
+  }>;
 }
 
 const getPresenceDisplay = (presence?: PresenceDocument | null) => {
@@ -55,8 +70,7 @@ const getPresenceDisplay = (presence?: PresenceDocument | null) => {
     ? new Date(presence.lastSeenAt).getTime()
     : 0;
   const now = Date.now();
-  const isRecent =
-    lastSeenMs > 0 && now - lastSeenMs <= ONLINE_STATUS_STALE_MS;
+  const isRecent = lastSeenMs > 0 && now - lastSeenMs <= ONLINE_STATUS_STALE_MS;
   if (presence.isOnline && isRecent) {
     return { label: "Đang online", isOnline: true };
   }
@@ -89,6 +103,9 @@ const FeedbackConversationDetail: React.FC<FeedbackConversationDetailProps> = ({
   isAdminView = false,
   onClose,
   isOpen = false,
+  conversationType = "feedback",
+  isLoading = false,
+  pendingMessages = [],
 }) => {
   const [draft, setDraft] = useState("");
   const messageEndRef = useRef<HTMLDivElement | null>(null);
@@ -106,7 +123,7 @@ const FeedbackConversationDetail: React.FC<FeedbackConversationDetailProps> = ({
 
   useEffect(() => {
     messageEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length]);
+  }, [messages.length, pendingMessages.length]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -190,9 +207,7 @@ const FeedbackConversationDetail: React.FC<FeedbackConversationDetailProps> = ({
     for (let index = messages.length - 1; index >= 0; index -= 1) {
       const message = messages[index];
       if (message.senderId !== currentUserId) continue;
-      const seen = (message.seenBy ?? []).filter(
-        (id) => id !== currentUserId
-      );
+      const seen = (message.seenBy ?? []).filter((id) => id !== currentUserId);
       if (seen.length > 0) {
         return message.$id;
       }
@@ -231,7 +246,7 @@ const FeedbackConversationDetail: React.FC<FeedbackConversationDetailProps> = ({
             <span className="flex items-center gap-1 text-xs text-gray-500">
               {presenceDisplay.isOnline ? (
                 <span className="inline-flex h-2.5 w-2.5 items-center justify-center">
-                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                  <span className="h-2 w-2 rounded-full bg-emerald-500" />
                 </span>
               ) : null}
               {presenceDisplay.label}
@@ -253,33 +268,50 @@ const FeedbackConversationDetail: React.FC<FeedbackConversationDetailProps> = ({
       );
     }
 
+    const nonAdminTitle =
+      conversationType === "member"
+        ? otherProfile?.name ?? "Thành viên"
+        : "Feedback";
+
     return (
-      <div className="flex items-center justify-between border-b border-black/10 px-4 py-3">
-        <div className="flex flex-col">
+      <div className="flex items-center border-b border-black/10 p-2">
+        {onBack ? (
+          <button
+            type="button"
+            onClick={onBack}
+            className="cursor-pointer flex h-7 w-7 items-center justify-center rounded-full bg-black/5 text-gray-600 transition hover:bg-black/10 hover:text-black focus:outline-none focus-visible:ring-2 focus-visible:ring-black/20"
+            aria-label="Quay lại danh sách hội thoại"
+          >
+            <FiChevronLeft className="h-4 w-4" />
+          </button>
+        ) : (
+          <span className="h-7 w-7" />
+        )}
+        <div className="flex flex-1 flex-col items-center justify-center">
           <span className="text-sm font-semibold text-[#111827]">
-            Feedback
+            {nonAdminTitle}
           </span>
           <span className="flex items-center gap-1 text-xs text-gray-500">
             {presenceDisplay.isOnline ? (
               <span className="inline-flex h-2.5 w-2.5 items-center justify-center">
-                <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                <span className="h-2 w-2 rounded-full bg-emerald-500" />
               </span>
             ) : null}
             {presenceDisplay.label}
           </span>
         </div>
-        <div className="flex items-center gap-2">
-          {onClose ? (
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full bg-black/5 text-gray-600 transition hover:bg-black/10 hover:text-black focus:outline-none focus-visible:ring-2 focus-visible:ring-black/20"
-              aria-label="Đóng phản hồi"
-            >
-              <FiX />
-            </button>
-          ) : null}
-        </div>
+        {onClose ? (
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-7 w-7 items-center justify-center rounded-full bg-black/5 text-gray-600 transition hover:bg-black/10 hover:text-black focus:outline-none focus-visible:ring-2 focus-visible:ring-black/20"
+            aria-label="Đóng phản hồi"
+          >
+            <FiX />
+          </button>
+        ) : (
+          <span className="h-7 w-7" />
+        )}
       </div>
     );
   };
@@ -308,62 +340,77 @@ const FeedbackConversationDetail: React.FC<FeedbackConversationDetailProps> = ({
               <div className="flex h-full items-center justify-center text-sm text-gray-500">
                 Chọn cuộc hội thoại
               </div>
-            ) : messages.length === 0 ? (
+            ) : isLoading ? (
+              <div className="space-y-3 py-4">
+                <ChatMessageSkeleton position="left" />
+                <ChatMessageSkeleton position="right" />
+                <ChatMessageSkeleton position="left" />
+              </div>
+            ) : messages.length === 0 && pendingMessages.length === 0 ? (
               <div className="flex h-full items-center justify-center text-sm text-gray-500">
                 Hãy gửi tin nhắn đầu tiên.
               </div>
             ) : (
-              messages.map((message, index) => {
-                const prev = messages[index - 1];
-                const next = messages[index + 1];
-                const grouping = computeMessageGrouping(
-                  message.senderId,
-                  prev?.senderId,
-                  next?.senderId
-                );
-                const showDivider = needDivider(prev, message);
-                const isOwn = message.senderId === currentUserId;
+              <>
+                {messages.map((message, index) => {
+                  const prev = messages[index - 1];
+                  const next = messages[index + 1];
+                  const grouping = computeMessageGrouping(
+                    message.senderId,
+                    prev?.senderId,
+                    next?.senderId
+                  );
+                  const showDivider = needDivider(prev, message);
+                  const isOwn = message.senderId === currentUserId;
 
-                const showSeenAvatars =
-                  isOwn && message.$id === lastSeenMessageId;
-                const seenAvatars = showSeenAvatars && message.seenBy
-                  ? message.seenBy
-                    .filter((id) => id !== currentUserId)
-                    .map((id) => ({
-                      id,
-                      name: otherProfile?.name,
-                      avatarUrl: otherProfile?.avatarUrl,
-                    }))
-                  : [];
-                const attachments = message.attachments ?? [];
+                  const showSeenAvatars =
+                    isOwn && message.$id === lastSeenMessageId;
+                  const seenAvatars =
+                    showSeenAvatars && message.seenBy
+                      ? message.seenBy
+                          .filter((id) => id !== currentUserId)
+                          .map((id) => ({
+                            id,
+                            name: otherProfile?.name,
+                            avatarUrl: otherProfile?.avatarUrl,
+                          }))
+                      : [];
+                  const attachments = message.attachments ?? [];
 
-                return (
-                  <React.Fragment key={message.$id}>
-                    {showDivider && (
-                      <div className="my-2 text-center text-xs text-gray-400">
-                        {formatVietnameseDateTime(message.$createdAt)}
-                      </div>
-                    )}
-                    <FeedbackMessageItem
-                      id={message.$id}
-                      isOwn={isOwn}
-                      content={message.content}
-                      createdAt={message.$createdAt}
-                      grouping={grouping}
-                      avatarUrl={otherProfile?.avatarUrl}
-                      displayName={otherProfile?.name}
-                      showAvatar={!isOwn && (grouping === "single" || grouping === "end")}
-                      showBrandAvatar={!isOwn && Boolean(isCounterpartAdmin)}
-                      seenAvatars={seenAvatars}
-                      attachments={attachments}
-                      onPreviewMedia={(media) => {
-                        setPreviewMedia(media);
-                        setIsPreviewOpen(true);
-                      }}
-                    />
-                  </React.Fragment>
-                );
-              })
+                  return (
+                    <React.Fragment key={message.$id}>
+                      {showDivider && (
+                        <div className="my-2 text-center text-xs text-gray-400">
+                          {formatVietnameseDateTime(message.$createdAt)}
+                        </div>
+                      )}
+                      <FeedbackMessageItem
+                        id={message.$id}
+                        isOwn={isOwn}
+                        content={message.content}
+                        createdAt={message.$createdAt}
+                        grouping={grouping}
+                        avatarUrl={otherProfile?.avatarUrl}
+                        displayName={otherProfile?.name}
+                        showAvatar={
+                          !isOwn &&
+                          (grouping === "single" || grouping === "end")
+                        }
+                        showBrandAvatar={!isOwn && Boolean(isCounterpartAdmin)}
+                        seenAvatars={seenAvatars}
+                        attachments={attachments}
+                        onPreviewMedia={(media) => {
+                          setPreviewMedia(media);
+                          setIsPreviewOpen(true);
+                        }}
+                      />
+                    </React.Fragment>
+                  );
+                })}
+                {pendingMessages.map((pending) => (
+                  <ChatMessageSkeleton key={pending.id} position="right" />
+                ))}
+              </>
             )}
             <div ref={messageEndRef} />
           </div>

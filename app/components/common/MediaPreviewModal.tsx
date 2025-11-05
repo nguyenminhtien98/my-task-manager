@@ -74,10 +74,10 @@ const MediaPreviewModal: React.FC<MediaPreviewModalProps> = ({ isOpen, onClose, 
               <button
                 type="button"
                 onClick={onClose}
-                className="absolute right-6 top-6 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-black/70 text-white hover:bg-black"
+                className="cursor-pointer absolute right-6 top-6 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white text-black"
                 title="Đóng"
               >
-                ×
+                X
               </button>
               <div className="flex max-h-[85vh] w-full max-w-5xl items-center justify-center overflow-hidden">
                 {type === "video"

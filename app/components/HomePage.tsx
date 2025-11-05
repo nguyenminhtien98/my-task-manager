@@ -502,7 +502,7 @@ const HomePage: React.FC = () => {
         projectTheme={currentProject?.themeColor || theme}
       />
 
-      <div className="relative p-4">
+      <div className="relative p-2">
         <Board
           tasks={boardTasks}
           currentUser={currentUserName}

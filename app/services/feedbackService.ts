@@ -28,12 +28,16 @@ const getConversationCollectionIds = () => {
   };
 };
 
+export type ConversationType = "feedback" | "member";
+
 export interface ConversationDocument extends Models.Document {
   participants: string[];
   lastMessage?: string | null;
   lastMessageAt?: string | null;
   unreadBy?: string[];
   createdBy?: string | null;
+  type?: ConversationType | null;
+  projectId?: string | null;
 }
 
 export interface ConversationMessageDocument extends Models.Document {
@@ -73,6 +77,36 @@ const extractIdFromValue = (value: unknown): string | null => {
   return null;
 };
 
+const hashProjectIdToKey = (projectId: string): string => {
+  let hash = 0;
+  for (let index = 0; index < projectId.length; index += 1) {
+    hash = Math.imul(31, hash) + projectId.charCodeAt(index);
+  }
+  const normalized = Math.abs(hash);
+  return normalized === 0 ? "0" : normalized.toString();
+};
+
+const normalizeProjectKey = (value: unknown): string | null => {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const normalized = Math.abs(value);
+    return normalized === 0 ? "0" : normalized.toString();
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed.length === 0) return null;
+    if (/^\d+$/.test(trimmed)) {
+      return trimmed;
+    }
+    return hashProjectIdToKey(trimmed);
+  }
+  return null;
+};
+
+export const deriveProjectKey = (projectId?: string | null): string | null => {
+  if (!projectId) return null;
+  return hashProjectIdToKey(projectId);
+};
+
 const normalizeConversationDocument = (
   doc: ConversationRawDocument
 ): ConversationDocument => {
@@ -106,6 +140,11 @@ const normalizeConversationDocument = (
     participants: Array.from(participantSet),
     unreadBy,
     createdBy: extractIdFromValue(doc.createdBy),
+    type:
+      typeof doc.type === "string"
+        ? (doc.type as string as ConversationType)
+        : (doc.type as ConversationType | null | undefined) ?? "feedback",
+    projectId: normalizeProjectKey(doc.projectId),
   };
 };
 
@@ -274,18 +313,32 @@ export const fetchUserConversations = async (
 
 export const ensureConversationExists = async (
   userId: string,
-  partnerId: string
+  partnerId: string,
+  options?: {
+    type?: ConversationType;
+    projectId?: string | null;
+  }
 ): Promise<ConversationDocument> => {
   const conversations = await fetchUserConversations(userId);
-  const existing = conversations.find(
-    (conv) =>
-      conv.participants.includes(partnerId) &&
-      conv.participants.includes(userId)
-  );
+  const desiredType = options?.type ?? "feedback";
+  const desiredProjectId = deriveProjectKey(options?.projectId ?? null);
+  const existing = conversations.find((conv) => {
+    if (!conv.participants.includes(partnerId)) return false;
+    if (!conv.participants.includes(userId)) return false;
+    const convType = conv.type ?? "feedback";
+    if (convType !== desiredType) return false;
+    const convProjectId = conv.projectId ?? null;
+    if (desiredType === "member") {
+      return convProjectId === desiredProjectId;
+    }
+    return true;
+  });
   if (existing) return existing;
   return createConversation({
     userIds: [userId, partnerId],
     createdBy: userId,
+    type: desiredType,
+    projectId: options?.projectId ?? null,
   });
 };
 
@@ -324,20 +377,30 @@ export const fetchConversationMessages = async (
 export const createConversation = async ({
   userIds,
   createdBy,
+  type = "feedback",
+  projectId,
 }: {
   userIds: string[];
   createdBy: string;
+  type?: ConversationType;
+  projectId?: string | null;
 }): Promise<ConversationDocument> => {
   const participants = Array.from(new Set(userIds));
   if (participants.length < 2) {
     throw new Error("Conversation need at least two participants");
   }
+  const projectKey = deriveProjectKey(projectId);
   const response = await fetch("/api/feedback/conversations", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ userIds: participants, createdBy }),
+    body: JSON.stringify({
+      userIds: participants,
+      createdBy,
+      type,
+      projectId: projectKey ? Number(projectKey) : null,
+    }),
   });
 
   if (!response.ok) {
@@ -393,8 +456,7 @@ export const sendConversationMessage = async ({
 
   if (!response.ok) {
     const errorText = await response.text();
-    const message =
-      extractErrorMessage(errorText) || "Không thể gửi tin nhắn";
+    const message = extractErrorMessage(errorText) || "Không thể gửi tin nhắn";
     throw new Error(message);
   }
 
@@ -568,6 +630,38 @@ export const subscribeConversationMessages = (
   });
 };
 
+export const subscribeAllConversationMessages = (
+  callback: RealtimeCallback<ConversationMessageDocument>
+) => {
+  const { databaseId, messageCollectionId } = getConversationCollectionIds();
+  const channel = `databases.${databaseId}.collections.${messageCollectionId}.documents`;
+  return subscribeToRealtime([channel], (response: unknown) => {
+    const payload = response as {
+      events?: string[];
+      payload?: ConversationMessageRawDocument;
+    };
+    if (!payload?.events?.length || !payload.payload) return;
+    callback(normalizeMessageDocument(payload.payload));
+  });
+};
+
+export const fetchConversationById = async (
+  conversationId: string
+): Promise<ConversationDocument | null> => {
+  const { databaseId, conversationCollectionId } =
+    getConversationCollectionIds();
+  try {
+    const doc = (await database.getDocument(
+      databaseId,
+      conversationCollectionId,
+      conversationId
+    )) as ConversationRawDocument;
+    return normalizeConversationDocument(doc);
+  } catch {
+    return null;
+  }
+};
+
 export const subscribeConversations = (
   userId: string,
   callback: RealtimeCallback<ConversationDocument>
@@ -654,3 +748,72 @@ export const fetchAdminProfileIds = async (): Promise<string[]> => {
 
   return (res.documents as unknown as ProfileDocument[]).map((doc) => doc.$id);
 };
+
+const getProjectMembershipCollectionId = () => {
+  const membershipsCollectionId =
+    process.env.NEXT_PUBLIC_COLLECTION_ID_PROJECT_MEMBERSHIPS;
+  if (!membershipsCollectionId) {
+    throw new Error("Thiếu cấu hình collection thành viên dự án");
+  }
+  return membershipsCollectionId;
+};
+
+export const fetchProjectMemberProfiles = async (
+  projectId: string,
+  options?: {
+    includeCurrentUser?: boolean;
+  }
+): Promise<ProfileDocument[]> => {
+  if (!projectId) return [];
+  const databaseId = process.env.NEXT_PUBLIC_DATABASE_ID;
+  const profileCollectionId = process.env.NEXT_PUBLIC_COLLECTION_ID_PROFILE;
+  if (!databaseId || !profileCollectionId) {
+    throw new Error("Thiếu cấu hình profile collection");
+  }
+  const membershipsCollectionId = getProjectMembershipCollectionId();
+  try {
+    const membershipRes = await database.listDocuments(
+      databaseId,
+      membershipsCollectionId,
+      [Query.equal("project", projectId), Query.limit(200)]
+    );
+    const memberIds = new Set<string>();
+    membershipRes.documents.forEach((doc) => {
+      const membership = doc as Models.Document & {
+        user?: string | { $id?: string };
+      };
+      if (typeof membership.user === "string") {
+        memberIds.add(membership.user);
+      } else if (membership.user && typeof membership.user.$id === "string") {
+        memberIds.add(membership.user.$id);
+      }
+    });
+
+    const uniqueIds = Array.from(memberIds);
+    if (!options?.includeCurrentUser) {
+      // exclude handled by caller if needed
+    }
+    if (!uniqueIds.length) return [];
+    const profileMap = await fetchProfilesByIds(uniqueIds);
+    const profiles: ProfileDocument[] = uniqueIds
+      .map((id) => profileMap[id])
+      .filter((profile): profile is ProfileDocument => Boolean(profile));
+    profiles.sort((a, b) =>
+      (a.name ?? "").localeCompare(b.name ?? "", "vi", { sensitivity: "base" })
+    );
+    return profiles;
+  } catch (error) {
+    console.error("Không thể lấy danh sách hồ sơ thành viên dự án:", error);
+    return [];
+  }
+};
+
+export const ensureMemberConversation = async (
+  userId: string,
+  memberId: string,
+  projectId: string
+): Promise<ConversationDocument> =>
+  ensureConversationExists(userId, memberId, {
+    type: "member",
+    projectId,
+  });

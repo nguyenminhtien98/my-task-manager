@@ -7,6 +7,8 @@ import { getServerAppwriteClients } from "@/lib/serverAppwrite";
 interface ConversationPayload {
   userIds: string[];
   createdBy: string;
+  type?: "feedback" | "member";
+  projectId?: string | null;
 }
 
 export async function POST(request: Request) {
@@ -40,6 +42,8 @@ export async function POST(request: Request) {
       lastMessage: null,
       lastMessageAt: null,
       unreadBy,
+      type: body.type ?? "feedback",
+      projectId: body.projectId ?? null,
     };
 
     const permissions = participantList.flatMap((id) => [

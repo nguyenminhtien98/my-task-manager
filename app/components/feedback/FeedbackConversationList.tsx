@@ -21,6 +21,9 @@ interface FeedbackConversationListProps {
   filter: "all" | "unread";
   onFilterChange: (filter: "all" | "unread") => void;
   onClose?: () => void;
+  headerTitle?: string;
+  headerDescription?: string;
+  actions?: React.ReactNode;
 }
 
 const FeedbackConversationList: React.FC<FeedbackConversationListProps> = ({
@@ -33,34 +36,49 @@ const FeedbackConversationList: React.FC<FeedbackConversationListProps> = ({
   filter,
   onFilterChange,
   onClose,
+  headerTitle = "Danh sách đoạn chat",
+  headerDescription,
+  actions,
 }) => {
+  const renderActions = () => {
+    if (actions) return actions;
+    return (
+      <div className="mt-2 flex items-center gap-2">
+        <Button
+          variant="solid"
+          onClick={() => onFilterChange("all")}
+          className={`rounded-full !px-3 !py-1 !text-xs ${filter === "all"
+            ? "border bg-black text-white"
+            : "border border-gray-300 bg-white text-[#111827]"
+            }`}
+        >
+          Tất cả
+        </Button>
+        <Button
+          variant="solid"
+          onClick={() => onFilterChange("unread")}
+          className={`rounded-full border !px-3 !py-1 !text-xs font-medium ${filter === "unread"
+            ? "border bg-black text-white"
+            : "border-gray-300 bg-white text-[#111827]"
+            }`}
+        >
+          Chưa đọc
+        </Button>
+      </div>
+    );
+  };
+
   return (
     <div className="flex h-full w-[320px] max-w-full flex-col rounded-2xl border border-black/10 bg-white shadow-xl">
-      <div className="flex items-start justify-between border-b border-black/10 px-4 py-3">
+      <div className="flex items-start justify-between border-b border-black/10 px-2 py-2">
         <div>
-          <div className="text-sm font-semibold text-[#111827]">Danh sách đoạn chat</div>
-          <div className="mt-2 flex items-center gap-2">
-            <Button
-              variant="solid"
-              onClick={() => onFilterChange("all")}
-              className={`rounded-full !px-3 !py-1 !text-xs ${filter === "all"
-                  ? "border bg-black text-white"
-                  : "border border-gray-300 bg-white text-[#111827]"
-                }`}
-            >
-              Tất cả
-            </Button>
-            <Button
-              variant="solid"
-              onClick={() => onFilterChange("unread")}
-              className={`rounded-full border !px-3 !py-1 !text-xs font-medium ${filter === "unread"
-                  ? "border bg-black text-white"
-                  : "border-gray-300 bg-white text-[#111827]"
-                }`}
-            >
-              Chưa đọc
-            </Button>
+          <div className="text-sm font-semibold text-[#111827]">
+            {headerTitle}
           </div>
+          {headerDescription ? (
+            <p className="text-xs text-gray-500">{headerDescription}</p>
+          ) : null}
+          <div className="mt-2 flex items-center gap-2">{renderActions()}</div>
         </div>
         {onClose ? (
           <button
@@ -98,9 +116,9 @@ const FeedbackConversationList: React.FC<FeedbackConversationListProps> = ({
                   type="button"
                   key={conversation.$id}
                   onClick={() => onSelectConversation(conversation.$id)}
-                  className={`cursor-pointer flex w-full items-center gap-3 rounded-xl border border-transparent px-3 py-2 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-black/30 ${selectedConversationId === conversation.$id
-                      ? "bg-black text-white"
-                      : "bg-black/60 text-white hover:bg-black/70"
+                  className={`cursor-pointer flex w-full items-center gap-3 rounded-xl border border-transparent px-1 py-1 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-black/30 ${selectedConversationId === conversation.$id
+                    ? "bg-black text-white"
+                    : "bg-black/60 text-white hover:bg-black/70"
                     }`}
                 >
                   <AvatarUser

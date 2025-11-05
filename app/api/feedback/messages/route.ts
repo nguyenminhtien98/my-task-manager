@@ -265,6 +265,12 @@ export async function POST(request: Request) {
     );
 
     try {
+      const conversationType =
+        typeof (conversation as Record<string, unknown>).type === "string"
+          ? ((conversation as Record<string, unknown>).type as string)
+          : "feedback";
+      const isMemberChat = conversationType === "member";
+
       const profileResponse = await databases.listDocuments(
         databaseId,
         profileCollectionId,
@@ -281,6 +287,13 @@ export async function POST(request: Request) {
         (senderProfile?.name as string | undefined) ?? "My Task Manager";
 
       const previewText = messageSummary;
+      const rawProjectId = (conversation as Record<string, unknown>).projectId;
+      const conversationProjectId =
+        typeof rawProjectId === "number"
+          ? rawProjectId
+          : typeof rawProjectId === "string"
+          ? rawProjectId
+          : null;
 
       await Promise.all(
         participants
@@ -291,20 +304,31 @@ export async function POST(request: Request) {
             const isRecipientAdmin =
               recipientRole === "admin" || recipientRole === "leader";
 
-            const type = isRecipientAdmin
+            const type = isMemberChat
+              ? "project.chat.message"
+              : isRecipientAdmin
               ? "feedback.message.fromUser"
               : "feedback.message.fromAdmin";
+            const scope = isMemberChat ? "project" : "system";
 
-            const messageText = isRecipientAdmin
+            const messageText = isMemberChat
+              ? `${senderName} đã gửi tin nhắn cho bạn.`
+              : isRecipientAdmin
               ? `${senderName} vừa gửi tin nhắn feedback cho bạn.`
               : `${senderName} vừa trả lời tin nhắn feedback của bạn.`;
 
-            const metadata = {
+            const metadata: Record<string, unknown> = {
               actorName: senderName,
               recipientName:
                 (recipientProfile?.name as string | undefined) ?? undefined,
               messagePreview: previewText.slice(0, 200),
             };
+            if (conversationProjectId) {
+              metadata.projectId =
+                typeof conversationProjectId === "number"
+                  ? String(conversationProjectId)
+                  : conversationProjectId;
+            }
 
             await databases.createDocument(
               databaseId,
@@ -312,7 +336,7 @@ export async function POST(request: Request) {
               "unique()",
               {
                 type,
-                scope: "system",
+                scope,
                 status: "unread",
                 recipient: recipientId,
                 actor: senderId,

@@ -6,7 +6,7 @@ import {
 } from "node-appwrite";
 
 export const FEEDBACK_RATE_LIMIT_WINDOW_MS = Number(
-  process.env.FEEDBACK_RATE_LIMIT_WINDOW_MS ?? 10000
+  process.env.FEEDBACK_RATE_LIMIT_WINDOW_MS ?? 20000
 );
 export const FEEDBACK_RATE_LIMIT_MAX_ACTIONS = Number(
   process.env.FEEDBACK_RATE_LIMIT_MAX_ACTIONS ?? 5
