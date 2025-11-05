@@ -19,7 +19,7 @@ import {
   getProjectMemberIds,
   CreateNotificationParams,
 } from "../services/notificationService";
-import { checkUserActionAllowed } from "../utils/moderation";
+import { checkUserSuspended } from "../utils/moderation";
 
 const ensureProjectStatus = (project: Project): Project => ({
   ...project,
@@ -41,7 +41,6 @@ export const useProjectOperations = () => {
     currentProject,
     setCurrentProject,
     setCurrentProjectRole,
-    // projects,
     setProjects,
   } = useProject();
   const [members, setMembers] = useState<ProjectMemberProfile[]>([]);
@@ -51,11 +50,11 @@ export const useProjectOperations = () => {
 
   const refetch = useCallback(() => setVersion((v) => v + 1), []);
 
-  const ensureUserActionAllowed = useCallback(async () => {
+  const ensureUserNotSuspended = useCallback(async () => {
     if (!user?.id) {
       throw new Error("Chưa đăng nhập");
     }
-    await checkUserActionAllowed(user.id);
+    await checkUserSuspended(user.id);
   }, [user?.id]);
 
   useEffect(() => {
@@ -67,7 +66,7 @@ export const useProjectOperations = () => {
     const fetchMembers = async () => {
       setIsLoading(true);
       try {
-        await ensureUserActionAllowed();
+        await ensureUserNotSuspended();
 
         const databaseId = String(process.env.NEXT_PUBLIC_DATABASE_ID);
         const membershipsCollectionId = String(
@@ -117,7 +116,7 @@ export const useProjectOperations = () => {
     };
 
     fetchMembers();
-  }, [currentProject, ensureUserActionAllowed, version]);
+  }, [currentProject, ensureUserNotSuspended, version]);
 
   useEffect(() => {
     if (!currentProject) return;
@@ -239,7 +238,6 @@ export const useProjectOperations = () => {
           locallyCreatedProjectIdsRef.current.delete(newProject.$id);
           return;
         }
-        // const isLeader = newProject.leader?.$id === user.id;
         setProjects((prev) => {
           if (prev.some((p) => p.$id === newProject.$id)) {
             return prev;
@@ -320,7 +318,7 @@ export const useProjectOperations = () => {
       }
 
       try {
-        await ensureUserActionAllowed();
+        await ensureUserNotSuspended();
 
         const databaseId = String(process.env.NEXT_PUBLIC_DATABASE_ID);
         const membershipsCollectionId = String(
@@ -404,9 +402,7 @@ export const useProjectOperations = () => {
         refetch();
         return { success: true, message: "Đã thêm thành viên thành công" };
       } catch (error) {
-        if (
-          !(error instanceof Error && error.message?.includes("khóa"))
-        ) {
+        if (!(error instanceof Error && error.message?.includes("khóa"))) {
           console.error("Failed to add member:", error);
         }
         const message =
@@ -416,7 +412,7 @@ export const useProjectOperations = () => {
         return { success: false, message };
       }
     },
-    [currentProject, ensureUserActionAllowed, refetch, user]
+    [currentProject, ensureUserNotSuspended, refetch, user]
   );
 
   const removeMember = useCallback(
@@ -439,7 +435,7 @@ export const useProjectOperations = () => {
       const member = members.find((m) => m.membershipId === membershipId);
 
       try {
-        await ensureUserActionAllowed();
+        await ensureUserNotSuspended();
 
         const databaseId = String(process.env.NEXT_PUBLIC_DATABASE_ID);
         const membershipsCollectionId = String(
@@ -488,9 +484,7 @@ export const useProjectOperations = () => {
         refetch();
         return { success: true, message: "Đã xóa thành viên" };
       } catch (error) {
-        if (
-          !(error instanceof Error && error.message?.includes("khóa"))
-        ) {
+        if (!(error instanceof Error && error.message?.includes("khóa"))) {
           console.error("Failed to remove member:", error);
         }
         const message =
@@ -500,7 +494,7 @@ export const useProjectOperations = () => {
         return { success: false, message };
       }
     },
-    [currentProject, ensureUserActionAllowed, members, refetch, user]
+    [currentProject, ensureUserNotSuspended, members, refetch, user]
   );
 
   const createProject = useCallback(
@@ -512,7 +506,7 @@ export const useProjectOperations = () => {
       }
 
       try {
-        await ensureUserActionAllowed();
+        await ensureUserNotSuspended();
         const databaseId = String(process.env.NEXT_PUBLIC_DATABASE_ID);
         const projectsCollectionId = String(
           process.env.NEXT_PUBLIC_COLLECTION_ID_PROJECTS
@@ -589,7 +583,13 @@ export const useProjectOperations = () => {
         return { success: false, message: errorMessage };
       }
     },
-    [ensureUserActionAllowed, setCurrentProject, setCurrentProjectRole, setProjects, user]
+    [
+      ensureUserNotSuspended,
+      setCurrentProject,
+      setCurrentProjectRole,
+      setProjects,
+      user,
+    ]
   );
 
   const deleteProject = useCallback(
@@ -614,7 +614,7 @@ export const useProjectOperations = () => {
       }
 
       try {
-        await ensureUserActionAllowed();
+        await ensureUserNotSuspended();
         const projectDoc = await database.getDocument(
           String(databaseId),
           String(projectsCollectionId),
@@ -739,9 +739,7 @@ export const useProjectOperations = () => {
         toast.success("Đã xóa dự án.");
         return { success: true };
       } catch (error) {
-        if (
-          !(error instanceof Error && error.message?.includes("hạn chế"))
-        ) {
+        if (!(error instanceof Error && error.message?.includes("hạn chế"))) {
           console.error("Failed to delete project:", error);
         }
         const message =
@@ -754,7 +752,7 @@ export const useProjectOperations = () => {
     },
     [
       currentProject,
-      ensureUserActionAllowed,
+      ensureUserNotSuspended,
       setCurrentProject,
       setCurrentProjectRole,
       setProjects,
@@ -787,7 +785,7 @@ export const useProjectOperations = () => {
       }
 
       try {
-        await ensureUserActionAllowed();
+        await ensureUserNotSuspended();
 
         await database.updateDocument(
           String(databaseId),
@@ -879,9 +877,7 @@ export const useProjectOperations = () => {
         );
         return { success: true };
       } catch (error) {
-        if (
-          !(error instanceof Error && error.message?.includes("hạn chế"))
-        ) {
+        if (!(error instanceof Error && error.message?.includes("hạn chế"))) {
           console.error("Failed to update project status:", error);
         }
         const message =
@@ -893,7 +889,7 @@ export const useProjectOperations = () => {
       }
     },
     [
-      ensureUserActionAllowed,
+      ensureUserNotSuspended,
       user,
       currentProject,
       setProjects,

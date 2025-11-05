@@ -27,7 +27,6 @@ const Header: React.FC<HeaderProps> = ({
   onLoginClick,
   onCreateProject,
   isProjectClosed,
-  projectTheme,
 }) => {
   const { user, logout } = useAuth();
   const { projects, currentProject, setCurrentProject, setCurrentProjectRole } =
@@ -140,10 +139,7 @@ const Header: React.FC<HeaderProps> = ({
     <>
       <header className="sticky top-0 z-50 flex w-full flex-col items-center justify-between gap-4 border-b border-white/20 bg-black/60 p-2 backdrop-blur-lg sm:flex-row">
         <div className="flex items-center gap-2">
-          <BrandOrbHeaderIcon
-            size={28}
-            background={projectTheme || DEFAULT_THEME_GRADIENT}
-          />
+          <BrandOrbHeaderIcon size={28} />
           <AnimatedGradientLogo className="text-xl font-bold sm:text-2xl" />
         </div>
 
@@ -161,16 +157,18 @@ const Header: React.FC<HeaderProps> = ({
                       key={member.$id || `${member.name}-${index}`}
                       type="button"
                       onClick={() => handleHeaderMemberClick(member)}
-                      className={`inline-flex focus:outline-none ${index > 0 ? "-ml-1" : ""
-                        }`}
+                      className={`inline-flex focus:outline-none ${
+                        index > 0 ? "-ml-1" : ""
+                      }`}
                       style={{ zIndex: visibleMembers.length - index }}
                     >
                       <AvatarUser
                         name={member.name}
                         avatarUrl={member.avatarUrl}
                         size={34}
-                        className={`${member.isLeader ? "border-2 border-white" : ""
-                          } shadow`}
+                        className={`${
+                          member.isLeader ? "border-2 border-white" : ""
+                        } shadow`}
                         title={
                           member.isLeader
                             ? `Leader: ${member.name}`
@@ -180,8 +178,9 @@ const Header: React.FC<HeaderProps> = ({
                     </button>
                   ))}
                   <div
-                    className={`${visibleMembers.length > 0 ? "-ml-1" : ""
-                      } flex h-[34px] w-[34px] cursor-pointer items-center justify-center rounded-full border border-dashed border-black bg-white/80 text-xs font-semibold text-black shadow transition hover:bg-white`}
+                    className={`${
+                      visibleMembers.length > 0 ? "-ml-1" : ""
+                    } flex h-[34px] w-[34px] cursor-pointer items-center justify-center rounded-full border border-dashed border-black bg-white/80 text-xs font-semibold text-black shadow transition hover:bg-white`}
                     title="Thêm thành viên"
                     onClick={openMembersModal}
                   >
@@ -192,18 +191,23 @@ const Header: React.FC<HeaderProps> = ({
             </div>
           )}
 
-          {user && projects.length > 1 && (
+          {user && projects.length > 0 && (
             <div ref={filterRef} className="relative">
               <Button
-                onClick={() => setShowProjectFilter((prev) => !prev)}
+                onClick={() => {
+                  if (projects.length > 1) {
+                    setShowProjectFilter((prev) => !prev);
+                  }
+                }}
                 className="px-3 py-1 text-white"
                 style={{
-                  background: currentProject?.themeColor || DEFAULT_THEME_GRADIENT,
+                  background:
+                    currentProject?.themeColor || DEFAULT_THEME_GRADIENT,
                 }}
               >
                 Dự án: {currentProject ? currentProject.name : "Chọn dự án"}
               </Button>
-              {showProjectFilter && (
+              {showProjectFilter && projects.length > 1 && (
                 <div className="absolute right-0 mt-1 w-48 rounded bg-white text-black shadow-lg z-40">
                   {projects.map((proj) => {
                     const isActive = currentProject?.$id === proj.$id;
@@ -245,10 +249,11 @@ const Header: React.FC<HeaderProps> = ({
               if (isProjectClosed) return;
               onCreateTask();
             }}
-            className={`px-3 py-1 text-white ${isProjectClosed
-              ? "bg-gray-400 cursor-not-allowed"
-              : "bg-[#d15f63] hover:bg-[#df8c8c]"
-              }`}
+            className={`px-3 py-1 text-white ${
+              isProjectClosed
+                ? "bg-gray-400 cursor-not-allowed"
+                : "bg-[#d15f63] hover:bg-[#df8c8c]"
+            }`}
             disabled={isProjectClosed}
             title={isProjectClosed ? "Dự án đã đóng, không thể tạo task" : ""}
           >
@@ -268,8 +273,9 @@ const Header: React.FC<HeaderProps> = ({
                   size={36}
                   showTooltip={false}
                   onClick={() => setShowMenu((prev) => !prev)}
-                  title={`${currentProject?.leader.$id === user.id ? "Leader" : "User"
-                    }: ${user.name}`}
+                  title={`${
+                    currentProject?.leader.$id === user.id ? "Leader" : "User"
+                  }: ${user.name}`}
                 />
                 {showMenu && (
                   <div className="absolute right-0 top-full mt-2 w-48 rounded bg-white text-black shadow-lg z-[60]">

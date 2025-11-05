@@ -187,7 +187,6 @@ export const useProjectTheme = () => {
           setCurrentProject(nextCurrentProject);
           setTheme(nextCurrentProject.themeColor ?? DEFAULT_THEME_GRADIENT);
         } else if (incomingLeader && !nextCurrentProject) {
-          // Update cached list entry if it wasn't found during map (e.g. project list empty)
           setProjects((prev) => {
             if (prev.some((project) => project.$id === documentId)) {
               return prev;

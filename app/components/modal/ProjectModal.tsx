@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import ModalComponent from "../common/ModalComponent";
 import { useProjectOperations } from "../../hooks/useProjectOperations";
@@ -12,6 +12,7 @@ const ProjectModal: React.FC<{
   onProjectCreate?: () => void;
 }> = ({ isOpen, setIsOpen, onProjectCreate }) => {
   const { createProject } = useProjectOperations();
+  const [isCreating, setIsCreating] = useState(false);
   const {
     register,
     handleSubmit,
@@ -26,11 +27,17 @@ const ProjectModal: React.FC<{
   });
 
   const onSubmit = async (data: ProjectFormValues) => {
-    const result = await createProject(data.name);
-    if (result.success) {
-      onProjectCreate?.();
-      reset();
-      setIsOpen(false);
+    if (isCreating) return;
+    setIsCreating(true);
+    try {
+      const result = await createProject(data.name);
+      if (result.success) {
+        onProjectCreate?.();
+        reset();
+        setIsOpen(false);
+      }
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -39,6 +46,7 @@ const ProjectModal: React.FC<{
   useEffect(() => {
     if (!isOpen) {
       reset();
+      setIsCreating(false);
     }
   }, [isOpen, reset]);
 
@@ -61,13 +69,14 @@ const ProjectModal: React.FC<{
         <div className="flex justify-end space-x-4">
           <button
             type="submit"
-            disabled={!projectName.trim()}
-            className={`px-4 py-2 rounded text-white ${!projectName.trim()
+            disabled={!projectName.trim() || isCreating}
+            className={`px-4 py-2 rounded text-white ${
+              !projectName.trim() || isCreating
                 ? "bg-gray-400 cursor-not-allowed"
                 : "bg-black hover:bg-black/90 cursor-pointer"
-              }`}
+            }`}
           >
-            Tạo
+            {isCreating ? "Đang tạo..." : "Tạo"}
           </button>
         </div>
       </form>

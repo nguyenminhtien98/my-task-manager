@@ -35,8 +35,11 @@ const ProjectMembersModal: React.FC<ProjectMembersModalProps> = ({
   initialMember,
   isProjectClosed: projectClosedProp,
 }) => {
-  const { currentProject, currentProjectRole, isProjectClosed: contextProjectClosed } =
-    useProject();
+  const {
+    currentProject,
+    currentProjectRole,
+    isProjectClosed: contextProjectClosed,
+  } = useProject();
   const {
     members: allMembers,
     leader,
@@ -240,6 +243,7 @@ const ProjectMembersModal: React.FC<ProjectMembersModalProps> = ({
           onAddMember={handleAddMember}
           onMemberClick={handleMemberSelect}
           isProjectClosed={isProjectClosed}
+          isAddingMember={isProcessing}
         />
       ) : activeMember ? (
         <ProjectMemberProfileView

@@ -2,6 +2,7 @@
 
 import React, { useMemo } from "react";
 import AvatarUser from "../common/AvatarUser";
+import BrandOrbHeaderIcon from "../common/LogoComponent";
 import {
   NotificationMessageSegment,
   NotificationRecord,
@@ -58,6 +59,8 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
   const createdAtLabel = formatRelativeTimeFromNow(notification.createdAt);
   const showUnreadDot = notification.status === "unread";
 
+  const isSystemNotification = notification.type.startsWith("system.");
+
   const displayMessage = useMemo(() => {
     if (isExpanded) {
       return buildNotificationMessageFromRecord(notification);
@@ -84,13 +87,19 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
       }`}
     >
       <div className="flex-shrink-0">
-        <AvatarUser
-          name={displayName}
-          avatarUrl={displayAvatar}
-          size={36}
-          showTooltip={false}
-          className="shadow-sm"
-        />
+        {isSystemNotification ? (
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white shadow-sm">
+            <BrandOrbHeaderIcon size={28} />
+          </div>
+        ) : (
+          <AvatarUser
+            name={displayName}
+            avatarUrl={displayAvatar}
+            size={36}
+            showTooltip={false}
+            className="shadow-sm"
+          />
+        )}
       </div>
 
       <div className={`min-w-0 ${showUnreadDot ? "flex-1" : "flex-1"}`}>

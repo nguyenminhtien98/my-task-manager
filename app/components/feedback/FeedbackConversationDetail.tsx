@@ -231,7 +231,7 @@ const FeedbackConversationDetail: React.FC<FeedbackConversationDetailProps> = ({
             <button
               type="button"
               onClick={onBack}
-              className="flex h-7 w-7 items-center justify-center rounded-full bg-black/5 text-gray-600 transition hover:bg-black/10 hover:text-black focus:outline-none focus-visible:ring-2 focus-visible:ring-black/20"
+              className="cursor-pointer flex h-7 w-7 items-center justify-center rounded-full bg-black/5 text-gray-600 transition hover:bg-black/10 hover:text-black focus:outline-none focus-visible:ring-2 focus-visible:ring-black/20"
               aria-label="Quay lại danh sách hội thoại"
             >
               <FiChevronLeft className="h-4 w-4" />
@@ -256,7 +256,7 @@ const FeedbackConversationDetail: React.FC<FeedbackConversationDetailProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="flex h-7 w-7 items-center justify-center rounded-full bg-black/5 text-gray-600 transition hover:bg-black/10 hover:text-black focus:outline-none focus-visible:ring-2 focus-visible:ring-black/20"
+              className="cursor-pointer flex h-7 w-7 items-center justify-center rounded-full bg-black/5 text-gray-600 transition hover:bg-black/10 hover:text-black focus:outline-none focus-visible:ring-2 focus-visible:ring-black/20"
               aria-label="Đóng phản hồi"
             >
               <FiX />
@@ -304,7 +304,7 @@ const FeedbackConversationDetail: React.FC<FeedbackConversationDetailProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="flex h-7 w-7 items-center justify-center rounded-full bg-black/5 text-gray-600 transition hover:bg-black/10 hover:text-black focus:outline-none focus-visible:ring-2 focus-visible:ring-black/20"
+            className="cursor-pointer flex h-7 w-7 items-center justify-center rounded-full bg-black/5 text-gray-600 transition hover:bg-black/10 hover:text-black focus:outline-none focus-visible:ring-2 focus-visible:ring-black/20"
             aria-label="Đóng phản hồi"
           >
             <FiX />

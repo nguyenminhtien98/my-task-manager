@@ -16,7 +16,7 @@ import { Permission, Role } from "appwrite";
 import toast from "react-hot-toast";
 import { uploadFilesToCloudinary } from "../utils/upload";
 import { createNotification } from "../services/notificationService";
-import { checkUserActionAllowed } from "../utils/moderation";
+import { checkUserSuspended } from "../utils/moderation";
 
 interface CreateTaskParams {
   data: CreateTaskFormValues;
@@ -68,11 +68,11 @@ export const useTask = () => {
     ]
   );
 
-  const ensureUserActionAllowed = useCallback(async () => {
+  const ensureUserNotSuspended = useCallback(async () => {
     if (!user?.id) {
       throw new Error("Chưa đăng nhập");
     }
-    await checkUserActionAllowed(user.id);
+    await checkUserSuspended(user.id);
   }, [user?.id]);
   useEffect(() => {
     if (!user || !currentProject) return;
@@ -220,7 +220,7 @@ export const useTask = () => {
       } as Record<string, unknown>;
 
       try {
-        await ensureUserActionAllowed();
+        await ensureUserNotSuspended();
         const created = await database.createDocument(
           process.env.NEXT_PUBLIC_DATABASE_ID!,
           process.env.NEXT_PUBLIC_COLLECTION_ID_TASKS!,
@@ -276,7 +276,7 @@ export const useTask = () => {
         return { success: false, message: errorMessage };
       }
     },
-    [ensureUserActionAllowed, isProjectClosed, projectMeta, user]
+    [ensureUserNotSuspended, isProjectClosed, projectMeta, user]
   );
 
   const updateTask = useCallback(
@@ -327,7 +327,7 @@ export const useTask = () => {
       }
 
       try {
-        await ensureUserActionAllowed();
+        await ensureUserNotSuspended();
 
         await database.updateDocument(
           process.env.NEXT_PUBLIC_DATABASE_ID!,
@@ -352,7 +352,7 @@ export const useTask = () => {
         return { success: false, message: errorMessage };
       }
     },
-    [ensureUserActionAllowed, isProjectClosed, user]
+    [ensureUserNotSuspended, isProjectClosed, user]
   );
 
   const receiveTask = useCallback(
@@ -371,7 +371,7 @@ export const useTask = () => {
       const { id: projectId, leaderId, leaderName } = projectMeta;
 
       try {
-        await ensureUserActionAllowed();
+        await ensureUserNotSuspended();
 
         await database.updateDocument(
           String(process.env.NEXT_PUBLIC_DATABASE_ID),
@@ -429,9 +429,7 @@ export const useTask = () => {
         toast.success("Nhận task thành công");
         return { success: true, task: updatedTask };
       } catch (err: unknown) {
-        if (
-          !(err instanceof Error && err.message?.includes("hạn chế"))
-        ) {
+        if (!(err instanceof Error && err.message?.includes("hạn chế"))) {
           console.error("Failed to receive task:", err);
         }
         const message =
@@ -444,7 +442,7 @@ export const useTask = () => {
         return { success: false, message };
       }
     },
-    [ensureUserActionAllowed, isProjectClosed, projectMeta, user]
+    [ensureUserNotSuspended, isProjectClosed, projectMeta, user]
   );
 
   const resolveProfileId = useCallback((value: unknown): string | undefined => {
@@ -474,7 +472,7 @@ export const useTask = () => {
       }
 
       try {
-        await ensureUserActionAllowed();
+        await ensureUserNotSuspended();
 
         await database.deleteDocument(
           String(process.env.NEXT_PUBLIC_DATABASE_ID),
@@ -521,7 +519,7 @@ export const useTask = () => {
       }
     },
     [
-      ensureUserActionAllowed,
+      ensureUserNotSuspended,
       isProjectClosed,
       projectMeta.id,
       resolveProfileId,
@@ -556,7 +554,7 @@ export const useTask = () => {
       }
 
       try {
-        await ensureUserActionAllowed();
+        await ensureUserNotSuspended();
 
         await database.updateDocument(
           String(process.env.NEXT_PUBLIC_DATABASE_ID),
@@ -661,9 +659,7 @@ export const useTask = () => {
 
         return { success: true, task: updatedTask };
       } catch (err: unknown) {
-        if (
-          !(err instanceof Error && err.message?.includes("hạn chế"))
-        ) {
+        if (!(err instanceof Error && err.message?.includes("hạn chế"))) {
           console.error("Failed to move task:", err);
         }
         const message =
@@ -673,7 +669,7 @@ export const useTask = () => {
         return { success: false, message };
       }
     },
-    [ensureUserActionAllowed, isProjectClosed, projectMeta, user]
+    [ensureUserNotSuspended, isProjectClosed, projectMeta, user]
   );
 
   return {

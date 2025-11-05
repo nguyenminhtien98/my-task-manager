@@ -14,7 +14,11 @@ import ProjectModal from "./modal/ProjectModal";
 import { useTheme } from "../context/ThemeContext";
 import { useProjectOperations } from "../hooks/useProjectOperations";
 import { useTask } from "../hooks/useTask";
-import { enrichTaskAssignee, enrichTasksAssignee, preserveAssignee } from "../utils/TasksAssignee";
+import {
+  enrichTaskAssignee,
+  enrichTasksAssignee,
+  preserveAssignee,
+} from "../utils/TasksAssignee";
 
 const Board = dynamic(() => import("./Board"), { ssr: false });
 
@@ -26,7 +30,8 @@ const defaultGuideTask: Task = {
   id: "guideTask",
   seq: 0,
   title: "Hướng dẫn sử dụng...",
-  description: '- Ứng dụng này được xây dựng nhằm hỗ trợ người dùng quản lý công việc và dự án một cách hiệu quả hơn.\n- Ứng dụng cho phép người dùng đăng nhập bằng tài khoản Google hoặc tạo tài khoản mới bằng Gmail.\n\n- Các chức năng chính bao gồm:\n  + Tạo, xóa, đóng, mở dự án.\n  + Thêm hoặc xóa thành viên trong dự án.\n  + Theo dõi hiệu suất làm việc của từng thành viên (dành riêng cho Leader).\n  + Tạo, cập nhật, xóa, phân loại Task, gán người thực hiện hoặc để trống để các thành viên tự nhận.\n  + Đính kèm tệp, đặt mức độ ưu tiên, thời gian bắt đầu và kết thúc.\n  + Kéo thả Task giữa các cột theo quyền (Leader hoặc Thành viên).\n  + Comment trong từng Task (Leader và người thực hiện Task).\n  + Thay đổi màu nền, thông tin dự án.\n  + Tất cả các thao tác đều được cập nhật Realtime (tạo, xóa, chỉnh sửa, kéo thả, thêm thành viên, comment...).\n\n- Hướng dẫn sử dụng:\n  + Trước tiên bạn hãy đăng ký tài khoản sau đó đăng nhập để sử dụng ứng dụng này nha.\n  + Sau khi đăng nhập bạn có thể tạo dự án và tạo task cho dự án đó.\n  + Logic kéo thả task giữa các cột của ứng dụng là:\n    Thành viên của dự án có quyền kéo Task từ cột "LIST" sang cột "DOING" và từ cột "DOING" sang cột "DONE" và kéo từ cột "BUG" về các cột mà thành viên được quyền kéo đến.\n    Khi Task đã rời cột "LIST" thì không thể kéo lại cột "LIST" nữa.\n    Chỉ có Leader của dự án mới có quyền kéo Task từ cột "DONE" sang cột "COMPLETED" hoặc từ cột "DONE" sang cột "BUG".\n    Thành viên của dự án chỉ có quyền kéo Task của chính mình, Leader có quyền kéo Task của tất cả các thành viên trong dự án.\n    Thành viên có thể tự tạo Task hoặc có thể nhận Task từ Leader (những Task mà Leader tạo nhưng chưa chọn thành viên thực hiện Task).\n    Thành viên chỉ có quyền chỉnh sửa các trường "Thời gian hoàn thành", "Ngày bắt đầu và ngày kết thúc của Task".\n  + Leader là: người tạo dự án.\n  + Thành viên là: người được Leader mời vào dự án.\n  + Logic tạo Task là: Leader có quyền để trống trường "Người thực hiện" và "Ngày bắt đầu và ngày kết thúc". Thành viên phải điền đầy đủ các trường.\n\n- Ứng dụng được thiết kế với giao diện hiện đại, sử dụng Next.js và Tailwind CSS cùng công nghệ Realtime để mang lại trải nghiệm mượt mà và trực quan nhất cho người dùng.',
+  description:
+    '- Ứng dụng này được xây dựng nhằm hỗ trợ người dùng quản lý công việc và dự án một cách hiệu quả hơn.\n- Ứng dụng cho phép người dùng đăng nhập bằng tài khoản Google hoặc tạo tài khoản mới bằng Gmail.\n\n- Các chức năng chính bao gồm:\n  + Tạo, xóa, đóng, mở dự án.\n  + Thêm hoặc xóa thành viên trong dự án.\n  + Theo dõi hiệu suất làm việc của từng thành viên (dành riêng cho Leader).\n  + Tạo, cập nhật, xóa, phân loại Task, gán người thực hiện hoặc để trống để các thành viên tự nhận.\n  + Đính kèm tệp, đặt mức độ ưu tiên, thời gian bắt đầu và kết thúc.\n  + Kéo thả Task giữa các cột theo quyền (Leader hoặc Thành viên).\n  + Comment trong từng Task (Leader và người thực hiện Task).\n  + Thay đổi màu nền, thông tin dự án.\n  + Tất cả các thao tác đều được cập nhật Realtime (tạo, xóa, chỉnh sửa, kéo thả, thêm thành viên, comment...).\n\n- Hướng dẫn sử dụng:\n  + Trước tiên bạn hãy đăng ký tài khoản sau đó đăng nhập để sử dụng ứng dụng này nha.\n  + Sau khi đăng nhập bạn có thể tạo dự án và tạo task cho dự án đó.\n  + Logic kéo thả task giữa các cột của ứng dụng là:\n    Thành viên của dự án có quyền kéo Task từ cột "LIST" sang cột "DOING" và từ cột "DOING" sang cột "DONE" và kéo từ cột "BUG" về các cột mà thành viên được quyền kéo đến.\n    Khi Task đã rời cột "LIST" thì không thể kéo lại cột "LIST" nữa.\n    Chỉ có Leader của dự án mới có quyền kéo Task từ cột "DONE" sang cột "COMPLETED" hoặc từ cột "DONE" sang cột "BUG".\n    Thành viên của dự án chỉ có quyền kéo Task của chính mình, Leader có quyền kéo Task của tất cả các thành viên trong dự án.\n    Thành viên có thể tự tạo Task hoặc có thể nhận Task từ Leader (những Task mà Leader tạo nhưng chưa chọn thành viên thực hiện Task).\n    Thành viên chỉ có quyền chỉnh sửa các trường "Thời gian hoàn thành", "Ngày bắt đầu và ngày kết thúc của Task".\n  + Leader là: người tạo dự án.\n  + Thành viên là: người được Leader mời vào dự án.\n  + Logic tạo Task là: Leader có quyền để trống trường "Người thực hiện" và "Ngày bắt đầu và ngày kết thúc". Thành viên phải điền đầy đủ các trường.\n\n- Ứng dụng được thiết kế với giao diện hiện đại, sử dụng Next.js và Tailwind CSS cùng công nghệ Realtime để mang lại trải nghiệm mượt mà và trực quan nhất cho người dùng.',
   assignee: "Admin",
   status: "completed",
   order: 0,
@@ -81,8 +86,12 @@ const mapTaskDocument = (raw: RawTaskDocument): Task => {
 const HomePage: React.FC = () => {
   const { user } = useAuth();
   const { theme } = useTheme();
-  const { currentProject, currentProjectRole, setTasksHydrated, isProjectClosed } =
-    useProject();
+  const {
+    currentProject,
+    currentProjectRole,
+    setTasksHydrated,
+    isProjectClosed,
+  } = useProject();
   const { members } = useProjectOperations();
   const currentUserName = user?.name || "";
   const isLeader = currentProjectRole === "leader";
@@ -104,15 +113,9 @@ const HomePage: React.FC = () => {
   useEffect(() => {
     const handleOpenLoginModal = () => setLoginModalOpen(true);
     const listener = () => handleOpenLoginModal();
-    window.addEventListener(
-      "open-login-modal",
-      listener as EventListener
-    );
+    window.addEventListener("open-login-modal", listener as EventListener);
     return () => {
-      window.removeEventListener(
-        "open-login-modal",
-        listener as EventListener
-      );
+      window.removeEventListener("open-login-modal", listener as EventListener);
     };
   }, []);
 
@@ -186,7 +189,11 @@ const HomePage: React.FC = () => {
           .map((doc) => mapTaskDocument(doc as RawTaskDocument))
           .filter((t) => t.projectId === currentProject.$id)
           .map((task) =>
-            preserveAssignee(enrichTaskAssignee(task, memberMap), memberMap, task.assignee)
+            preserveAssignee(
+              enrichTaskAssignee(task, memberMap),
+              memberMap,
+              task.assignee
+            )
           );
         setAllTasks(dedupeTasks(mapped));
       })
@@ -199,7 +206,14 @@ const HomePage: React.FC = () => {
           if (setTasksHydrated) setTasksHydrated(true);
         }
       });
-  }, [user, currentProject, hasLoaded, setTasksHydrated, memberMap, dedupeTasks]);
+  }, [
+    user,
+    currentProject,
+    hasLoaded,
+    setTasksHydrated,
+    memberMap,
+    dedupeTasks,
+  ]);
 
   useEffect(() => {
     if (!user || !currentProject) return;
@@ -242,7 +256,10 @@ const HomePage: React.FC = () => {
           if (mapped.projectId !== currentProject.$id) return;
 
           let finalAssignee = mapped.assignee;
-          if (typeof mapped.assignee === "string" && mapped.assignee.trim() !== "") {
+          if (
+            typeof mapped.assignee === "string" &&
+            mapped.assignee.trim() !== ""
+          ) {
             const enriched = memberMap.get(mapped.assignee);
             if (enriched) {
               finalAssignee = enriched;
@@ -272,7 +289,10 @@ const HomePage: React.FC = () => {
           if (prev.some((task) => task.id === mapped.id)) {
             return prev;
           }
-          return [...prev, preserveAssignee(mapped, memberMap, mapped.assignee)];
+          return [
+            ...prev,
+            preserveAssignee(mapped, memberMap, mapped.assignee),
+          ];
         });
       }
     });
@@ -328,10 +348,10 @@ const HomePage: React.FC = () => {
     }
   };
 
-  const boardTasks = useMemo(() => dedupeTasks(allTasks), [
-    allTasks,
-    dedupeTasks,
-  ]);
+  const boardTasks = useMemo(
+    () => dedupeTasks(allTasks),
+    [allTasks, dedupeTasks]
+  );
 
   const handleCreateTask = (task: Task) => {
     if (currentProject) {
@@ -491,7 +511,7 @@ const HomePage: React.FC = () => {
 
   return (
     <div
-      className="min-h-screen transition-colors duration-500"
+      className="h-screen overflow-hidden flex flex-col transition-colors duration-500"
       style={{ background: theme }}
     >
       <Header
@@ -499,10 +519,9 @@ const HomePage: React.FC = () => {
         onLoginClick={handleLoginClick}
         onCreateProject={handleCreateProject}
         isProjectClosed={isProjectClosed}
-        projectTheme={currentProject?.themeColor || theme}
       />
 
-      <div className="relative p-2">
+      <div className="flex-1 overflow-hidden p-2 min-h-0">
         <Board
           tasks={boardTasks}
           currentUser={currentUserName}

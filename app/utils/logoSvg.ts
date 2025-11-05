@@ -1,3 +1,5 @@
+import { DEFAULT_THEME_GRADIENT } from "./themeColors";
+
 const DEFAULT_FILL = "#6d28d9";
 const DEFAULT_GRADIENT_FROM = "#E9D5FF";
 const DEFAULT_GRADIENT_TO = "#A78BFA";
@@ -29,11 +31,24 @@ const clampOffset = (value: number): number => {
   return value / 100;
 };
 
-export const getFillConfig = (
-  background?: string | null
-): FillConfig => {
+export const getFillConfig = (background?: string | null): FillConfig => {
   if (!background) {
-    return { type: "solid", solid: DEFAULT_FILL };
+    const normalized = DEFAULT_THEME_GRADIENT.trim();
+    const matches = Array.from(
+      normalized.matchAll(/#([0-9a-f]{3,8})(?:\s+([0-9]{1,3})%)?/gi)
+    );
+    if (matches.length > 0) {
+      const stops: GradientStop[] = matches.map((match) => {
+        const color = `#${match[1]}`;
+        const rawOffset = match[2];
+        const offset =
+          rawOffset !== undefined ? clampOffset(parseFloat(rawOffset)) : 0;
+        return { color, offset };
+      });
+      stops.sort((a, b) => a.offset - b.offset);
+      return { type: "gradient", stops };
+    }
+    return { type: "gradient", stops: DEFAULT_STOPS };
   }
 
   const normalized = background.trim();
@@ -63,8 +78,7 @@ export const getFillConfig = (
       };
     }
 
-    const computed =
-      matches.length === 1 ? 0 : index / (matches.length - 1);
+    const computed = matches.length === 1 ? 0 : index / (matches.length - 1);
 
     return {
       color,
@@ -72,7 +86,6 @@ export const getFillConfig = (
     };
   });
 
-  // Ensure offsets sorted ascending
   stops.sort((a, b) => a.offset - b.offset);
 
   return {
@@ -95,16 +108,16 @@ export const createBrandOrbSvg = (
           ${fillConfig.stops
             .map(
               ({ color, offset }) =>
-                `<stop offset="${Math.round(offset * 100)}%" stop-color="${color}" />`
+                `<stop offset="${Math.round(
+                  offset * 100
+                )}%" stop-color="${color}" />`
             )
             .join("")}
         </linearGradient>`
       : "";
 
   const fillAttr =
-    fillConfig.type === "gradient"
-      ? `url(#${gradientId})`
-      : fillConfig.solid;
+    fillConfig.type === "gradient" ? `url(#${gradientId})` : fillConfig.solid;
 
   return `
 <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 100 100">

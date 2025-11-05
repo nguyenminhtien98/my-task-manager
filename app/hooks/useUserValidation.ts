@@ -12,9 +12,6 @@ export interface ValidationResult {
 }
 
 export const useUserValidation = () => {
-  /**
-   * Kiểm tra email có tồn tại trong hệ thống không
-   */
   const checkEmailExists = useCallback(
     async (email: string): Promise<ValidationResult> => {
       if (!email || email.trim() === "") {
@@ -57,10 +54,6 @@ export const useUserValidation = () => {
     },
     []
   );
-
-  /**
-   * Kiểm tra tên có tồn tại trong hệ thống không
-   */
   const checkNameExists = useCallback(
     async (name: string): Promise<ValidationResult> => {
       if (!name || name.trim() === "") {

@@ -77,7 +77,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
         await ensureWelcomeNotification(u.id, u.name);
       } catch (err) {
         if (err instanceof AppwriteException && err.code === 404) {
-          console.warn("Profile chưa được tạo, sẽ thử lại sau khi hoàn tất đăng ký.");
+          console.warn(
+            "Profile chưa được tạo, sẽ thử lại sau khi hoàn tất đăng ký."
+          );
           return;
         }
         console.error("Login error fetching profile:", err);
@@ -115,7 +117,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
           await login(accountInfo.$id, accountInfo.name);
         }
       } catch (error) {
-        console.warn("Session hydrate failed:", error);
+        console.info(
+          "Session hydrate: unauthenticated (expected when not logged in)",
+          error
+        );
         if (typeof window !== "undefined") {
           window.sessionStorage.removeItem("activeProjectId");
         }

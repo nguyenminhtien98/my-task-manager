@@ -8,7 +8,6 @@ import { formatVietnameseDateTime } from "@/app/utils/date";
 import HoverPopover from "@/app/components/common/HoverPopover";
 import Button from "@/app/components/common/Button";
 import { useAuth } from "@/app/context/AuthContext";
-// import { useProject } from "@/app/context/ProjectContext";
 import { useProjectOperations } from "@/app/hooks/useProjectOperations";
 
 interface ScreenProjectDetailProps {
@@ -21,7 +20,6 @@ const ScreenProjectDetail: React.FC<ScreenProjectDetailProps> = ({
   onDeleted,
 }) => {
   const { user } = useAuth();
-  // const { currentProject } = useProject();
   const { deleteProject, closeProject, reopenProject } = useProjectOperations();
   const [members, setMembers] = useState<BasicProfile[]>([]);
   const [loading, setLoading] = useState(false);
@@ -59,8 +57,8 @@ const ScreenProjectDetail: React.FC<ScreenProjectDetailProps> = ({
       ? "Đang mở..."
       : "Mở dự án"
     : isUpdatingStatus
-      ? "Đang đóng..."
-      : "Đóng dự án";
+    ? "Đang đóng..."
+    : "Đóng dự án";
 
   useEffect(() => {
     const fetchMembers = async () => {
@@ -215,7 +213,9 @@ const ScreenProjectDetail: React.FC<ScreenProjectDetailProps> = ({
         <div className="text-sm text-sub">Dự án</div>
         <div className="flex items-center gap-3 text-lg font-semibold text-gray-900">
           <span>{projectData.name}</span>
-          <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusBadgeClasses}`}>
+          <span
+            className={`rounded-full px-3 py-1 text-xs font-semibold ${statusBadgeClasses}`}
+          >
             {statusLabel}
           </span>
         </div>
@@ -224,7 +224,9 @@ const ScreenProjectDetail: React.FC<ScreenProjectDetailProps> = ({
           <div>
             <div className="text-sm text-sub">Ngày tạo</div>
             <div className="font-medium text-gray-900">
-              {formatVietnameseDateTime(projectData.$createdAt, { hideTime: true })}
+              {formatVietnameseDateTime(projectData.$createdAt, {
+                hideTime: true,
+              })}
             </div>
           </div>
           <div>
@@ -265,11 +267,13 @@ const ScreenProjectDetail: React.FC<ScreenProjectDetailProps> = ({
                           <li key={m.$id}>
                             <button
                               type="button"
-                              className={`${isLeader && "cursor-pointer"
-                                } w-full px-2 py-2 text-left text-sm whitespace-nowrap overflow-hidden text-ellipsis ${selectedUserForLeader?.$id === m.$id
+                              className={`${
+                                isLeader && "cursor-pointer"
+                              } w-full px-2 py-2 text-left text-sm whitespace-nowrap overflow-hidden text-ellipsis ${
+                                selectedUserForLeader?.$id === m.$id
                                   ? "bg-gray-200 text-[#111827]"
                                   : "hover:underline"
-                                }`}
+                              }`}
                               onClick={() => {
                                 if (isLeader) {
                                   setSelectedUserForLeader(m);
@@ -315,37 +319,37 @@ const ScreenProjectDetail: React.FC<ScreenProjectDetailProps> = ({
         <div className="rounded-lg border border-black/10 p-4">
           <div className="mb-3 text-sm font-semibold text-gray-800">
             {selectedUserForLeader
-              ? `Các task của ${selectedUserForLeader.name} - ${Object.values(selectedUserCounts).reduce(
-                (a, b) => a + b,
-                0
-              )} task`
+              ? `Các task của ${selectedUserForLeader.name} - ${Object.values(
+                  selectedUserCounts
+                ).reduce((a, b) => a + b, 0)} task`
               : `Tổng số task của dự án - ${Object.values(overallCounts).reduce(
-                (a, b) => a + b,
-                0
-              )} task`}
+                  (a, b) => a + b,
+                  0
+                )} task`}
           </div>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {(selectedUserForLeader ? selectedUserCounts : overallCounts)
               ? statusOrder.map((s) => (
-                <div
-                  key={s.key}
-                  className="flex items-center justify-between rounded-md bg-black/5 px-3 py-2 text-sm text-gray-800"
-                >
-                  <span>{s.label}</span>
-                  <span className="font-semibold">
-                    {(selectedUserForLeader
-                      ? selectedUserCounts
-                      : overallCounts)[s.key] ?? 0}
-                  </span>
-                </div>
-              ))
+                  <div
+                    key={s.key}
+                    className="flex items-center justify-between rounded-md bg-black/5 px-3 py-2 text-sm text-gray-800"
+                  >
+                    <span>{s.label}</span>
+                    <span className="font-semibold">
+                      {(selectedUserForLeader
+                        ? selectedUserCounts
+                        : overallCounts)[s.key] ?? 0}
+                    </span>
+                  </div>
+                ))
               : null}
           </div>
         </div>
       ) : (
         <div className="rounded-lg border border-black/10 p-4">
           <div className="mb-3 text-sm font-semibold text-gray-800">
-            Các task của bạn - {Object.values(myTaskCounts).reduce((a, b) => a + b, 0)} task
+            Các task của bạn -{" "}
+            {Object.values(myTaskCounts).reduce((a, b) => a + b, 0)} task
           </div>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {statusOrder.map((s) => (

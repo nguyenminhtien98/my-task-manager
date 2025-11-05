@@ -791,7 +791,6 @@ export const fetchProjectMemberProfiles = async (
 
     const uniqueIds = Array.from(memberIds);
     if (!options?.includeCurrentUser) {
-      // exclude handled by caller if needed
     }
     if (!uniqueIds.length) return [];
     const profileMap = await fetchProfilesByIds(uniqueIds);

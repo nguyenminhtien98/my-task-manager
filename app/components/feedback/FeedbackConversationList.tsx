@@ -47,20 +47,22 @@ const FeedbackConversationList: React.FC<FeedbackConversationListProps> = ({
         <Button
           variant="solid"
           onClick={() => onFilterChange("all")}
-          className={`rounded-full !px-3 !py-1 !text-xs ${filter === "all"
-            ? "border bg-black text-white"
-            : "border border-gray-300 bg-white text-[#111827]"
-            }`}
+          className={`rounded-full !px-3 !py-1 !text-xs ${
+            filter === "all"
+              ? "border bg-black text-white"
+              : "border border-gray-300 bg-white text-[#111827]"
+          }`}
         >
           Tất cả
         </Button>
         <Button
           variant="solid"
           onClick={() => onFilterChange("unread")}
-          className={`rounded-full border !px-3 !py-1 !text-xs font-medium ${filter === "unread"
-            ? "border bg-black text-white"
-            : "border-gray-300 bg-white text-[#111827]"
-            }`}
+          className={`rounded-full border !px-3 !py-1 !text-xs font-medium ${
+            filter === "unread"
+              ? "border bg-black text-white"
+              : "border-gray-300 bg-white text-[#111827]"
+          }`}
         >
           Chưa đọc
         </Button>
@@ -106,7 +108,8 @@ const FeedbackConversationList: React.FC<FeedbackConversationListProps> = ({
               const otherId = others[0];
               const profile = otherId ? profileMap[otherId] : undefined;
               const displayName = profile?.name ?? "Người dùng";
-              const lastMessage = conversation.lastMessage ?? "(Không có tin nhắn)";
+              const lastMessage =
+                conversation.lastMessage ?? "(Không có tin nhắn)";
               const unreadBy = conversation.unreadBy ?? [];
               const hasUnread = unreadBy.includes(currentUserId);
               const presence = otherId ? presenceMap[otherId] : undefined;
@@ -116,10 +119,11 @@ const FeedbackConversationList: React.FC<FeedbackConversationListProps> = ({
                   type="button"
                   key={conversation.$id}
                   onClick={() => onSelectConversation(conversation.$id)}
-                  className={`cursor-pointer flex w-full items-center gap-3 rounded-xl border border-transparent px-1 py-1 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-black/30 ${selectedConversationId === conversation.$id
-                    ? "bg-black text-white"
-                    : "bg-black/60 text-white hover:bg-black/70"
-                    }`}
+                  className={`cursor-pointer flex w-full items-center gap-3 rounded-xl border border-transparent px-1 py-1 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-black/30 ${
+                    selectedConversationId === conversation.$id
+                      ? "bg-black text-white"
+                      : "bg-black/60 text-white hover:bg-black/70"
+                  }`}
                 >
                   <AvatarUser
                     name={displayName}

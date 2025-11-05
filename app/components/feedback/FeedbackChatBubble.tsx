@@ -2,7 +2,6 @@
 
 import React, { type CSSProperties } from "react";
 import BrandOrbHeaderIcon from "../common/LogoComponent";
-import { useProject } from "../../context/ProjectContext";
 
 interface FeedbackChatBubbleProps {
   onClick: () => void;
@@ -27,9 +26,6 @@ const FeedbackChatBubbleInner: React.FC<FeedbackChatBubbleProps> = ({
   onPointerDown,
   style,
 }) => {
-  const { currentProject } = useProject();
-  const background = currentProject?.themeColor ?? null;
-
   return (
     <button
       type="button"
@@ -39,7 +35,7 @@ const FeedbackChatBubbleInner: React.FC<FeedbackChatBubbleProps> = ({
       aria-label="Mở hộp thoại phản hồi"
       style={style}
     >
-      <BrandOrbHeaderIcon size={28} background={background} />
+      <BrandOrbHeaderIcon size={28} />
     </button>
   );
 };
