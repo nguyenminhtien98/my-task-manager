@@ -1,8 +1,9 @@
 "use server";
 
 import { NextResponse } from "next/server";
-import { Permission, Role } from "node-appwrite";
+import { Permission, Role, AppwriteException } from "node-appwrite";
 import { getServerAppwriteClients } from "@/lib/serverAppwrite";
+import { createHash } from "crypto";
 
 interface ConversationPayload {
   userIds: string[];
@@ -29,9 +30,17 @@ export async function POST(request: Request) {
     const participantSet = new Set<string>(participants);
     participantSet.add(createdBy);
     const participantList = Array.from(participantSet);
+    const sortedParticipants = [...participantList].sort();
     const partnerId =
       participantList.find((id) => id !== createdBy) ?? participantList[0];
     const unreadBy = participantList.filter((id) => id !== createdBy);
+    const conversationKey = `${sortedParticipants.join("|")}::${
+      body.type ?? "feedback"
+    }::${body.projectId ?? ""}`;
+    const docId = createHash("sha256")
+      .update(conversationKey)
+      .digest("hex")
+      .slice(0, 36);
 
     const { databases, databaseId, conversationCollectionId } =
       getServerAppwriteClients();
@@ -51,15 +60,27 @@ export async function POST(request: Request) {
       Permission.update(Role.user(id)),
     ]);
 
-    const doc = await databases.createDocument(
-      databaseId,
-      conversationCollectionId,
-      "unique()",
-      payload,
-      permissions
-    );
+    try {
+      const doc = await databases.createDocument(
+        databaseId,
+        conversationCollectionId,
+        docId,
+        payload,
+        permissions
+      );
+      return NextResponse.json(doc);
+    } catch (error) {
+      if (error instanceof AppwriteException && error.code === 409) {
+        const existing = await databases.getDocument(
+          databaseId,
+          conversationCollectionId,
+          docId
+        );
+        return NextResponse.json(existing);
+      }
+      throw error;
+    }
 
-    return NextResponse.json(doc);
   } catch (error) {
     console.error("Create feedback conversation API error:", error);
     return NextResponse.json(

@@ -27,6 +27,9 @@ const ProjectSelector: React.FC<ProjectSelectorProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const selectableProjects = Array.isArray(projects)
+    ? projects.filter((project) => Boolean(project?.$id))
+    : [];
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -42,9 +45,9 @@ const ProjectSelector: React.FC<ProjectSelectorProps> = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  if (!projects.length) return null;
+  if (!selectableProjects.length) return null;
 
-  const canToggle = projects.length > 1;
+  const canToggle = selectableProjects.length > 1;
 
   const handleTriggerClick = () => {
     if (!canToggle) return;
@@ -83,7 +86,7 @@ const ProjectSelector: React.FC<ProjectSelectorProps> = ({
             dropdownClassName
           )}
         >
-          {projects.map((proj) => {
+          {selectableProjects.map((proj) => {
             const isActive = currentProject?.$id === proj.$id;
             return (
               <Button
