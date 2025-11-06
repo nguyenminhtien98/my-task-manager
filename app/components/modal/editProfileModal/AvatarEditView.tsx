@@ -14,7 +14,6 @@ import AvatarUser from "../../common/AvatarUser";
 interface AvatarEditViewProps {
   imgSrc: string;
   userName: string;
-  onCancel: () => void;
   onSave: (croppedImageBlob: Blob) => void;
   isSaving?: boolean;
 }
@@ -42,7 +41,6 @@ function centerAspectCrop(
 const AvatarEditView: React.FC<AvatarEditViewProps> = ({
   imgSrc,
   userName,
-  onCancel,
   onSave,
   isSaving = false,
 }) => {
@@ -167,14 +165,6 @@ const AvatarEditView: React.FC<AvatarEditViewProps> = ({
 
       {/* Action Buttons */}
       <div className="mt-2 flex justify-end gap-3">
-        <Button
-          variant="ghost"
-          onClick={onCancel}
-          className="border border-transparent text-black hover:bg-gray-200"
-          disabled={isSaving}
-        >
-          Hủy
-        </Button>
         <Button
           variant="solid"
           className="bg-black text-white"

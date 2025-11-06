@@ -224,7 +224,6 @@ export const useChat = (
     };
   }, [currentProject?.$id, enrichProfiles]);
 
-  // Reload member profiles when members change
   useEffect(() => {
     if (!currentProject?.$id) return;
     const unsubscribe = onMembersChanged((projectId) => {
@@ -335,7 +334,6 @@ export const useChat = (
     if (!isAdmin && !adminLookupDone) return;
     try {
       const data = await fetchUserConversations(currentUserId);
-      // Deduplicate conversations by ID to prevent duplicates
       const uniqueData = Array.from(
         new Map(data.map((item) => [item.$id, item])).values()
       );
@@ -839,7 +837,6 @@ export const useChat = (
   const memberConversations = useMemo(() => {
     if (!currentProject?.$id) return [] as ConversationDocument[];
     const projectKey = deriveProjectKey(currentProject.$id);
-    // Get current member IDs (excluding current user)
     const currentMemberIds = new Set(
       memberProfiles
         .map((profile) => profile.$id)
@@ -848,20 +845,17 @@ export const useChat = (
     const filtered = conversations.filter((conversation) => {
       if ((conversation.type ?? "feedback") !== "member") return false;
       if (conversation.projectId !== projectKey) return false;
-      // Only include conversations where the other participant is still a member
       const others = (conversation.participants ?? []).filter(
         (id) => id !== currentUserId
       );
       return others.length > 0 && others.some((id) => currentMemberIds.has(id));
     });
-    // Deduplicate by participants (same participants = same conversation)
     const uniqueMap = new Map<string, ConversationDocument>();
     for (const conv of filtered) {
       const participantsKey = [...(conv.participants ?? [])].sort().join(":");
       if (!uniqueMap.has(participantsKey)) {
         uniqueMap.set(participantsKey, conv);
       } else {
-        // Keep the one with more recent lastMessageAt
         const existing = uniqueMap.get(participantsKey)!;
         const existingTime = existing.lastMessageAt ?? "";
         const currentTime = conv.lastMessageAt ?? "";
@@ -875,16 +869,12 @@ export const useChat = (
     );
   }, [conversations, currentProject?.$id, currentUserId, memberProfiles]);
 
-  // Auto-select conversation for user when opening chat
-  // Only runs when conversations are loaded, admin lookup is done, and member profiles are loaded
   useEffect(() => {
     if (!isOpen) return;
     if (!shouldForceFeedbackOnly) return;
     if (selectedConversationId) return;
     if (suppressAutoSelectRef.current) return;
-    // Don't auto-select until conversations are loaded and admin lookup is done
     if (conversations.length === 0 && !adminLookupDone) return;
-    // For user accounts, wait for member profiles to be loaded to correctly determine shouldForceFeedbackOnly
     if (
       !isAdmin &&
       hasProject &&
@@ -899,7 +889,6 @@ export const useChat = (
       return;
     }
 
-    // Only create new conversation if admin lookup is done and no conversations exist
     if (adminLookupDone && conversations.length === 0) {
       void resolveConversationId();
     }

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Project, BasicProfile, Task, ProjectStatus } from "@/app/types/Types";
 import { database } from "@/lib/appwrite";
 import { Query } from "appwrite";
@@ -9,6 +9,9 @@ import HoverPopover from "@/app/components/common/HoverPopover";
 import Button from "@/app/components/common/Button";
 import { useAuth } from "@/app/context/AuthContext";
 import { useProjectOperations } from "@/app/hooks/useProjectOperations";
+import toast from "react-hot-toast";
+import { exportProjectBoardToExcel } from "@/app/utils/exportExcel";
+import { mapTaskDocument, RawTaskDocument } from "@/app/utils/taskMapping";
 
 interface ScreenProjectDetailProps {
   project: Project;
@@ -36,6 +39,7 @@ const ScreenProjectDetail: React.FC<ScreenProjectDetailProps> = ({
   const [isDeleting, setIsDeleting] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [projectData, setProjectData] = useState<Project>(project);
+  const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
     setProjectData(project);
@@ -57,8 +61,8 @@ const ScreenProjectDetail: React.FC<ScreenProjectDetailProps> = ({
       ? "Đang mở..."
       : "Mở dự án"
     : isUpdatingStatus
-    ? "Đang đóng..."
-    : "Đóng dự án";
+      ? "Đang đóng..."
+      : "Đóng dự án";
 
   useEffect(() => {
     const fetchMembers = async () => {
@@ -207,6 +211,55 @@ const ScreenProjectDetail: React.FC<ScreenProjectDetailProps> = ({
     }
   };
 
+  const exportMembers = useMemo(() => {
+    const map = new Map<string, BasicProfile>();
+    const leader = projectData.leader;
+    if (leader?.$id) {
+      map.set(leader.$id, {
+        $id: leader.$id,
+        name: leader.name,
+        email: leader.email,
+        avatarUrl: leader.avatarUrl ?? undefined,
+      });
+    }
+    members.forEach((member) => {
+      if (member?.$id) {
+        map.set(member.$id, member);
+      }
+    });
+    return Array.from(map.values());
+  }, [members, projectData.leader]);
+
+  const handleExportExcel = useCallback(async () => {
+    if (isExporting) return;
+    setIsExporting(true);
+    try {
+      const databaseId = String(process.env.NEXT_PUBLIC_DATABASE_ID);
+      const tasksCollectionId = String(
+        process.env.NEXT_PUBLIC_COLLECTION_ID_TASKS
+      );
+      const response = await database.listDocuments(
+        databaseId,
+        tasksCollectionId,
+        [Query.equal("projectId", projectId), Query.limit(200)]
+      );
+      const mappedTasks = (response.documents as RawTaskDocument[]).map((doc) =>
+        mapTaskDocument(doc)
+      );
+      await exportProjectBoardToExcel({
+        project: projectData,
+        members: exportMembers,
+        tasks: mappedTasks,
+      });
+      toast.success("Đã xuất bảng Excel.");
+    } catch (error) {
+      console.error("Xuất Excel thất bại:", error);
+      toast.error("Xuất bảng Excel thất bại.");
+    } finally {
+      setIsExporting(false);
+    }
+  }, [exportMembers, isExporting, projectData, projectId]);
+
   return (
     <div className="space-y-6">
       <div className="space-y-2 rounded-lg bg-black/5 p-4">
@@ -267,13 +320,11 @@ const ScreenProjectDetail: React.FC<ScreenProjectDetailProps> = ({
                           <li key={m.$id}>
                             <button
                               type="button"
-                              className={`${
-                                isLeader && "cursor-pointer"
-                              } w-full px-2 py-2 text-left text-sm whitespace-nowrap overflow-hidden text-ellipsis ${
-                                selectedUserForLeader?.$id === m.$id
+                              className={`${isLeader && "cursor-pointer"
+                                } w-full px-2 py-2 text-left text-sm whitespace-nowrap overflow-hidden text-ellipsis ${selectedUserForLeader?.$id === m.$id
                                   ? "bg-gray-200 text-[#111827]"
                                   : "hover:underline"
-                              }`}
+                                }`}
                               onClick={() => {
                                 if (isLeader) {
                                   setSelectedUserForLeader(m);
@@ -291,16 +342,24 @@ const ScreenProjectDetail: React.FC<ScreenProjectDetailProps> = ({
                 </HoverPopover>
               </div>
               {isLeader && (
-                <div className="flex flex-col gap-2 sm:justify-self-end sm:flex-row">
+                <div className="flex flex-col gap-1 sm:justify-self-end sm:flex-row">
                   <Button
-                    className={toggleButtonClass}
+                    className="bg-green-600 text-white !p-2 text-sm"
+                    hoverClassName="hover:bg-green-700"
+                    disabled={isExporting}
+                    onClick={handleExportExcel}
+                  >
+                    {isExporting ? "Đang xuất..." : "Xuất Excel"}
+                  </Button>
+                  <Button
+                    className={`${toggleButtonClass} !p-2 text-sm`}
                     disabled={isUpdatingStatus}
                     onClick={handleToggleStatus}
                   >
                     {toggleButtonLabel}
                   </Button>
                   <Button
-                    className="bg-red-600 text-white font-semibold"
+                    className="bg-red-600 text-white !p-2 text-sm"
                     hoverClassName="hover:bg-red-700"
                     disabled={isDeleting}
                     onClick={handleDeleteProject}
@@ -320,28 +379,28 @@ const ScreenProjectDetail: React.FC<ScreenProjectDetailProps> = ({
           <div className="mb-3 text-sm font-semibold text-gray-800">
             {selectedUserForLeader
               ? `Các task của ${selectedUserForLeader.name} - ${Object.values(
-                  selectedUserCounts
-                ).reduce((a, b) => a + b, 0)} task`
+                selectedUserCounts
+              ).reduce((a, b) => a + b, 0)} task`
               : `Tổng số task của dự án - ${Object.values(overallCounts).reduce(
-                  (a, b) => a + b,
-                  0
-                )} task`}
+                (a, b) => a + b,
+                0
+              )} task`}
           </div>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {(selectedUserForLeader ? selectedUserCounts : overallCounts)
               ? statusOrder.map((s) => (
-                  <div
-                    key={s.key}
-                    className="flex items-center justify-between rounded-md bg-black/5 px-3 py-2 text-sm text-gray-800"
-                  >
-                    <span>{s.label}</span>
-                    <span className="font-semibold">
-                      {(selectedUserForLeader
-                        ? selectedUserCounts
-                        : overallCounts)[s.key] ?? 0}
-                    </span>
-                  </div>
-                ))
+                <div
+                  key={s.key}
+                  className="flex items-center justify-between rounded-md bg-black/5 px-3 py-2 text-sm text-gray-800"
+                >
+                  <span>{s.label}</span>
+                  <span className="font-semibold">
+                    {(selectedUserForLeader
+                      ? selectedUserCounts
+                      : overallCounts)[s.key] ?? 0}
+                  </span>
+                </div>
+              ))
               : null}
           </div>
         </div>

@@ -51,6 +51,9 @@ const TaskCard: React.FC<TaskCardProps> = ({
     transition,
     opacity: isDragging ? 0.5 : 1,
   };
+  const combinedStyle = isDraggable
+    ? { ...style, touchAction: "none" as const }
+    : style;
 
   const IssueIcon =
     task.issueType === "Bug"
@@ -93,7 +96,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
   return (
     <div
       ref={setNodeRef}
-      style={style}
+      style={combinedStyle}
       {...(isDraggable ? attributes : {})}
       {...(isDraggable ? listeners : {})}
       onClick={onClick}

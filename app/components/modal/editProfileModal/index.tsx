@@ -126,7 +126,7 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onClose }) 
   return (
     <ModalComponent
       isOpen={isOpen}
-      setIsOpen={() => {}}
+      setIsOpen={() => { }}
       onClose={handleClose}
       title={view === "profile" ? "Hồ sơ" : "Thay đổi avatar"}
       panelClassName="sm:max-w-md"
@@ -146,7 +146,6 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onClose }) 
           pendingAvatarFile={newAvatarFile}
           onAvatarChangeClick={handleAvatarChangeClick}
           onSaveChanges={handleUpdateProfile}
-          onClose={handleClose}
           isSaving={isUpdating}
           nameError={nameError}
           disableSave={isNameLocked}
@@ -156,7 +155,6 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onClose }) 
         <AvatarEditView
           imgSrc={imgSrc}
           userName={user.name}
-          onCancel={() => setView("profile")}
           onSave={handleAvatarCropped}
           isSaving={isUpdating}
         />

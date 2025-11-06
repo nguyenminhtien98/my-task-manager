@@ -3,7 +3,6 @@
 import React, { useEffect, useState } from "react";
 import { FiChevronDown, FiChevronUp, FiLogOut, FiX } from "react-icons/fi";
 import AvatarUser from "../common/AvatarUser";
-import ProjectSelector from "./ProjectSelector";
 import { Project } from "../../types/Types";
 import { User } from "../../context/AuthContext";
 import { cn } from "../../utils/cn";
@@ -12,10 +11,7 @@ interface MobileDrawerProps {
   user: User | null;
   isOpen: boolean;
   onClose: () => void;
-  projects: Project[];
   currentProject: Project | null;
-  onProjectSelect: (project: Project) => void;
-  currentTheme: string;
   onOpenProfile: () => void;
   onOpenProjectManager: () => void;
   onOpenTheme: () => void;
@@ -28,10 +24,7 @@ const MobileDrawer: React.FC<MobileDrawerProps> = ({
   user,
   isOpen,
   onClose,
-  projects,
   currentProject,
-  onProjectSelect,
-  currentTheme,
   onOpenProfile,
   onOpenProjectManager,
   onOpenTheme,
@@ -90,23 +83,6 @@ const MobileDrawer: React.FC<MobileDrawerProps> = ({
             <FiX className="h-5 w-5" />
           </button>
         </div>
-
-        {projects.length > 0 && currentProject && (
-          <div className="mt-4">
-            <ProjectSelector
-              projects={projects}
-              currentProject={currentProject}
-              onSelect={(project) => {
-                onProjectSelect(project);
-                onClose();
-              }}
-              className="w-full"
-              buttonClassName="w-full justify-between text-sm font-semibold"
-              dropdownClassName="left-0 right-auto w-full"
-              buttonStyle={{ background: currentTheme }}
-            />
-          </div>
-        )}
 
         <div className="mt-6 space-y-3">
           <div className="rounded-2xl bg-white/5">

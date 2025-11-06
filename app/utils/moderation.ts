@@ -34,20 +34,12 @@ export const checkUserActionAllowed = async (userId: string): Promise<void> => {
   }
 };
 
-/**
- * Check if user is permanently suspended
- * Used for all actions (create project, task, add/remove member, etc.)
- * This checks the suspendedUntil field in the user's profile
- * Does NOT check rate limit - only permanent suspension
- */
 export const checkUserSuspended = async (userId: string): Promise<void> => {
   if (!userId) {
     throw new Error("Chưa đăng nhập");
   }
 
   try {
-    // Use dedicated API endpoint that ONLY checks suspendedUntil
-    // Does NOT check rate limit, so it won't affect rate limit counters
     const response = await fetch("/api/moderation/suspended", {
       method: "POST",
       headers: {

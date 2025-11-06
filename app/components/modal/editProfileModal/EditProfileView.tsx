@@ -11,7 +11,6 @@ interface EditProfileViewProps {
   pendingAvatarFile: File | null;
   onAvatarChangeClick: () => void;
   onSaveChanges: (newName: string) => void;
-  onClose: () => void;
   isSaving: boolean;
   nameError?: string | null;
   disableSave?: boolean;
@@ -23,7 +22,6 @@ const EditProfileView: React.FC<EditProfileViewProps> = ({
   pendingAvatarFile,
   onAvatarChangeClick,
   onSaveChanges,
-  onClose,
   isSaving,
   nameError,
   disableSave = false,
@@ -128,14 +126,6 @@ const EditProfileView: React.FC<EditProfileViewProps> = ({
 
       {/* Action Buttons */}
       <div className="mt-4 flex justify-end gap-3">
-        <Button
-          variant="ghost"
-          onClick={onClose}
-          className="border border-transparent text-black hover:bg-gray-200"
-          disabled={isSaving}
-        >
-          Hủy
-        </Button>
         <Button
           variant="solid"
           className="bg-black text-white"

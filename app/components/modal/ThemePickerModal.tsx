@@ -62,15 +62,6 @@ const ThemePickerModal: React.FC<ThemePickerModalProps> = ({
       </div>
       <div className="mt-6 flex justify-end gap-3">
         <Button
-          variant="ghost"
-          onClick={onClose}
-          backgroundColor="transparent"
-          textColor="#374151"
-          className="px-5 py-2"
-        >
-          Hủy
-        </Button>
-        <Button
           onClick={onSave}
           disabled={isSaving}
           backgroundColor="#111827"

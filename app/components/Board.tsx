@@ -6,6 +6,7 @@ import {
   useSensors,
   useSensor,
   PointerSensor,
+  TouchSensor,
   closestCorners,
   pointerWithin,
   rectIntersection,
@@ -58,7 +59,10 @@ export default function Board({
   };
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 150, tolerance: 8 },
+    })
   );
 
   const columns: Record<TaskStatus, Task[]> = {

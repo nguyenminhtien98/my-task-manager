@@ -22,7 +22,6 @@ export async function POST(request: Request) {
     const { databases, databaseId, profileCollectionId } =
       getServerAppwriteClients();
 
-    // Only check suspendedUntil, do NOT check rate limit
     let profileDoc: Record<string, unknown> | null = null;
     try {
       profileDoc = (await databases.getDocument(
@@ -31,7 +30,6 @@ export async function POST(request: Request) {
         userId
       )) as unknown as Record<string, unknown>;
     } catch {
-      // If profile not found, assume not suspended
       return NextResponse.json({ ok: true });
     }
 

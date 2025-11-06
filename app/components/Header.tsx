@@ -282,16 +282,14 @@ const Header: React.FC<HeaderProps> = ({
         currentTheme={currentTheme}
         onProjectSelect={handleProjectSelect}
         onLoginClick={onLoginClick}
+        onAddProject={onCreateProject}
       />
 
       <MobileDrawer
         user={user}
         isOpen={isMobileDrawerOpen}
         onClose={closeMobileDrawer}
-        projects={projects}
         currentProject={currentProject}
-        onProjectSelect={handleProjectSelect}
-        currentTheme={currentTheme}
         onOpenProfile={handleOpenProfileSection}
         onOpenProjectManager={handleOpenProjectManager}
         onOpenTheme={handleOpenThemeModal}

@@ -240,7 +240,7 @@ export const ensureWelcomeNotification = async (
   try {
     const { databaseId, collectionId } = getIds();
     const existing = await database.listDocuments(databaseId, collectionId, [
-      Query.equal("recipient.$id", [recipientId]),
+      Query.equal("recipient", recipientId),
       Query.equal("type", "system.welcome"),
       Query.limit(1),
     ]);
