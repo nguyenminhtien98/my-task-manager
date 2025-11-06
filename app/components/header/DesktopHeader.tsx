@@ -25,7 +25,7 @@ interface DesktopHeaderProps {
   onCreateTask: () => void;
   isProjectClosed: boolean;
   onLoginClick: () => void;
-  menuRef: React.RefObject<HTMLDivElement>;
+  menuRef: React.RefObject<HTMLDivElement | null>;
   showMenu: boolean;
   onToggleMenu: () => void;
   onOpenProfile: () => void;
@@ -143,11 +143,11 @@ const DesktopHeader: React.FC<DesktopHeaderProps> = ({
         </Button>
 
         {user ? (
-          <div className="flex items-center gap-3">
+          <div ref={menuRef} className="flex items-center gap-3">
             <NotificationBell
               buttonClassName="rounded-full p-2 text-white transition hover:border-white hover:bg-white/10"
             />
-            <div ref={menuRef} className="relative flex items-center justify-center">
+            <div className="relative flex items-center justify-center">
               <AvatarUser
                 name={user.name}
                 avatarUrl={user.avatarUrl}

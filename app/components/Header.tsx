@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useProject } from "../context/ProjectContext";
-import { HeaderProps, Project } from "../types/Types";
+import { FooterAction, HeaderProps, Project } from "../types/Types";
 import { useTheme } from "../context/ThemeContext";
 import ThemePickerModal from "./modal/ThemePickerModal";
 import EditProfileModal from "./modal/editProfileModal";
@@ -21,7 +21,6 @@ import DesktopHeader from "./header/DesktopHeader";
 import MobileHeader from "./header/MobileHeader";
 import MobileDrawer from "./header/MobileDrawer";
 import MobileFooterBar from "./header/MobileFooterBar";
-import { FooterAction } from "./header/types";
 
 const Header: React.FC<HeaderProps> = ({
   onCreateTask,

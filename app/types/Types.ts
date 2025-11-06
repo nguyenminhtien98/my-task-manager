@@ -47,13 +47,7 @@ export interface NotificationMessage {
 }
 
 export interface NotificationMetadata {
-  audience?:
-    | "actor"
-    | "target"
-    | "member"
-    | "leader"
-    | "assignee"
-    | "creator";
+  audience?: "actor" | "target" | "member" | "leader" | "assignee" | "creator";
   actorName?: string;
   recipientName?: string;
   projectName?: string;
@@ -239,6 +233,8 @@ export interface HeaderProps {
   isTaskModalOpen?: boolean;
   isProjectModalOpen?: boolean;
 }
+
+export type FooterAction = "add" | "members" | "chat";
 
 export interface Profile {
   $id: string;

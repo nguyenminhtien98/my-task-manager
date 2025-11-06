@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import type { useNotifications } from "../../hooks/useNotifications";
 import type { NotificationRecord } from "../../types/Types";
 import { useFeedbackChat } from "../../context/FeedbackChatContext";
-import NotificationList from "../notifications/NotificationList";
+import NotificationList from "./NotificationList";
 import { cn } from "../../utils/cn";
 
 type NotificationsHook = ReturnType<typeof useNotifications>;

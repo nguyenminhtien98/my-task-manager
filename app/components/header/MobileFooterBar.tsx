@@ -12,11 +12,10 @@ import type { ReactNode } from "react";
 import { FiMenu, FiMessageCircle, FiPlus, FiUsers } from "react-icons/fi";
 import { LuBell } from "react-icons/lu";
 import { User } from "../../context/AuthContext";
-import { Project } from "../../types/Types";
-import { FooterAction } from "./types";
+import { FooterAction, Project } from "../../types/Types";
 import { cn } from "../../utils/cn";
 import { useNotifications } from "../../hooks/useNotifications";
-import MobileNotificationPanel from "./MobileNotificationPanel";
+import MobileNotificationPanel from "../notifications/MobileNotificationPanel";
 
 interface MobileFooterBarProps {
   user: User | null;
