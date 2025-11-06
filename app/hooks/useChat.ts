@@ -185,21 +185,38 @@ export const useChat = (
     [currentUserId, onShowIncomingBanner, selectedConversationId]
   );
 
-  const enrichProfiles = useCallback(async (ids: string[]) => {
-    if (!ids.length) return;
-    try {
-      const profiles = await fetchProfilesByIds(ids);
-      setProfileMap((prev) => ({ ...prev, ...profiles }));
-      await Promise.all(
-        ids.map(async (id) => {
-          const doc = await fetchUserPresence(id);
-          setPresenceMap((prev) => ({ ...prev, [id]: doc }));
-        })
-      );
-    } catch (error) {
-      console.error("Không thể tải thông tin người dùng:", error);
-    }
-  }, []);
+  const enrichProfiles = useCallback(
+    async (ids: string[]) => {
+      if (!ids.length) return;
+      try {
+        const profiles = await fetchProfilesByIds(ids);
+        setProfileMap((prev) => ({ ...prev, ...profiles }));
+
+        const missingPresenceIds = ids.filter(
+          (id) => !Object.prototype.hasOwnProperty.call(presenceMap, id)
+        );
+
+        if (missingPresenceIds.length) {
+          const presenceEntries = await Promise.all(
+            missingPresenceIds.map(async (id) => ({
+              id,
+              doc: await fetchUserPresence(id),
+            }))
+          );
+          setPresenceMap((prev) => {
+            const next = { ...prev };
+            presenceEntries.forEach(({ id, doc }) => {
+              next[id] = doc;
+            });
+            return next;
+          });
+        }
+      } catch (error) {
+        console.error("Không thể tải thông tin người dùng:", error);
+      }
+    },
+    [presenceMap]
+  );
 
   useEffect(() => {
     if (!currentProject?.$id) {

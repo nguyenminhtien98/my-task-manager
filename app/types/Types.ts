@@ -136,6 +136,7 @@ export interface TaskCardProps {
   onClick?: () => void;
   customClass?: string;
   isDraggable?: boolean;
+  highlightClass?: string;
 }
 
 export interface TaskModalProps {

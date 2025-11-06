@@ -94,3 +94,32 @@ select {
 .animate-feedback-pulse {
   animation: feedback-pulse 2s ease-in-out infinite;
 }
+
+@keyframes high-priority-border {
+  0% {
+    background-position: 0 0, 0% 0;
+  }
+  100% {
+    background-position: 0 0, 300% 0;
+  }
+}
+
+.high-priority-card {
+  position: relative;
+  border-radius: 0.5rem;
+  border: 2px solid transparent;
+  background-image: linear-gradient(#fee2e2, #fee2e2),
+    linear-gradient(
+      120deg,
+      rgba(247, 124, 124, 0.45),
+      rgba(241, 66, 66, 0.95),
+      rgba(247, 124, 124, 0.45),
+      rgba(247, 124, 124, 0.45),
+      rgba(241, 66, 66, 0.95)
+    );
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+  background-size: 100% 100%, 300% 100%;
+  background-position: 0 0, 0 0;
+  animation: high-priority-border 4s linear infinite;
+}

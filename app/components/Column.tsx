@@ -63,12 +63,18 @@ export default function Column({
               task.status !== "completed" &&
               (isLeader || isOwnedByCurrentUser());
 
+            const highlightClass =
+              task.priority === "High" && task.status !== "completed"
+                ? "high-priority-card"
+                : "bg-white";
+
             return (
               <TaskCard
                 key={task.id}
                 task={task}
-                onClick={() => onTaskClick(task)}
                 customClass={index !== 0 ? "mt-[10px]" : ""}
+                highlightClass={highlightClass}
+                onClick={() => onTaskClick(task)}
                 isDraggable={canDrag}
               />
             );

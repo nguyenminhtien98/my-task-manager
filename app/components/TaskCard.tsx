@@ -31,6 +31,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
   onClick,
   customClass = "",
   isDraggable = true,
+  highlightClass = "bg-white",
 }) => {
   const isDisabled = !isDraggable;
   const {
@@ -92,7 +93,6 @@ const TaskCard: React.FC<TaskCardProps> = ({
     : "";
   const endDateDisplay = task.endDate ? formatDateDisplay(task.endDate) : "";
   const showDateBlock = Boolean(startDateDisplay || endDateDisplay);
-
   return (
     <div
       ref={setNodeRef}
@@ -100,7 +100,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
       {...(isDraggable ? attributes : {})}
       {...(isDraggable ? listeners : {})}
       onClick={onClick}
-      className={`bg-white p-2 rounded shadow ${customClass} ${
+      className={`${highlightClass} p-2 rounded shadow ${
         isDraggable ? "cursor-grab" : "cursor-default select-none"
       } ${customClass}`}
     >
