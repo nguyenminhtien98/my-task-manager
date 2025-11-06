@@ -115,19 +115,23 @@ export default function Board({
         setLastOverStatus(null);
       }}
     >
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 h-full min-h-0">
+      <div className="flex h-full min-h-0 gap-2 overflow-x-auto pb-[calc(var(--mobile-footer-height,72px)+0.1rem)] no-scrollbar md:grid md:grid-cols-2 md:gap-2 md:overflow-visible md:pb-0 lg:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-5">
         {(Object.keys(columns) as TaskStatus[]).map((status) => (
-          <Column
+          <div
             key={status}
-            status={status}
-            label={LABELS[status]}
-            tasks={columns[status]}
-            currentUserName={currentUser}
-            currentUserId={currentUserId}
-            isLeader={isLeader}
-            isProjectClosed={isProjectClosed}
-            onTaskClick={onTaskClick}
-          />
+            className="flex-shrink-0 basis-[80%] md:basis-auto md:flex-shrink md:min-w-0 lg:basis-auto"
+          >
+            <Column
+              status={status}
+              label={LABELS[status]}
+              tasks={columns[status]}
+              currentUserName={currentUser}
+              currentUserId={currentUserId}
+              isLeader={isLeader}
+              isProjectClosed={isProjectClosed}
+              onTaskClick={onTaskClick}
+            />
+          </div>
         ))}
       </div>
       <DragOverlay>
@@ -136,7 +140,7 @@ export default function Board({
             <TaskCard
               task={findTask(activeId) as Task}
               isDraggable={false}
-              onClick={() => {}}
+              onClick={() => { }}
             />
           </div>
         ) : null}

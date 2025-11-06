@@ -236,6 +236,8 @@ export interface HeaderProps {
   onCreateProject?: () => void;
   isProjectClosed: boolean;
   projectTheme?: string | null;
+  isTaskModalOpen?: boolean;
+  isProjectModalOpen?: boolean;
 }
 
 export interface Profile {

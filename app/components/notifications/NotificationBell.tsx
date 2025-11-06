@@ -8,13 +8,20 @@ import NotificationList from "./NotificationList";
 import { useNotifications } from "../../hooks/useNotifications";
 import { NotificationRecord } from "../../types/Types";
 import { useFeedbackChat } from "../../context/FeedbackChatContext";
+import { cn } from "../../utils/cn";
 
 const formatUnreadCount = (count: number) => {
   if (count > 99) return "99+";
   return String(count);
 };
 
-const NotificationBell: React.FC = () => {
+interface NotificationBellProps {
+  buttonClassName?: string;
+}
+
+const NotificationBell: React.FC<NotificationBellProps> = ({
+  buttonClassName,
+}) => {
   const { user } = useAuth();
   const hook = useNotifications({ recipientId: user?.id });
   const [isOpen, setIsOpen] = useState(false);
@@ -66,7 +73,10 @@ const NotificationBell: React.FC = () => {
         <button
           type="button"
           onClick={() => setIsOpen((prev) => !prev)}
-          className="relative flex h-10 w-10 items-center justify-center text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 hover:text-white/90 hover:cursor-pointer"
+          className={cn(
+            "relative flex h-9 w-9 items-center justify-center text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 hover:text-white/90 hover:cursor-pointer",
+            buttonClassName
+          )}
           aria-label="Mở thông báo"
         >
           <LuBell className="h-5 w-5" />

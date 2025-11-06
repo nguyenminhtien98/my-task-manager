@@ -203,7 +203,7 @@ const FeedbackChatWidget: React.FC = () => {
       )}
 
       {isOpen && (
-        <div className="fixed inset-0 z-40">
+        <div className="fixed inset-0 z-[90]">
           <button
             type="button"
             onClick={close}
@@ -211,7 +211,7 @@ const FeedbackChatWidget: React.FC = () => {
             className="absolute inset-0 cursor-default bg-transparent"
           />
           <div
-            className={`absolute bottom-6 ${
+            className={`absolute bottom-28 sm:bottom-6 ${
               bubblePosition.side === "left" ? "left-6" : "right-6"
             }`}
           >

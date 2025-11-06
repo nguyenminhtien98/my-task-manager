@@ -31,7 +31,7 @@ const FeedbackChatBubbleInner: React.FC<FeedbackChatBubbleProps> = ({
       type="button"
       onClick={onClick}
       onPointerDown={onPointerDown}
-      className="relative flex h-10 w-10 cursor-pointer items-center justify-center rounded-full bg-white shadow-lg transition-all duration-[1200ms] ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-black/30 animate-feedback-pulse hover:scale-110"
+      className="relative hidden h-10 w-10 cursor-pointer items-center justify-center rounded-full bg-white shadow-lg transition-all duration-[1200ms] ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-black/30 animate-feedback-pulse hover:scale-110 sm:flex"
       aria-label="Mở hộp thoại phản hồi"
       style={style}
     >

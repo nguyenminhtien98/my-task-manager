@@ -57,7 +57,7 @@ const ThemePickerModal: React.FC<ThemePickerModalProps> = ({
       }}
       title="Màu nền"
     >
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
         {themeColors.map(renderColorCard)}
       </div>
       <div className="mt-6 flex justify-end gap-3">

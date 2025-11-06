@@ -5,6 +5,7 @@ import { NotificationRecord } from "../../types/Types";
 import NotificationCard from "./NotificationCard";
 import { NotificationFilter } from "../../hooks/useNotifications";
 import Button from "../common/Button";
+import { cn } from "../../utils/cn";
 
 interface NotificationListMainScreenProps {
   notifications: NotificationRecord[];
@@ -16,6 +17,7 @@ interface NotificationListMainScreenProps {
   isLoading: boolean;
   isFetchingMore: boolean;
   hasMore: boolean;
+  className?: string;
 }
 
 const NotificationListMainScreen: React.FC<NotificationListMainScreenProps> = ({
@@ -28,6 +30,7 @@ const NotificationListMainScreen: React.FC<NotificationListMainScreenProps> = ({
   isLoading,
   isFetchingMore,
   hasMore,
+  className,
 }) => {
   const observerRef = useRef<IntersectionObserver | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
@@ -82,7 +85,12 @@ const NotificationListMainScreen: React.FC<NotificationListMainScreenProps> = ({
   ]);
 
   return (
-    <div className="w-[360px] max-w-[92vw] rounded-lg bg-white p-3 shadow-lg">
+    <div
+      className={cn(
+        "w-[360px] max-w-[92vw] rounded-lg bg-white p-3 shadow-lg",
+        className
+      )}
+    >
       <div className="flex w-full justify-start">
         <span className="text-sm font-semibold uppercase tracking-wide text-[#111827]">
           Thông báo

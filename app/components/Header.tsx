@@ -3,16 +3,12 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useProject } from "../context/ProjectContext";
-import { HeaderProps } from "../types/Types";
-import AvatarUser from "./common/AvatarUser";
-import AnimatedGradientLogo from "./common/AnimatedGradientLogo";
-import BrandOrbHeaderIcon from "./common/LogoComponent";
+import { HeaderProps, Project } from "../types/Types";
 import { useTheme } from "../context/ThemeContext";
 import ThemePickerModal from "./modal/ThemePickerModal";
 import EditProfileModal from "./modal/editProfileModal";
 import { DEFAULT_THEME_GRADIENT } from "../utils/themeColors";
 import toast from "react-hot-toast";
-import Button from "./common/Button";
 import {
   useProjectOperations,
   EnrichedProjectMember,
@@ -20,26 +16,35 @@ import {
 import ProjectMembersModal from "./modal/projectMemberModal";
 import ProjectManagerModal from "./modal/projectModal/ProjectManagerModal";
 import { useProjectTheme } from "../hooks/useProjectTheme";
-import NotificationBell from "./notifications/NotificationBell";
+import { useFeedbackChat } from "../context/FeedbackChatContext";
+import DesktopHeader from "./header/DesktopHeader";
+import MobileHeader from "./header/MobileHeader";
+import MobileDrawer from "./header/MobileDrawer";
+import MobileFooterBar from "./header/MobileFooterBar";
+import { FooterAction } from "./header/types";
 
 const Header: React.FC<HeaderProps> = ({
   onCreateTask,
   onLoginClick,
   onCreateProject,
   isProjectClosed,
+  isTaskModalOpen = false,
+  isProjectModalOpen = false,
 }) => {
   const { user, logout } = useAuth();
   const { projects, currentProject, setCurrentProject, setCurrentProjectRole } =
     useProject();
   const [showMenu, setShowMenu] = useState(false);
-  const [showProjectFilter, setShowProjectFilter] = useState(false);
   const [themeModalOpen, setThemeModalOpen] = useState(false);
   const [isEditProfileModalOpen, setIsEditProfileModalOpen] = useState(false);
   const [pendingTheme, setPendingTheme] = useState<string>(
     DEFAULT_THEME_GRADIENT
   );
   const menuRef = useRef<HTMLDivElement>(null);
-  const filterRef = useRef<HTMLDivElement>(null);
+  const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
+  const [activeFooterAction, setActiveFooterAction] =
+    useState<FooterAction | null>(null);
+  const [isAddActionPending, setIsAddActionPending] = useState(false);
   const [isProjectManagerOpen, setIsProjectManagerOpen] = useState(false);
   const { setTheme, resetTheme } = useTheme();
   const { members: projectMembers, isLoading: isMembersLoading } =
@@ -48,6 +53,15 @@ const Header: React.FC<HeaderProps> = ({
   const [modalInitialMember, setModalInitialMember] =
     useState<EnrichedProjectMember | null>(null);
   const { isSaving: isSavingTheme, saveTheme } = useProjectTheme();
+  const { isOpen: isChatOpen, open: openChat } = useFeedbackChat();
+  const pendingAddActionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const clearPendingAddActionTimeout = useCallback(() => {
+    if (pendingAddActionTimeoutRef.current) {
+      clearTimeout(pendingAddActionTimeoutRef.current);
+      pendingAddActionTimeoutRef.current = null;
+    }
+  }, []);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -60,18 +74,50 @@ const Header: React.FC<HeaderProps> = ({
   }, []);
 
   useEffect(() => {
-    const handleClickOutsideFilter = (event: MouseEvent) => {
-      if (
-        filterRef.current &&
-        !filterRef.current.contains(event.target as Node)
-      ) {
-        setShowProjectFilter(false);
-      }
+    if (isMobileDrawerOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+
+    return () => {
+      document.body.style.overflow = "";
     };
-    document.addEventListener("mousedown", handleClickOutsideFilter);
-    return () =>
-      document.removeEventListener("mousedown", handleClickOutsideFilter);
-  }, []);
+  }, [isMobileDrawerOpen]);
+
+  useEffect(() => {
+    return () => {
+      clearPendingAddActionTimeout();
+    };
+  }, [clearPendingAddActionTimeout]);
+
+  useEffect(() => {
+    if (!user) {
+      setIsMobileDrawerOpen(false);
+    }
+  }, [user]);
+
+  const addModalVisible = Boolean(isTaskModalOpen || isProjectModalOpen);
+
+  useEffect(() => {
+    if (isAddActionPending) return;
+    const desiredAction: FooterAction | null = isChatOpen
+      ? "chat"
+      : isMemberModalOpen
+        ? "members"
+        : addModalVisible
+          ? "add"
+          : null;
+    setActiveFooterAction((prev) =>
+      prev === desiredAction ? prev : desiredAction
+    );
+  }, [addModalVisible, isAddActionPending, isChatOpen, isMemberModalOpen]);
+
+  useEffect(() => {
+    if (!isAddActionPending || !addModalVisible) return;
+    setIsAddActionPending(false);
+    clearPendingAddActionTimeout();
+  }, [addModalVisible, clearPendingAddActionTimeout, isAddActionPending]);
 
   useEffect(() => {
     const projectTheme = currentProject?.themeColor;
@@ -85,6 +131,7 @@ const Header: React.FC<HeaderProps> = ({
     setTheme(current);
     setThemeModalOpen(true);
     setShowMenu(false);
+    setIsMobileDrawerOpen(false);
   };
 
   const handleCloseThemeModal = () => {
@@ -111,6 +158,17 @@ const Header: React.FC<HeaderProps> = ({
     }
   };
 
+  const handleProjectSelect = useCallback(
+    (project: Project) => {
+      setCurrentProject(project);
+      setCurrentProjectRole(
+        project.leader.$id === user?.id ? "leader" : "user"
+      );
+      setTheme(project.themeColor || DEFAULT_THEME_GRADIENT);
+    },
+    [setCurrentProject, setCurrentProjectRole, setTheme, user?.id]
+  );
+
   const visibleMembers = projectMembers.slice(0, 3);
   const remainingMembers = Math.max(
     projectMembers.length - visibleMembers.length,
@@ -135,202 +193,124 @@ const Header: React.FC<HeaderProps> = ({
     setModalInitialMember(null);
   }, []);
 
+  const handleOpenProfileSection = useCallback(() => {
+    setIsEditProfileModalOpen(true);
+    setShowMenu(false);
+  }, []);
+
+  const handleOpenProjectManager = useCallback(() => {
+    setIsProjectManagerOpen(true);
+    setShowMenu(false);
+  }, []);
+
+  const handleToggleMenu = useCallback(() => {
+    setShowMenu((prev) => !prev);
+  }, []);
+
+  const handleLogoutClick = useCallback(() => {
+    void logout();
+    setShowMenu(false);
+  }, [logout]);
+
+  const handleOpenDrawer = useCallback(() => {
+    setIsMobileDrawerOpen(true);
+  }, []);
+
+  const closeMobileDrawer = useCallback(() => {
+    setIsMobileDrawerOpen(false);
+  }, []);
+
+  const handleMobileAddTask = useCallback(() => {
+    if (isProjectClosed) {
+      toast.error("Dự án đã bị đóng, không thể tạo task mới.");
+      return;
+    }
+    onCreateTask();
+    setActiveFooterAction("add");
+    setIsAddActionPending(true);
+    clearPendingAddActionTimeout();
+    pendingAddActionTimeoutRef.current = setTimeout(() => {
+      setIsAddActionPending(false);
+      pendingAddActionTimeoutRef.current = null;
+    }, 1500);
+  }, [clearPendingAddActionTimeout, isProjectClosed, onCreateTask]);
+
+  const handleFooterMembersClick = useCallback(() => {
+    if (!user || !currentProject) {
+      toast.error("Vui lòng chọn dự án trước.");
+      return;
+    }
+    closeMobileDrawer();
+    openMembersModal();
+  }, [closeMobileDrawer, currentProject, openMembersModal, user]);
+
+  const handleFooterChatOpen = useCallback(() => {
+    openChat();
+  }, [openChat]);
+
+  const currentTheme = currentProject?.themeColor || DEFAULT_THEME_GRADIENT;
+
   return (
     <>
-      <header className="sticky top-0 z-50 flex w-full flex-col items-center justify-between gap-4 border-b border-white/20 bg-black/60 p-2 backdrop-blur-lg sm:flex-row">
-        <div className="flex items-center gap-2">
-          <BrandOrbHeaderIcon size={28} />
-          <AnimatedGradientLogo className="text-xl font-bold sm:text-2xl" />
-        </div>
+      <DesktopHeader
+        user={user}
+        currentProject={currentProject}
+        projects={projects}
+        isMembersLoading={isMembersLoading}
+        visibleMembers={visibleMembers}
+        remainingMembers={remainingMembers}
+        onMemberClick={handleHeaderMemberClick}
+        onOpenMembersModal={openMembersModal}
+        onProjectSelect={handleProjectSelect}
+        onCreateProject={onCreateProject}
+        onCreateTask={onCreateTask}
+        isProjectClosed={isProjectClosed}
+        onLoginClick={onLoginClick}
+        menuRef={menuRef}
+        showMenu={showMenu}
+        onToggleMenu={handleToggleMenu}
+        onOpenProfile={handleOpenProfileSection}
+        onOpenProjectManager={handleOpenProjectManager}
+        onOpenTheme={handleOpenThemeModal}
+        onLogout={handleLogoutClick}
+        currentTheme={currentTheme}
+      />
 
-        <div className="flex flex-col items-center space-y-2 sm:flex-row sm:space-y-0 sm:space-x-4">
-          {user && currentProject && (
-            <div className="flex items-center">
-              {isMembersLoading ? (
-                <div className="flex items-center justify-center w-[34px] h-[34px]">
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                </div>
-              ) : (
-                <div className="flex items-center">
-                  {visibleMembers.map((member, index) => (
-                    <button
-                      key={member.$id || `${member.name}-${index}`}
-                      type="button"
-                      onClick={() => handleHeaderMemberClick(member)}
-                      className={`inline-flex focus:outline-none ${
-                        index > 0 ? "-ml-1" : ""
-                      }`}
-                      style={{ zIndex: visibleMembers.length - index }}
-                    >
-                      <AvatarUser
-                        name={member.name}
-                        avatarUrl={member.avatarUrl}
-                        size={34}
-                        className={`${
-                          member.isLeader ? "border-2 border-white" : ""
-                        } shadow`}
-                        title={
-                          member.isLeader
-                            ? `Leader: ${member.name}`
-                            : member.name
-                        }
-                      />
-                    </button>
-                  ))}
-                  <div
-                    className={`${
-                      visibleMembers.length > 0 ? "-ml-1" : ""
-                    } flex h-[34px] w-[34px] cursor-pointer items-center justify-center rounded-full border border-dashed border-black bg-white/80 text-xs font-semibold text-black shadow transition hover:bg-white`}
-                    title="Thêm thành viên"
-                    onClick={openMembersModal}
-                  >
-                    {remainingMembers > 0 ? `+${remainingMembers}` : "+"}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+      <MobileHeader
+        user={user}
+        projects={projects}
+        currentProject={currentProject}
+        currentTheme={currentTheme}
+        onProjectSelect={handleProjectSelect}
+        onLoginClick={onLoginClick}
+      />
 
-          {user && projects.length > 0 && (
-            <div ref={filterRef} className="relative">
-              <Button
-                onClick={() => {
-                  if (projects.length > 1) {
-                    setShowProjectFilter((prev) => !prev);
-                  }
-                }}
-                className="px-3 py-1 text-white"
-                style={{
-                  background:
-                    currentProject?.themeColor || DEFAULT_THEME_GRADIENT,
-                }}
-              >
-                Dự án: {currentProject ? currentProject.name : "Chọn dự án"}
-              </Button>
-              {showProjectFilter && projects.length > 1 && (
-                <div className="absolute right-0 mt-1 w-48 rounded bg-white text-black shadow-lg z-40">
-                  {projects.map((proj) => {
-                    const isActive = currentProject?.$id === proj.$id;
-                    return (
-                      <Button
-                        key={proj.$id}
-                        variant="ghost"
-                        onClick={() => {
-                          setCurrentProject(proj);
-                          setCurrentProjectRole(
-                            proj.leader.$id === user?.id ? "leader" : "user"
-                          );
-                          setTheme(proj.themeColor || DEFAULT_THEME_GRADIENT);
-                          setShowProjectFilter(false);
-                        }}
-                        className="w-full justify-start px-4 py-2 text-left text-[#111827] hover:bg-gray-200"
-                        backgroundColor={isActive ? "#e5e7eb" : undefined}
-                      >
-                        {proj.name}
-                      </Button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
+      <MobileDrawer
+        user={user}
+        isOpen={isMobileDrawerOpen}
+        onClose={closeMobileDrawer}
+        projects={projects}
+        currentProject={currentProject}
+        onProjectSelect={handleProjectSelect}
+        currentTheme={currentTheme}
+        onOpenProfile={handleOpenProfileSection}
+        onOpenProjectManager={handleOpenProjectManager}
+        onOpenTheme={handleOpenThemeModal}
+        onLogout={handleLogoutClick}
+      />
 
-          {user && projects.length > 0 && onCreateProject && (
-            <Button
-              onClick={onCreateProject}
-              className="px-3 py-1 bg-green-600 text-white"
-            >
-              Add Project
-            </Button>
-          )}
-
-          <Button
-            onClick={() => {
-              if (isProjectClosed) return;
-              onCreateTask();
-            }}
-            className={`px-3 py-1 text-white ${
-              isProjectClosed
-                ? "bg-gray-400 cursor-not-allowed"
-                : "bg-[#d15f63] hover:bg-[#df8c8c]"
-            }`}
-            disabled={isProjectClosed}
-            title={isProjectClosed ? "Dự án đã đóng, không thể tạo task" : ""}
-          >
-            Add Task
-          </Button>
-
-          {user ? (
-            <div className="flex items-center gap-3">
-              <NotificationBell />
-              <div
-                ref={menuRef}
-                className="relative flex items-center justify-center"
-              >
-                <AvatarUser
-                  name={user.name}
-                  avatarUrl={user.avatarUrl}
-                  size={36}
-                  showTooltip={false}
-                  onClick={() => setShowMenu((prev) => !prev)}
-                  title={`${
-                    currentProject?.leader.$id === user.id ? "Leader" : "User"
-                  }: ${user.name}`}
-                />
-                {showMenu && (
-                  <div className="absolute right-0 top-full mt-2 w-48 rounded bg-white text-black shadow-lg z-[60]">
-                    <Button
-                      variant="ghost"
-                      onClick={() => {
-                        setIsEditProfileModalOpen(true);
-                        setShowMenu(false);
-                      }}
-                      className="w-full justify-start px-4 py-2 text-left text-[#111827]"
-                    >
-                      Hồ sơ của tôi
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      onClick={() => {
-                        setIsProjectManagerOpen(true);
-                        setShowMenu(false);
-                      }}
-                      className="w-full justify-start px-4 py-2 text-left text-[#111827]"
-                    >
-                      Quản lý dự án
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      onClick={handleOpenThemeModal}
-                      className="w-full justify-start px-4 py-2 text-left text-[#111827]"
-                    >
-                      Thay đổi màu nền
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      onClick={() => {
-                        logout();
-                        setShowMenu(false);
-                      }}
-                      className="w-full justify-start px-4 py-2 text-left text-[#111827]"
-                    >
-                      Đăng xuất
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </div>
-          ) : (
-            <Button
-              onClick={onLoginClick}
-              variant="ghost"
-              className="px-3 py-1 bg-gray-100 text-white hover:text-black hover:bg-gray-200"
-            >
-              Đăng nhập
-            </Button>
-          )}
-        </div>
-      </header>
+      <MobileFooterBar
+        user={user}
+        currentProject={currentProject}
+        isProjectClosed={isProjectClosed}
+        activeAction={activeFooterAction}
+        onMembersClick={handleFooterMembersClick}
+        onAddClick={handleMobileAddTask}
+        onChatClick={handleFooterChatOpen}
+        onMenuClick={handleOpenDrawer}
+        isMenuOpen={isMobileDrawerOpen}
+        onMenuClose={closeMobileDrawer}
+      />
 
       <ProjectMembersModal
         isOpen={isMemberModalOpen}

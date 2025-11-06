@@ -519,6 +519,8 @@ const HomePage: React.FC = () => {
         onLoginClick={handleLoginClick}
         onCreateProject={handleCreateProject}
         isProjectClosed={isProjectClosed}
+        isTaskModalOpen={taskModalOpen}
+        isProjectModalOpen={projectModalOpen}
       />
 
       <div className="flex-1 overflow-hidden p-2 min-h-0">

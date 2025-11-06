@@ -10,12 +10,14 @@ interface NotificationListProps {
   hook: ReturnType<typeof useNotifications>;
   isOpen: boolean;
   onAction?: (actionKey: string, notification: NotificationRecord) => void;
+  panelClassName?: string;
 }
 
 const NotificationList: React.FC<NotificationListProps> = ({
   hook,
   isOpen,
   onAction,
+  panelClassName,
 }) => {
   const {
     filteredNotifications,
@@ -81,12 +83,14 @@ const NotificationList: React.FC<NotificationListProps> = ({
           isLoading={isLoading}
           isFetchingMore={isFetchingMore}
           hasMore={hasMore}
+          className={panelClassName}
         />
       ) : (
         <NotificationListDetailScreen
           notification={selectedNotification}
           onBack={handleBack}
           onAction={onAction}
+          className={panelClassName}
         />
       )}
     </div>
