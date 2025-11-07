@@ -100,6 +100,7 @@ export const useChat = (
   const [presenceMap, setPresenceMap] = useState<
     Record<string, PresenceDocument | null>
   >({});
+  const presenceFetchedRef = useRef<Set<string>>(new Set());
   const [memberProfiles, setMemberProfiles] = useState<ProfileDocument[]>([]);
   const [adminIds, setAdminIds] = useState<string[]>([]);
   const [adminLookupDone, setAdminLookupDone] = useState<boolean>(
@@ -185,38 +186,37 @@ export const useChat = (
     [currentUserId, onShowIncomingBanner, selectedConversationId]
   );
 
-  const enrichProfiles = useCallback(
-    async (ids: string[]) => {
-      if (!ids.length) return;
-      try {
-        const profiles = await fetchProfilesByIds(ids);
-        setProfileMap((prev) => ({ ...prev, ...profiles }));
+  const enrichProfiles = useCallback(async (ids: string[]) => {
+    if (!ids.length) return;
+    try {
+      const profiles = await fetchProfilesByIds(ids);
+      setProfileMap((prev) => ({ ...prev, ...profiles }));
 
-        const missingPresenceIds = ids.filter(
-          (id) => !Object.prototype.hasOwnProperty.call(presenceMap, id)
+      const fetchableIds = ids.filter((id) => {
+        if (!id) return false;
+        return !presenceFetchedRef.current.has(id);
+      });
+
+      if (fetchableIds.length) {
+        fetchableIds.forEach((id) => presenceFetchedRef.current.add(id));
+        const presenceEntries = await Promise.all(
+          fetchableIds.map(async (id) => ({
+            id,
+            doc: await fetchUserPresence(id),
+          }))
         );
-
-        if (missingPresenceIds.length) {
-          const presenceEntries = await Promise.all(
-            missingPresenceIds.map(async (id) => ({
-              id,
-              doc: await fetchUserPresence(id),
-            }))
-          );
-          setPresenceMap((prev) => {
-            const next = { ...prev };
-            presenceEntries.forEach(({ id, doc }) => {
-              next[id] = doc;
-            });
-            return next;
+        setPresenceMap((prev) => {
+          const next = { ...prev };
+          presenceEntries.forEach(({ id, doc }) => {
+            next[id] = doc;
           });
-        }
-      } catch (error) {
-        console.error("Không thể tải thông tin người dùng:", error);
+          return next;
+        });
       }
-    },
-    [presenceMap]
-  );
+    } catch (error) {
+      console.error("Không thể tải thông tin người dùng:", error);
+    }
+  }, []);
 
   useEffect(() => {
     if (!currentProject?.$id) {
