@@ -11,6 +11,7 @@
 - **Tạo và chỉnh sửa nhiệm vụ:** Tạo các nhiệm vụ mới với tiêu đề, mô tả, người được giao, ngày bắt đầu và ngày kết thúc, số giờ dự đoán, loại sự cố và mức độ ưu tiên. Chỉnh sửa các nhiệm vụ hiện có để giữ cho chúng được cập nhật.
 - **Chi tiết nhiệm vụ:** Xem thông tin chi tiết cho từng nhiệm vụ, bao gồm lịch sử, nhận xét và tệp đính kèm.
 - **Loại sự cố và mức độ ưu tiên:** Phân loại nhiệm vụ theo loại sự cố (Lỗi, Cải tiến hoặc Tính năng) và đặt mức độ ưu tiên của chúng (Cao, Trung bình hoặc Thấp).
+- **Bộ lọc nâng cao:** Bộ lọc phía máy chủ cho phép lọc nhiệm vụ theo trạng thái phân công (không có người nhận, của tôi, theo thành viên), ngày kết thúc (không có, quá hạn), mức độ ưu tiên và loại Issue (Feature/Bug/Improvement). Bộ lọc nằm ngay trên header dự án và áp dụng ngay khi chọn.
 
 ### Quản lý dự án
 

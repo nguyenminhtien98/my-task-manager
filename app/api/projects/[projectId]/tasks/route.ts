@@ -1,6 +1,6 @@
 "use server";
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { Query } from "node-appwrite";
 import { getServerAppwriteClients } from "@/lib/serverAppwrite";
 import {
@@ -10,12 +10,12 @@ import {
 import { mapTaskDocument, RawTaskDocument } from "@/app/utils/taskMapping";
 import { Task } from "@/app/types/Types";
 
-export async function POST(
-  request: Request,
-  { params }: { params: { projectId: string } }
-) {
+export const POST = async (
+  request: NextRequest,
+  context: { params: Promise<{ projectId: string }> }
+) => {
   try {
-    const { projectId } = params;
+    const { projectId } = await context.params;
     const tasksCollectionId = process.env.NEXT_PUBLIC_COLLECTION_ID_TASKS;
     if (!tasksCollectionId) {
       throw new Error("Thiếu cấu hình collection Task");
@@ -58,4 +58,4 @@ export async function POST(
       { status: 500 }
     );
   }
-}
+};
