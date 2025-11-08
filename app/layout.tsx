@@ -12,6 +12,7 @@ import {
 } from "./utils/logoSvg";
 import FeedbackChatWidget from "./components/feedback/FeedbackChatWidget";
 import { spaceMono, geistMono, geistSans } from "@/lib/fonts";
+import { TaskFilterProvider } from "./context/TaskFilterContext";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://my-task-manager-web.vercel.app"),
@@ -98,11 +99,13 @@ export default function RootLayout({
           <ProjectProvider>
             <ThemeProvider>
               <FeedbackChatProvider>
-                <AppBootstrap>
-                  <Toaster position="top-right" />
-                  {children}
-                  <FeedbackChatWidget />
-                </AppBootstrap>
+                <TaskFilterProvider>
+                  <AppBootstrap>
+                    <Toaster position="top-right" />
+                    {children}
+                    <FeedbackChatWidget />
+                  </AppBootstrap>
+                </TaskFilterProvider>
               </FeedbackChatProvider>
             </ThemeProvider>
           </ProjectProvider>

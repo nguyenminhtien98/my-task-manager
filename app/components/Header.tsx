@@ -258,6 +258,7 @@ const Header: React.FC<HeaderProps> = ({
         isMembersLoading={isMembersLoading}
         visibleMembers={visibleMembers}
         remainingMembers={remainingMembers}
+        projectMembers={projectMembers}
         onMemberClick={handleHeaderMemberClick}
         onOpenMembersModal={openMembersModal}
         onProjectSelect={handleProjectSelect}

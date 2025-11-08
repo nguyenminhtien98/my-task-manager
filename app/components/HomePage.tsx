@@ -7,7 +7,7 @@ import TaskModal from "./modal/taskModal/TaskModal";
 import { Task, TaskStatus, BasicProfile } from "../types/Types";
 import { useAuth } from "../context/AuthContext";
 import { DragEndEvent } from "@dnd-kit/core";
-import { database, subscribeToRealtime } from "../../lib/appwrite";
+import { subscribeToRealtime } from "../../lib/appwrite";
 import toast from "react-hot-toast";
 import { useProject } from "../context/ProjectContext";
 import ProjectModal from "./modal/ProjectModal";
@@ -20,6 +20,8 @@ import {
   preserveAssignee,
 } from "../utils/TasksAssignee";
 import { mapTaskDocument, RawTaskDocument } from "../utils/taskMapping";
+import { useTaskFilter } from "../context/TaskFilterContext";
+import { matchesTaskFilters } from "../utils/taskFilters";
 
 const Board = dynamic(() => import("./Board"), { ssr: false });
 
@@ -70,6 +72,13 @@ const HomePage: React.FC = () => {
   ] = useState(false);
   const [hasLoaded, setHasLoaded] = useState<boolean>(false);
   const { moveTask } = useTask();
+  const { filters } = useTaskFilter();
+  const markHydrated = useCallback(() => {
+    if (!hasLoaded) {
+      setHasLoaded(true);
+      if (setTasksHydrated) setTasksHydrated(true);
+    }
+  }, [hasLoaded, setTasksHydrated]);
 
   useEffect(() => {
     const handleOpenLoginModal = () => setLoginModalOpen(true);
@@ -116,157 +125,116 @@ const HomePage: React.FC = () => {
 
   const applyTasks = useCallback(
     (updater: (prev: Task[]) => Task[]) => {
-      setAllTasks((prev) => dedupeTasks(updater(prev)));
+      setAllTasks((prev) =>
+        dedupeTasks(updater(prev)).filter((task) =>
+          matchesTaskFilters(task, filters, { currentUserId: user?.id ?? null })
+        )
+      );
     },
-    [dedupeTasks]
+    [dedupeTasks, filters, user?.id]
   );
 
-  useEffect(() => {
-    if (!user) {
-      setTimeout(() => {
+  const fetchTasks = useCallback(
+    async (signal?: AbortSignal) => {
+      if (!user) {
         setAllTasks([defaultGuideTask]);
-        setHasLoaded(true);
-        if (setTasksHydrated) setTasksHydrated(true);
-      }, 300);
-      return;
-    }
-
-    if (!currentProject) {
-      setAllTasks([defaultGuideTask]);
-      if (!hasLoaded) {
-        setHasLoaded(true);
-        if (setTasksHydrated) setTasksHydrated(true);
+        markHydrated();
+        return;
       }
-      return;
-    }
 
-    database
-      .listDocuments(
-        String(process.env.NEXT_PUBLIC_DATABASE_ID),
-        String(process.env.NEXT_PUBLIC_COLLECTION_ID_TASKS)
-      )
-      .then((res) => {
-        const mapped = res.documents
-          .map((doc) => mapTaskDocument(doc as RawTaskDocument))
-          .filter((t) => t.projectId === currentProject.$id)
+      if (!currentProject) {
+        setAllTasks([defaultGuideTask]);
+        markHydrated();
+        return;
+      }
+
+      try {
+        const response = await fetch(
+          `/api/projects/${currentProject.$id}/tasks`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              filters,
+              currentUserId: user.id,
+            }),
+            signal,
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(await response.text());
+        }
+
+        const raw = (await response.json()) as RawTaskDocument[];
+        const mapped = raw
+          .map((doc) => mapTaskDocument(doc))
           .map((task) =>
             preserveAssignee(
               enrichTaskAssignee(task, memberMap),
               memberMap,
               task.assignee
             )
+          )
+          .filter((task) =>
+            matchesTaskFilters(task, filters, { currentUserId: user.id })
           );
+
         setAllTasks(dedupeTasks(mapped));
-      })
-      .catch((err) => {
-        console.error("Lấy tasks thất bại:", err);
-      })
-      .finally(() => {
-        if (!hasLoaded) {
-          setHasLoaded(true);
-          if (setTasksHydrated) setTasksHydrated(true);
-        }
-      });
-  }, [
-    user,
-    currentProject,
-    hasLoaded,
-    setTasksHydrated,
-    memberMap,
-    dedupeTasks,
-  ]);
+      } catch (error) {
+        if (signal?.aborted) return;
+        console.error("Lấy tasks thất bại:", error);
+      } finally {
+        markHydrated();
+      }
+    },
+    [
+      user,
+      currentProject,
+      filters,
+      memberMap,
+      dedupeTasks,
+      markHydrated,
+    ]
+  );
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetchTasks(controller.signal);
+    return () => controller.abort();
+  }, [fetchTasks]);
 
   useEffect(() => {
     if (!user || !currentProject) return;
 
     const channel = `databases.${process.env.NEXT_PUBLIC_DATABASE_ID}.collections.${process.env.NEXT_PUBLIC_COLLECTION_ID_TASKS}.documents`;
 
-    const unsubscribe = subscribeToRealtime([channel], async (res: unknown) => {
+    const unsubscribe = subscribeToRealtime([channel], (res: unknown) => {
       const payload = res as {
-        payload: RawTaskDocument;
-        events: string[];
+        payload?: RawTaskDocument;
+        events?: string[];
       };
-
-      const { payload: raw, events } = payload;
-      if (!events?.length || !raw) return;
-
-      const documentId = raw.$id;
-
-      if (events.some((e: string) => e.endsWith(".delete"))) {
-        if (documentId) {
-          applyTasks((prev) => prev.filter((t) => t.id !== documentId));
-        }
-        return;
-      }
-
-      if (events.some((e: string) => e.endsWith(".update"))) {
-        if (!documentId) return;
-
-        try {
-          const fullDoc = await database.getDocument(
-            String(process.env.NEXT_PUBLIC_DATABASE_ID),
-            String(process.env.NEXT_PUBLIC_COLLECTION_ID_TASKS),
-            documentId
-          );
-
-          const mapped = enrichTaskAssignee(
-            mapTaskDocument(fullDoc as RawTaskDocument),
-            memberMap
-          );
-
-          if (mapped.projectId !== currentProject.$id) return;
-
-          let finalAssignee = mapped.assignee;
-          if (
-            typeof mapped.assignee === "string" &&
-            mapped.assignee.trim() !== ""
-          ) {
-            const enriched = memberMap.get(mapped.assignee);
-            if (enriched) {
-              finalAssignee = enriched;
-            }
-          }
-
-          const updatedTask = { ...mapped, assignee: finalAssignee };
-
-          applyTasks((prev) =>
-            prev.map((t) => (t.id === mapped.id ? updatedTask : t))
-          );
-
-          setSelectedTask((task) =>
-            task && task.id === mapped.id ? updatedTask : task
-          );
-        } catch (error) {
-          console.error("❌ Failed to fetch full document:", error);
-        }
-        return;
-      }
-
-      if (events.some((e: string) => e.endsWith(".create"))) {
-        const mapped = enrichTaskAssignee(mapTaskDocument(raw), memberMap);
-        if (mapped.projectId !== currentProject.$id) return;
-
-        applyTasks((prev) => {
-          if (prev.some((task) => task.id === mapped.id)) {
-            return prev;
-          }
-          return [
-            ...prev,
-            preserveAssignee(mapped, memberMap, mapped.assignee),
-          ];
-        });
-      }
+      if (!payload?.events?.length || !payload.payload) return;
+      const docProjectId = payload.payload.projectId;
+      if (docProjectId && docProjectId !== currentProject.$id) return;
+      void fetchTasks();
     });
 
     return () => unsubscribe();
-  }, [user, currentProject, applyTasks, memberMap]);
+  }, [user, currentProject, fetchTasks]);
 
   useEffect(() => {
-    setAllTasks((prev) => dedupeTasks(enrichTasksAssignee(prev, memberMap)));
+    setAllTasks((prev) =>
+      dedupeTasks(enrichTasksAssignee(prev, memberMap)).filter((task) =>
+        matchesTaskFilters(task, filters, { currentUserId: user?.id ?? null })
+      )
+    );
     setSelectedTask((task) =>
       task ? enrichTaskAssignee(task, memberMap) : task
     );
-  }, [memberMap, dedupeTasks]);
+  }, [memberMap, dedupeTasks, filters, user?.id]);
 
   const handleCreateClick = () => {
     if (user) {

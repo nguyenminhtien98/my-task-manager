@@ -10,6 +10,7 @@ import ProjectSelector from "./ProjectSelector";
 import { Project } from "../../types/Types";
 import { User } from "../../context/AuthContext";
 import { EnrichedProjectMember } from "../../hooks/useProjectOperations";
+import TaskFilterDropdown from "./TaskFilterDropdown";
 
 interface DesktopHeaderProps {
   user: User | null;
@@ -18,6 +19,7 @@ interface DesktopHeaderProps {
   isMembersLoading: boolean;
   visibleMembers: EnrichedProjectMember[];
   remainingMembers: number;
+  projectMembers: EnrichedProjectMember[];
   onMemberClick: (member: EnrichedProjectMember) => void;
   onOpenMembersModal: () => void;
   onProjectSelect: (project: Project) => void;
@@ -42,6 +44,7 @@ const DesktopHeader: React.FC<DesktopHeaderProps> = ({
   isMembersLoading,
   visibleMembers,
   remainingMembers,
+  projectMembers,
   onMemberClick,
   onOpenMembersModal,
   onProjectSelect,
@@ -106,6 +109,13 @@ const DesktopHeader: React.FC<DesktopHeaderProps> = ({
               </div>
             )}
           </div>
+        )}
+
+        {user && projects.length > 0 && (
+          <TaskFilterDropdown
+            members={projectMembers}
+            disabled={!currentProject}
+          />
         )}
 
         {user && projects.length > 0 && (
