@@ -1,7 +1,6 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import React, { useEffect, useState } from "react";
+import React, { ChangeEvent, useCallback, useEffect, useState } from "react";
 import ModalComponent from "../common/ModalComponent";
-import { useForm } from "react-hook-form";
+import { RegisterOptions, useForm } from "react-hook-form";
 import { FormUserValues } from "../../types/Types";
 import { useAuth } from "../../context/AuthContext";
 import { account, database } from "../../../lib/appwrite";
@@ -10,6 +9,8 @@ import toast from "react-hot-toast";
 import { useUserValidation } from "../../hooks/useUserValidation";
 import Button from "../common/Button";
 import { FcGoogle } from "react-icons/fc";
+import { localizeAuthError } from "../../utils/authErrors";
+import { validateNoEmoji } from "../../utils/inputValidation";
 
 const LoginRegisterModal: React.FC<{
   isOpen: boolean;
@@ -29,20 +30,58 @@ const LoginRegisterModal: React.FC<{
     handleSubmit,
     reset,
     watch,
-    formState: { errors, isValid, isSubmitting },
+    formState: { errors, isSubmitting },
   } = useForm<FormUserValues>({ mode: "onChange" });
+  const [showErrors, setShowErrors] = useState(false);
+  const [clearedFields, setClearedFields] = useState<
+    Partial<Record<keyof FormUserValues, boolean>>
+  >({});
+
+  const resetErrorVisibility = useCallback(() => {
+    setShowErrors(false);
+    setClearedFields({});
+  }, []);
+
+  const registerField = useCallback(
+    <T extends keyof FormUserValues>(
+      name: T,
+      options?: RegisterOptions<FormUserValues, T>
+    ) => {
+      const field = register(name, options);
+      return {
+        ...field,
+        onChange: (event: ChangeEvent<HTMLInputElement>) => {
+          if (showErrors && clearedFields[name] !== true) {
+            setClearedFields((prev) => ({ ...prev, [name]: true }));
+          }
+          field.onChange(event);
+        },
+      };
+    },
+    [clearedFields, register, showErrors]
+  );
+
+  const getFieldError = useCallback(
+    (field: keyof FormUserValues) => {
+      if (!showErrors || clearedFields[field]) return null;
+      return errors[field]?.message ?? null;
+    },
+    [clearedFields, errors, showErrors]
+  );
 
   const toggleForm = () => {
     setIsLogin(!isLogin);
     reset();
+    resetErrorVisibility();
   };
 
   useEffect(() => {
     if (isOpen) {
       setIsLogin(true);
       reset();
+      resetErrorVisibility();
     }
-  }, [isOpen, reset]);
+  }, [isOpen, reset, resetErrorVisibility]);
 
   useEffect(() => {
     if (!user || !isOpen) return;
@@ -75,11 +114,9 @@ const LoginRegisterModal: React.FC<{
   };
 
   const onSubmit = async (data: FormUserValues) => {
-    if (!isValid) return;
-
     if (isLogin) {
       try {
-        await account.deleteSession("current").catch(() => { });
+        await account.deleteSession("current").catch(() => {});
         await account.createEmailPasswordSession(data.email, data.password);
         const userInfo = await account.get();
         await login(userInfo.$id, userInfo.name);
@@ -87,8 +124,9 @@ const LoginRegisterModal: React.FC<{
         onLoginSuccess();
         setIsOpen(false);
         reset();
-      } catch (err: any) {
-        toast.error(err.message || "Đăng nhập thất bại");
+        resetErrorVisibility();
+      } catch (error) {
+        toast.error(localizeAuthError(error, "Đăng nhập thất bại"));
       }
     } else {
       try {
@@ -114,13 +152,38 @@ const LoginRegisterModal: React.FC<{
         toast.success("Đăng ký thành công! Vui lòng đăng nhập.");
         setIsLogin(true);
         reset();
-      } catch (err: any) {
-        toast.error(err.message || "Đăng ký thất bại");
+        resetErrorVisibility();
+      } catch (error) {
+        toast.error(localizeAuthError(error, "Đăng ký thất bại"));
       }
     }
   };
 
-  const canSubmit = isValid && !isSubmitting;
+  const handleFormSubmit = handleSubmit(
+    async (data) => {
+      resetErrorVisibility();
+      await onSubmit(data);
+    },
+    () => {
+      setShowErrors(true);
+      setClearedFields({});
+    }
+  );
+
+  const emailValue = watch("email");
+  const passwordValue = watch("password");
+  const nameValue = watch("name");
+  const confirmPasswordValue = watch("confirmPassword");
+
+  const hasLoginInput =
+    Boolean(emailValue?.trim()) && Boolean(passwordValue?.trim());
+  const hasRegisterInput =
+    hasLoginInput &&
+    Boolean(nameValue?.trim()) &&
+    Boolean(confirmPasswordValue?.trim());
+
+  const canSubmit =
+    !isSubmitting && (isLogin ? hasLoginInput : hasRegisterInput);
 
   return (
     <ModalComponent
@@ -152,13 +215,13 @@ const LoginRegisterModal: React.FC<{
         </div>
       </div>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="mt-4 space-y-4">
+      <form onSubmit={handleFormSubmit} className="mt-4 space-y-4">
         {!isLogin && (
           <div>
             <label className="block text-sm font-medium text-sub">Tên</label>
             <input
               placeholder="Nhập tên người dùng"
-              {...register("name", {
+              {...registerField("name", {
                 required: "Tên không được bỏ trống",
                 minLength: {
                   value: 3,
@@ -170,6 +233,9 @@ const LoginRegisterModal: React.FC<{
                 },
                 validate: async (value?: string) => {
                   if (!value) return true;
+
+                  const emojiCheck = validateNoEmoji(value);
+                  if (emojiCheck !== true) return emojiCheck;
 
                   const result = await checkNameExists(value);
 
@@ -186,8 +252,8 @@ const LoginRegisterModal: React.FC<{
               })}
               className="mt-1 w-full p-2 border border-black rounded text-black"
             />
-            {errors.name && (
-              <p className="text-red-500 text-sm">{errors.name.message}</p>
+            {getFieldError("name") && (
+              <p className="text-red-500 text-sm">{getFieldError("name")}</p>
             )}
           </div>
         )}
@@ -197,7 +263,7 @@ const LoginRegisterModal: React.FC<{
           <input
             type="email"
             placeholder="you@gmail.com"
-            {...register("email", {
+            {...registerField("email", {
               required: "Email không được bỏ trống",
               pattern: {
                 value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
@@ -223,14 +289,16 @@ const LoginRegisterModal: React.FC<{
                     return result.message;
                   }
                 }
+                const emojiCheck = validateNoEmoji(trimmedValue);
+                if (emojiCheck !== true) return emojiCheck;
 
                 return true;
               },
             })}
             className="mt-1 w-full p-2 border border-black rounded text-black"
           />
-          {errors.email && (
-            <p className="text-red-500 text-sm">{errors.email.message}</p>
+          {getFieldError("email") && (
+            <p className="text-red-500 text-sm">{getFieldError("email")}</p>
           )}
         </div>
 
@@ -240,7 +308,7 @@ const LoginRegisterModal: React.FC<{
             <input
               placeholder="Ít nhất 8 ký tự"
               type={showPassword ? "text" : "password"}
-              {...register("password", {
+              {...registerField("password", {
                 required: "Mật khẩu không được bỏ trống",
                 minLength: {
                   value: 8,
@@ -248,6 +316,9 @@ const LoginRegisterModal: React.FC<{
                 },
                 validate: (value?: string) => {
                   if (!value) return true;
+
+                  const emojiCheck = validateNoEmoji(value);
+                  if (emojiCheck !== true) return emojiCheck;
 
                   if (!/[A-Z]/.test(value)) {
                     return "Mật khẩu phải có ít nhất 1 chữ hoa";
@@ -269,8 +340,10 @@ const LoginRegisterModal: React.FC<{
               {showPassword ? "🙈" : "👁️"}
             </span>
           </div>
-          {errors.password && (
-            <p className="text-red-500 text-sm">{errors.password.message}</p>
+          {getFieldError("password") && (
+            <p className="text-red-500 text-sm">
+              {getFieldError("password")}
+            </p>
           )}
         </div>
 
@@ -283,10 +356,16 @@ const LoginRegisterModal: React.FC<{
               <input
                 placeholder="Nhập lại mật khẩu"
                 type={showConfirm ? "text" : "password"}
-                {...register("confirmPassword", {
+                {...registerField("confirmPassword", {
                   required: "Vui lòng xác nhận mật khẩu",
                   validate: (v) =>
-                    v === watch("password") || "Mật khẩu không khớp",
+                    !v
+                      ? true
+                      : containsEmoji(v)
+                      ? validateNoEmoji(v)
+                      : v === watch("password")
+                      ? true
+                      : "Mật khẩu không khớp",
                 })}
                 className="mt-1 w-full p-2 border border-black rounded text-black pr-10"
               />
@@ -297,9 +376,9 @@ const LoginRegisterModal: React.FC<{
                 {showConfirm ? "🙈" : "👁️"}
               </span>
             </div>
-            {errors.confirmPassword && (
+            {getFieldError("confirmPassword") && (
               <p className="text-red-500 text-sm">
-                {errors.confirmPassword.message}
+                {getFieldError("confirmPassword")}
               </p>
             )}
           </div>

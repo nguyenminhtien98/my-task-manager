@@ -54,26 +54,25 @@ const FeedbackChatWidget: React.FC = () => {
     isLoadingMessages,
     pendingMessages,
     handleSendMessage,
-    resolveConversationId,
     hasProject,
+    hasOtherMembers,
+    shouldForceFeedbackOnly,
     memberConversations,
     feedbackConversations,
+    pendingConversation,
+    startPendingConversation,
+    clearPendingConversation,
   } = chat;
-
   const suppressAutoSelectRef = useRef(false);
-  const hasOtherMembers = useMemo(
-    () => memberConversations.length > 0,
-    [memberConversations.length]
-  );
-  const shouldForceFeedbackOnly = !isAdmin && (!hasProject || !hasOtherMembers);
 
   useEffect(() => {
     if (isOpen) {
       clearIncomingBanner();
     } else {
       suppressAutoSelectRef.current = false;
+      clearPendingConversation();
     }
-  }, [clearIncomingBanner, isOpen]);
+  }, [clearIncomingBanner, clearPendingConversation, isOpen]);
 
   useEffect(() => {
     if (selectedConversationId) {
@@ -116,6 +115,14 @@ const FeedbackChatWidget: React.FC = () => {
     );
   }, [conversations, selectedConversationId]);
 
+  const activeConversationType = useMemo<ConversationType>(
+    () =>
+      selectedConversation?.type ??
+      pendingConversation?.type ??
+      "feedback",
+    [pendingConversation, selectedConversation]
+  );
+
   const filteredConversations = useMemo(() => {
     let dataset = feedbackConversations;
     if (isAdmin) {
@@ -132,24 +139,28 @@ const FeedbackChatWidget: React.FC = () => {
     return dataset;
   }, [feedbackConversations, currentUserId, filter, isAdmin]);
 
-  const showListView = !shouldForceFeedbackOnly && !selectedConversationId;
+  const showListView =
+    !shouldForceFeedbackOnly && !selectedConversationId && !pendingConversation;
 
   useEffect(() => {
     if (!isOpen) {
       setSelectedConversationId(null);
       suppressAutoSelectRef.current = false;
+      clearPendingConversation();
     }
-  }, [isOpen, setSelectedConversationId]);
+  }, [clearPendingConversation, isOpen, setSelectedConversationId]);
 
   const bubbleStyle = bubbleStyleHook;
   const allowBackNavigation = isAdmin || !shouldForceFeedbackOnly;
   const handleBackToList = useCallback(() => {
     suppressAutoSelectRef.current = true;
     setSelectedConversationId(null);
+    clearPendingConversation();
     if (!isAdmin && !shouldForceFeedbackOnly) {
       setConversationTab("member");
     }
   }, [
+    clearPendingConversation,
     isAdmin,
     shouldForceFeedbackOnly,
     setSelectedConversationId,
@@ -164,28 +175,43 @@ const FeedbackChatWidget: React.FC = () => {
       if (nextTab === "member") {
         setConversationTab("member");
         setSelectedConversationId(null);
+        clearPendingConversation();
         return;
       }
 
       setConversationTab("feedback");
+      setSelectedConversationId(null);
+      clearPendingConversation();
       if (isAdmin || shouldForceFeedbackOnly) {
         return;
       }
-      const existing = feedbackConversations[0];
+      const existing = feedbackConversations.find(
+        (conversation) => !conversation.__placeholderTargetId
+      );
       if (existing) {
         setSelectedConversationId(existing.$id);
         return;
       }
-      void resolveConversationId();
+      const placeholder = feedbackConversations.find(
+        (conversation) => Boolean(conversation.__placeholderTargetId)
+      );
+      if (placeholder?.__placeholderTargetId) {
+        startPendingConversation({
+          targetId: placeholder.__placeholderTargetId,
+          type: placeholder.type ?? "feedback",
+          projectId: placeholder.__placeholderProjectId ?? null,
+        });
+      }
     },
     [
+      clearPendingConversation,
       conversationTab,
       feedbackConversations,
       isAdmin,
       shouldForceFeedbackOnly,
+      startPendingConversation,
       setConversationTab,
       setSelectedConversationId,
-      resolveConversationId,
     ]
   );
 
@@ -240,14 +266,23 @@ const FeedbackChatWidget: React.FC = () => {
                     presenceMap={presenceMap}
                     currentUserId={currentUserId}
                     selectedConversationId={selectedConversationId}
-                    onSelectConversation={(id) => {
-                      const conversation = conversations.find(
-                        (conv) => conv.$id === id
-                      );
-                      if (!conversation) return;
+                    pendingTargetId={pendingConversation?.targetId ?? null}
+                    onSelectConversation={(conversation) => {
                       suppressAutoSelectRef.current = false;
+                      const placeholderTargetId =
+                        conversation.__placeholderTargetId;
+                      if (placeholderTargetId) {
+                        startPendingConversation({
+                          targetId: placeholderTargetId,
+                          type: conversation.type ?? "feedback",
+                          projectId: conversation.__placeholderProjectId ?? null,
+                        });
+                        setSelectedConversationId(null);
+                        setConversationTab(conversation.type ?? "feedback");
+                        return;
+                      }
                       setConversationTab(conversation.type ?? "feedback");
-                      setSelectedConversationId(id);
+                      setSelectedConversationId(conversation.$id);
                     }}
                     filter={conversationTab === "feedback" ? filter : "all"}
                     onFilterChange={
@@ -304,15 +339,15 @@ const FeedbackChatWidget: React.FC = () => {
                     currentUserId={currentUserId}
                     messages={messages}
                     onSendMessage={handleSendMessage}
+                    allowCreateConversation={Boolean(pendingConversation)}
                     isSending={isSending}
                     otherProfile={otherParticipant}
                     onBack={allowBackNavigation ? handleBackToList : undefined}
                     presence={presence}
                     isAdminView={
-                      isAdmin &&
-                      (selectedConversation?.type ?? "feedback") === "feedback"
+                      isAdmin && activeConversationType === "feedback"
                     }
-                    conversationType={selectedConversation?.type ?? "feedback"}
+                    conversationType={activeConversationType}
                     onClose={close}
                     isOpen={isOpen}
                     isLoading={isLoadingMessages}

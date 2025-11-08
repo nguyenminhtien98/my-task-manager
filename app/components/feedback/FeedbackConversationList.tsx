@@ -5,25 +5,26 @@ import { FiX } from "react-icons/fi";
 import AvatarUser from "../common/AvatarUser";
 import Button from "../common/Button";
 import {
-  ConversationDocument,
+  ConversationListEntry,
   PresenceDocument,
   ProfileDocument,
 } from "../../services/feedbackService";
 import Tooltip from "../common/Tooltip";
 
 interface FeedbackConversationListProps {
-  conversations: ConversationDocument[];
+  conversations: ConversationListEntry[];
   profileMap: Record<string, ProfileDocument | undefined>;
   presenceMap: Record<string, PresenceDocument | null>;
   currentUserId: string;
   selectedConversationId: string | null;
-  onSelectConversation: (conversationId: string) => void;
+  onSelectConversation: (conversation: ConversationListEntry) => void;
   filter: "all" | "unread";
   onFilterChange: (filter: "all" | "unread") => void;
   onClose?: () => void;
   headerTitle?: string;
   headerDescription?: string;
   actions?: React.ReactNode;
+  pendingTargetId?: string | null;
 }
 
 const FeedbackConversationList: React.FC<FeedbackConversationListProps> = ({
@@ -39,6 +40,7 @@ const FeedbackConversationList: React.FC<FeedbackConversationListProps> = ({
   headerTitle = "Danh sách đoạn chat",
   headerDescription,
   actions,
+  pendingTargetId = null,
 }) => {
   const renderActions = () => {
     if (actions) return actions;
@@ -113,14 +115,18 @@ const FeedbackConversationList: React.FC<FeedbackConversationListProps> = ({
               const unreadBy = conversation.unreadBy ?? [];
               const hasUnread = unreadBy.includes(currentUserId);
               const presence = otherId ? presenceMap[otherId] : undefined;
+              const isActive =
+                selectedConversationId === conversation.$id ||
+                (pendingTargetId &&
+                  conversation.__placeholderTargetId === pendingTargetId);
 
               return (
                 <button
                   type="button"
                   key={conversation.$id}
-                  onClick={() => onSelectConversation(conversation.$id)}
+                  onClick={() => onSelectConversation(conversation)}
                   className={`cursor-pointer flex w-full items-center gap-3 rounded-xl border border-transparent px-1 py-1 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-black/30 ${
-                    selectedConversationId === conversation.$id
+                    isActive
                       ? "bg-black text-white"
                       : "bg-black/60 text-white hover:bg-black/70"
                   }`}

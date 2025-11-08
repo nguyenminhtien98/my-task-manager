@@ -7,13 +7,13 @@ import toast from "react-hot-toast";
 import type { UploadedFileInfo } from "../utils/upload";
 import {
   ConversationDocument,
+  ConversationListEntry,
   ConversationMessageDocument,
   ConversationType,
   PresenceDocument,
   ProfileDocument,
   deriveProjectKey,
   ensureConversationExists,
-  ensureMemberConversation,
   fetchAdminProfileIds,
   fetchConversationById,
   fetchConversationMessages,
@@ -34,6 +34,12 @@ import {
   conversationSortValue,
 } from "../utils/feedbackChat.utils";
 import { onMembersChanged } from "../utils/membersBus";
+
+interface PendingConversationInfo {
+  targetId: string;
+  type: ConversationType;
+  projectId?: string | null;
+}
 
 export interface UseChatResult {
   isAdmin: boolean;
@@ -67,10 +73,14 @@ export interface UseChatResult {
     content: string,
     attachments?: UploadedFileInfo[]
   ) => Promise<void>;
-  resolveConversationId: () => Promise<string | null>;
   hasProject: boolean;
-  memberConversations: ConversationDocument[];
-  feedbackConversations: ConversationDocument[];
+  hasOtherMembers: boolean;
+  shouldForceFeedbackOnly: boolean;
+  memberConversations: ConversationListEntry[];
+  feedbackConversations: ConversationListEntry[];
+  pendingConversation: PendingConversationInfo | null;
+  startPendingConversation: (info: PendingConversationInfo) => void;
+  clearPendingConversation: () => void;
   adminLookupDone: boolean;
 }
 
@@ -108,7 +118,6 @@ export const useChat = (
   );
   const adminWarningShownRef = useRef(false);
   const initialTabSetRef = useRef(false);
-  const ensuredMemberIdsRef = useRef<Set<string>>(new Set());
   const suppressAutoSelectRef = useRef(false);
   const [pendingMessages, setPendingMessages] = useState<
     Array<{
@@ -119,6 +128,9 @@ export const useChat = (
     }>
   >([]);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const [pendingConversation, setPendingConversation] =
+    useState<PendingConversationInfo | null>(null);
+  const newlyCreatedConversationIdRef = useRef<string | null>(null);
 
   const isAdmin = Boolean(user?.role && ADMIN_ROLES.has(user.role));
   const currentUserId = user?.id ?? "";
@@ -131,6 +143,12 @@ export const useChat = (
     [memberProfiles, currentUserId]
   );
   const shouldForceFeedbackOnly = !isAdmin && (!hasProject || !hasOtherMembers);
+
+  useEffect(() => {
+    if (!currentUserId) {
+      setPendingConversation(null);
+    }
+  }, [currentUserId]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -149,6 +167,7 @@ export const useChat = (
     if (!isOpen) {
       initialTabSetRef.current = false;
       suppressAutoSelectRef.current = false;
+      setPendingConversation(null);
     }
   }, [isOpen]);
 
@@ -157,11 +176,10 @@ export const useChat = (
   }, [hasProject, hasOtherMembers, isAdmin]);
 
   useEffect(() => {
-    ensuredMemberIdsRef.current.clear();
-  }, [currentProject?.$id]);
-
-  useEffect(() => {
-    if (selectedConversationId) suppressAutoSelectRef.current = false;
+    if (selectedConversationId) {
+      suppressAutoSelectRef.current = false;
+      setPendingConversation(null);
+    }
   }, [selectedConversationId]);
 
   const upsertConversation = useCallback(
@@ -218,6 +236,58 @@ export const useChat = (
     }
   }, []);
 
+  const startPendingConversation = useCallback(
+    (info: PendingConversationInfo) => {
+      if (!info?.targetId) return;
+      if (!currentUserId) {
+        toast.error("Vui lòng đăng nhập để trò chuyện");
+        return;
+      }
+      setPendingConversation(info);
+      setSelectedConversationId(null);
+      void enrichProfiles([info.targetId]);
+    },
+    [currentUserId, enrichProfiles]
+  );
+
+  const clearPendingConversation = useCallback(() => {
+    setPendingConversation(null);
+  }, []);
+
+  const buildPlaceholderConversation = useCallback(
+    (
+      targetId: string,
+      type: ConversationType,
+      projectId?: string | null
+    ): ConversationListEntry => {
+      const participants = [currentUserId, targetId].filter(
+        (id): id is string => Boolean(id)
+      );
+      const placeholderProjectKey = projectId
+        ? deriveProjectKey(projectId)
+        : null;
+      const baseId = projectId ? `${projectId}:${targetId}` : targetId;
+      return {
+        $collectionId: "",
+        $databaseId: "",
+        $id: `placeholder:${type}:${baseId}`,
+        $permissions: [],
+        $createdAt: new Date(0).toISOString(),
+        $updatedAt: new Date(0).toISOString(),
+        participants,
+        unreadBy: [],
+        createdBy: currentUserId,
+        type,
+        projectId: placeholderProjectKey,
+        lastMessage: null,
+        lastMessageAt: null,
+        __placeholderTargetId: targetId,
+        __placeholderProjectId: projectId ?? null,
+      };
+    },
+    [currentUserId]
+  );
+
   useEffect(() => {
     if (!currentProject?.$id) {
       setMemberProfiles([]);
@@ -263,52 +333,6 @@ export const useChat = (
   }, [currentProject?.$id, enrichProfiles]);
 
   useEffect(() => {
-    if (!currentProject?.$id) return;
-    if (!currentUserId) return;
-    if (conversationTab !== "member") return;
-    const projectKey = deriveProjectKey(currentProject.$id) ?? "0";
-    const memberIds = memberProfiles
-      .map((profile) => profile.$id)
-      .filter(
-        (memberId): memberId is string =>
-          Boolean(memberId) &&
-          memberId !== currentUserId &&
-          !ensuredMemberIdsRef.current.has(`${projectKey}:${memberId}`)
-      );
-    if (!memberIds.length) return;
-    let cancelled = false;
-    const ensureAll = async () => {
-      for (const memberId of memberIds) {
-        if (cancelled) break;
-        try {
-          const conversation = await ensureMemberConversation(
-            currentUserId,
-            memberId,
-            currentProject.$id
-          );
-          if (cancelled) break;
-          ensuredMemberIdsRef.current.add(`${projectKey}:${memberId}`);
-          upsertConversation(conversation);
-          void enrichProfiles([memberId]);
-        } catch (error) {
-          console.error("Không thể khởi tạo đoạn chat thành viên:", error);
-        }
-      }
-    };
-    void ensureAll();
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    conversationTab,
-    currentProject?.$id,
-    currentUserId,
-    enrichProfiles,
-    memberProfiles,
-    upsertConversation,
-  ]);
-
-  useEffect(() => {
     if (isAdmin) {
       setAdminLookupDone(true);
       return;
@@ -345,6 +369,12 @@ export const useChat = (
       cancelled = true;
     };
   }, [adminLookupDone, isAdmin, isOpen]);
+
+  useEffect(() => {
+    if (isAdmin) return;
+    if (!adminIds.length) return;
+    void enrichProfiles(adminIds);
+  }, [adminIds, enrichProfiles, isAdmin]);
 
   const loadConversations = useCallback(async () => {
     if (!currentUserId) return;
@@ -437,58 +467,37 @@ export const useChat = (
     if (conversationTab !== convType) setConversationTab(convType);
   }, [conversationTab, selectedConversation]);
 
-  useEffect(() => {
-    if (isAdmin) return;
-    if (!currentUserId) return;
-    if (!adminLookupDone) return;
-    if (!adminIds.length) return;
-    const missingAdminIds = adminIds.filter(
-      (adminId) =>
-        !conversations.some(
-          (conv) =>
-            (conv.type ?? "feedback") === "feedback" &&
-            conv.participants.includes(adminId) &&
-            conv.participants.includes(currentUserId)
-        )
-    );
-    if (!missingAdminIds.length) return;
-    missingAdminIds.forEach(async (adminId) => {
-      try {
-        const conversation = await ensureConversationExists(
-          currentUserId,
-          adminId,
-          { type: "feedback" }
-        );
-        upsertConversation(conversation);
-        void enrichProfiles([adminId]);
-      } catch (error) {
-        console.error("Không thể khởi tạo đoạn chat feedback:", error);
-      }
-    });
-  }, [
-    adminIds,
-    adminLookupDone,
-    conversations,
-    currentUserId,
-    enrichProfiles,
-    isAdmin,
-    upsertConversation,
-  ]);
-
   const otherParticipant = useMemo(() => {
-    if (!selectedConversation) return null;
-    const otherId = (selectedConversation.participants ?? []).find(
-      (id) => id !== currentUserId
-    );
-    if (!otherId) return null;
-    const profile = profileMap[otherId];
-    return {
-      id: otherId,
-      name: profile?.name,
-      avatarUrl: profile?.avatarUrl,
-      role: profile?.role,
-    };
-  }, [currentUserId, profileMap, selectedConversation]);
+    if (selectedConversation) {
+      const otherId = (selectedConversation.participants ?? []).find(
+        (id) => id !== currentUserId
+      );
+      if (otherId) {
+        const profile = profileMap[otherId];
+        return {
+          id: otherId,
+          name: profile?.name,
+          avatarUrl: profile?.avatarUrl,
+          role: profile?.role,
+        };
+      }
+    }
+    if (pendingConversation) {
+      const profile = profileMap[pendingConversation.targetId];
+      return {
+        id: pendingConversation.targetId,
+        name: profile?.name,
+        avatarUrl: profile?.avatarUrl,
+        role: profile?.role,
+      };
+    }
+    return null;
+  }, [
+    currentUserId,
+    pendingConversation,
+    profileMap,
+    selectedConversation,
+  ]);
 
   useEffect(() => {
     if (!isOpen || !otherParticipant) {
@@ -529,9 +538,16 @@ export const useChat = (
 
   useEffect(() => {
     if (!isOpen || !selectedConversationId || !currentUserId) return;
+    const skipInitialLoading =
+      newlyCreatedConversationIdRef.current === selectedConversationId;
     setMessages([]);
     setMessagesCursor(null);
-    setIsLoadingMessages(true);
+    if (!skipInitialLoading) {
+      setIsLoadingMessages(true);
+    } else {
+      setIsLoadingMessages(false);
+      newlyCreatedConversationIdRef.current = null;
+    }
     let cancelled = false;
     const loadMessages = async () => {
       try {
@@ -586,6 +602,9 @@ export const useChat = (
         toast.error("Không thể tải tin nhắn");
       } finally {
         if (!cancelled) setIsLoadingMessages(false);
+        if (newlyCreatedConversationIdRef.current === selectedConversationId) {
+          newlyCreatedConversationIdRef.current = null;
+        }
       }
     };
     void loadMessages();
@@ -712,62 +731,43 @@ export const useChat = (
     conversations,
     currentUserId,
     isOpen,
+    onShowIncomingBanner,
     selectedConversationId,
     summarizeMessage,
     upsertConversation,
   ]);
 
-  const resolveConversationId = useCallback(async (): Promise<
-    string | null
-  > => {
-    if (selectedConversationId) return selectedConversationId;
+  const createConversationFromPending = useCallback(async () => {
+    if (!pendingConversation) return null;
     if (!currentUserId) return null;
-    if (isAdmin) {
-      toast.error("Vui lòng chọn một cuộc hội thoại");
-      return null;
-    }
-    const targetAdminIds =
-      adminIds.length > 0
-        ? adminIds
-        : process.env.NEXT_PUBLIC_FEEDBACK_ADMIN_ID?.trim()
-        ? [process.env.NEXT_PUBLIC_FEEDBACK_ADMIN_ID.trim()!]
-        : [];
-    if (targetAdminIds.length === 0) {
-      toast.error("Không tìm thấy người nhận phản hồi");
-      return null;
-    }
     try {
       const conversation = await ensureConversationExists(
         currentUserId,
-        targetAdminIds[0]
+        pendingConversation.targetId,
+        {
+          type: pendingConversation.type,
+          projectId: pendingConversation.projectId ?? null,
+        }
       );
-      setConversations((prev) => {
-        const exists = prev.some((item) => item.$id === conversation.$id);
-        const merged = exists
-          ? prev.map((item) =>
-              item.$id === conversation.$id ? conversation : item
-            )
-          : [...prev, conversation];
-        return merged.sort(
-          (a, b) => conversationSortValue(b) - conversationSortValue(a)
-        );
-      });
+      setPendingConversation(null);
+      newlyCreatedConversationIdRef.current = conversation.$id ?? null;
+      upsertConversation(conversation);
       setSelectedConversationId(conversation.$id);
-      void enrichProfiles(
-        (conversation.participants ?? []).filter((id) => id !== currentUserId)
+      const others = (conversation.participants ?? []).filter(
+        (id) => id !== currentUserId
       );
-      return conversation.$id;
+      if (others.length) void enrichProfiles(others);
+      return conversation.$id ?? null;
     } catch (error) {
       console.error("Không thể khởi tạo cuộc hội thoại:", error);
       toast.error("Không thể khởi tạo cuộc hội thoại");
       return null;
     }
   }, [
-    adminIds,
     currentUserId,
     enrichProfiles,
-    isAdmin,
-    selectedConversationId,
+    pendingConversation,
+    upsertConversation,
   ]);
 
   const handleSendMessage = useCallback(
@@ -777,7 +777,7 @@ export const useChat = (
       try {
         let conversationId = selectedConversationId;
         if (!conversationId) {
-          conversationId = await resolveConversationId();
+          conversationId = await createConversationFromPending();
           if (!conversationId) {
             setIsSending(false);
             return;
@@ -836,14 +836,14 @@ export const useChat = (
       }
     },
     [
+      createConversationFromPending,
       currentUserId,
-      resolveConversationId,
       selectedConversationId,
       summarizeMessage,
     ]
   );
 
-  const feedbackConversations = useMemo(
+  const existingFeedbackConversations = useMemo(
     () =>
       conversations.filter(
         (conversation) => (conversation.type ?? "feedback") === "feedback"
@@ -851,7 +851,34 @@ export const useChat = (
     [conversations]
   );
 
-  const memberConversations = useMemo(() => {
+  const feedbackConversations = useMemo(() => {
+    if (!currentUserId) return existingFeedbackConversations;
+    if (isAdmin) return existingFeedbackConversations;
+    const existingAdminIds = new Set(
+      existingFeedbackConversations.flatMap(
+        (conversation) => conversation.participants ?? []
+      )
+    );
+    const placeholders = adminIds
+      .filter(
+        (adminId): adminId is string =>
+          Boolean(adminId) &&
+          adminId !== currentUserId &&
+          !existingAdminIds.has(adminId)
+      )
+      .map((adminId) => buildPlaceholderConversation(adminId, "feedback"));
+    return [...existingFeedbackConversations, ...placeholders].sort(
+      (a, b) => conversationSortValue(b) - conversationSortValue(a)
+    );
+  }, [
+    adminIds,
+    buildPlaceholderConversation,
+    currentUserId,
+    existingFeedbackConversations,
+    isAdmin,
+  ]);
+
+  const existingMemberConversations = useMemo(() => {
     if (!currentProject?.$id) return [] as ConversationDocument[];
     const projectKey = deriveProjectKey(currentProject.$id);
     const currentMemberIds = new Set(
@@ -886,6 +913,34 @@ export const useChat = (
     );
   }, [conversations, currentProject?.$id, currentUserId, memberProfiles]);
 
+  const memberConversations = useMemo(() => {
+    if (!currentUserId) return [] as ConversationListEntry[];
+    const placeholders: ConversationListEntry[] = [];
+    if (currentProject?.$id) {
+      const memberIdsWithConversation = new Set(
+        existingMemberConversations.flatMap(
+          (conversation) => conversation.participants ?? []
+        )
+      );
+      memberProfiles.forEach((profile) => {
+        if (!profile.$id || profile.$id === currentUserId) return;
+        if (memberIdsWithConversation.has(profile.$id)) return;
+        placeholders.push(
+          buildPlaceholderConversation(profile.$id, "member", currentProject.$id)
+        );
+      });
+    }
+    return [...existingMemberConversations, ...placeholders].sort(
+      (a, b) => conversationSortValue(b) - conversationSortValue(a)
+    );
+  }, [
+    buildPlaceholderConversation,
+    currentProject?.$id,
+    currentUserId,
+    existingMemberConversations,
+    memberProfiles,
+  ]);
+
   useEffect(() => {
     if (!isOpen) return;
     if (!shouldForceFeedbackOnly) return;
@@ -900,24 +955,35 @@ export const useChat = (
     )
       return;
 
-    const conversation = feedbackConversations[0];
+    const conversation = existingFeedbackConversations[0];
     if (conversation) {
       setSelectedConversationId(conversation.$id);
       return;
     }
 
-    if (adminLookupDone && conversations.length === 0) {
-      void resolveConversationId();
+    if (adminLookupDone && conversations.length === 0 && !pendingConversation) {
+      const placeholder = feedbackConversations.find(
+        (item) => Boolean(item.__placeholderTargetId)
+      );
+      if (placeholder?.__placeholderTargetId) {
+        startPendingConversation({
+          targetId: placeholder.__placeholderTargetId,
+          type: placeholder.type ?? "feedback",
+          projectId: placeholder.__placeholderProjectId ?? null,
+        });
+      }
     }
   }, [
     adminLookupDone,
     conversations.length,
+    existingFeedbackConversations,
     feedbackConversations,
     hasProject,
     isAdmin,
     isOpen,
     memberProfiles.length,
-    resolveConversationId,
+    pendingConversation,
+    startPendingConversation,
     selectedConversationId,
     shouldForceFeedbackOnly,
   ]);
@@ -941,10 +1007,14 @@ export const useChat = (
     isLoadingMessages,
     pendingMessages,
     handleSendMessage,
-    resolveConversationId,
     hasProject,
+    hasOtherMembers,
+    shouldForceFeedbackOnly,
     memberConversations,
     feedbackConversations,
+    pendingConversation,
+    startPendingConversation,
+    clearPendingConversation,
     adminLookupDone,
   };
 };

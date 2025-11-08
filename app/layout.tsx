@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "./context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
@@ -12,18 +11,7 @@ import {
   DEFAULT_LOGO_SVG,
 } from "./utils/logoSvg";
 import FeedbackChatWidget from "./components/feedback/FeedbackChatWidget";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-  preload: true,
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-  preload: true,
-});
+import { spaceMono, geistMono, geistSans } from "@/lib/fonts";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://my-task-manager-web.vercel.app"),
@@ -104,7 +92,7 @@ export default function RootLayout({
       </head>
       <body
         suppressHydrationWarning
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${spaceMono.variable} ${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <AuthProvider>
           <ProjectProvider>

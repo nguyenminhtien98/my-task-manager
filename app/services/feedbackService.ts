@@ -40,6 +40,11 @@ export interface ConversationDocument extends Models.Document {
   projectId?: string | null;
 }
 
+export interface ConversationListEntry extends ConversationDocument {
+  __placeholderTargetId?: string;
+  __placeholderProjectId?: string | null;
+}
+
 export interface ConversationMessageDocument extends Models.Document {
   conversationId: string;
   senderId: string;
@@ -806,13 +811,3 @@ export const fetchProjectMemberProfiles = async (
     return [];
   }
 };
-
-export const ensureMemberConversation = async (
-  userId: string,
-  memberId: string,
-  projectId: string
-): Promise<ConversationDocument> =>
-  ensureConversationExists(userId, memberId, {
-    type: "member",
-    projectId,
-  });

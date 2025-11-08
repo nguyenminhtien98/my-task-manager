@@ -34,7 +34,7 @@
 ## Ngăn xếp công nghệ
 
 - **Giao diện người dùng:** [Next.js](https://nextjs.org/) (khung React)
-- **Phụ trợ:** [Appwrite](https://appwrite.io/) (แบ็กเอนด์โอเพนซอร์สในฐานะบริการ)
+- **Phụ trợ:** [Appwrite](https://appwrite.io/)
 - **Lưu trữ tệp:** [Cloudinary](https://cloudinary.com/)
 - **Tạo kiểu:** [Tailwind CSS](https://tailwindcss.com/)
 - **Kéo và thả:** [dnd-kit](https://dndkit.com/)
@@ -57,20 +57,3 @@ bun dev
 Mở [http://localhost:3000](http://localhost:3000) bằng trình duyệt của bạn để xem kết quả.
 
 Bạn có thể bắt đầu chỉnh sửa trang bằng cách sửa đổi `app/page.tsx`. Trang tự động cập nhật khi bạn chỉnh sửa tệp.
-
-Dự án này sử dụng [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) để tự động tối ưu hóa và tải [Geist](https://vercel.com/font), một họ phông chữ mới cho Vercel.
-
-## Tìm hiểu thêm
-
-Để tìm hiểu thêm về Next.js, hãy xem các tài nguyên sau:
-
-- [Tài liệu Next.js](https://nextjs.org/docs) - tìm hiểu về các tính năng và API của Next.js.
-- [Tìm hiểu Next.js](https://nextjs.org/learn) - một hướng dẫn tương tác về Next.js.
-
-Bạn có thể xem [kho lưu trữ GitHub của Next.js](https://github.com/vercel/next.js) - chúng tôi hoan nghênh những phản hồi và đóng góp của bạn!
-
-## Triển khai trên Vercel
-
-Cách dễ nhất để triển khai ứng dụng Next.js của bạn là sử dụng [Nền tảng Vercel](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) từ những người tạo ra Next.js.
-
-Xem [tài liệu triển khai Next.js](https://nextjs.org/docs/app/building-your-application/deploying) của chúng tôi để biết thêm chi tiết.

@@ -61,6 +61,7 @@ interface FeedbackConversationDetailProps {
     content: string;
     attachments?: UploadedFileInfo[];
   }>;
+  allowCreateConversation?: boolean;
 }
 
 const getPresenceDisplay = (presence?: PresenceDocument | null) => {
@@ -106,6 +107,7 @@ const FeedbackConversationDetail: React.FC<FeedbackConversationDetailProps> = ({
   conversationType = "feedback",
   isLoading = false,
   pendingMessages = [],
+  allowCreateConversation = false,
 }) => {
   const [draft, setDraft] = useState("");
   const messageEndRef = useRef<HTMLDivElement | null>(null);
@@ -135,9 +137,23 @@ const FeedbackConversationDetail: React.FC<FeedbackConversationDetailProps> = ({
     };
   }, [conversationId, isOpen]);
 
+  const trimmedDraft = draft.trim();
+  const canAttachMedia =
+    (Boolean(conversationId) || allowCreateConversation) && !isUploadingMedia;
+  const canSubmit =
+    (conversationId || allowCreateConversation) &&
+    !isSending &&
+    !isUploadingMedia &&
+    trimmedDraft.length > 0;
+
   const handleSend = async () => {
-    const content = draft.trim();
-    if (!conversationId || !content || isUploadingMedia) return;
+    const content = trimmedDraft;
+    if (
+      (!conversationId && !allowCreateConversation) ||
+      !content ||
+      isUploadingMedia
+    )
+      return;
     await onSendMessage(content);
     setDraft("");
   };
@@ -171,7 +187,10 @@ const FeedbackConversationDetail: React.FC<FeedbackConversationDetailProps> = ({
         );
       });
 
-      if (!conversationId || validFiles.length === 0) {
+      if (
+        (!conversationId && !allowCreateConversation) ||
+        validFiles.length === 0
+      ) {
         event.target.value = "";
         return;
       }
@@ -190,7 +209,7 @@ const FeedbackConversationDetail: React.FC<FeedbackConversationDetailProps> = ({
         event.target.value = "";
       }
     },
-    [conversationId, onSendMessage]
+    [allowCreateConversation, conversationId, onSendMessage]
   );
 
   const presenceDisplay = useMemo(
@@ -336,7 +355,7 @@ const FeedbackConversationDetail: React.FC<FeedbackConversationDetailProps> = ({
       ) : (
         <>
           <div className="flex-1 space-y-3 overflow-y-auto px-3 py-3 no-scrollbar max-h-[calc(100vh-220px)]">
-            {!conversationId ? (
+            {!conversationId && !allowCreateConversation ? (
               <div className="flex h-full items-center justify-center text-sm text-gray-500">
                 Chọn cuộc hội thoại
               </div>
@@ -420,8 +439,8 @@ const FeedbackConversationDetail: React.FC<FeedbackConversationDetailProps> = ({
               <button
                 type="button"
                 onClick={handleMediaClick}
-                disabled={isUploadingMedia}
-                className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-black/70 text-white transition hover:bg-black focus:outline-none focus-visible:ring-2 focus-visible:ring-black/30 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={!canAttachMedia}
+                className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-black/70 text-white transition hover:bg-black focus:outline-none focus-visible:ring-2 focus-visible:ring-black/30 disabled:cursor-not-allowed disabled:bg-black/40 disabled:text-white/70"
                 title="Đính kèm hình ảnh/video"
               >
                 <FiImage />
@@ -429,7 +448,11 @@ const FeedbackConversationDetail: React.FC<FeedbackConversationDetailProps> = ({
               <input
                 ref={inputRef}
                 value={draft}
-                disabled={isSending || isUploadingMedia || !conversationId}
+                disabled={
+                  isSending ||
+                  isUploadingMedia ||
+                  (!conversationId && !allowCreateConversation)
+                }
                 onChange={(event) => setDraft(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") {
@@ -443,13 +466,8 @@ const FeedbackConversationDetail: React.FC<FeedbackConversationDetailProps> = ({
               />
               <Button
                 type="button"
-                className="bg-black text-white !rounded-lg !px-3 !py-2 flex-shrink-0"
-                disabled={
-                  !conversationId ||
-                  isSending ||
-                  isUploadingMedia ||
-                  !draft.trim()
-                }
+                className="bg-black text-white !rounded-lg !px-3 !py-2 flex-shrink-0 disabled:bg-black/40 disabled:text-white/70 disabled:cursor-not-allowed"
+                disabled={!canSubmit}
                 onClick={() => void handleSend()}
               >
                 {isSending || isUploadingMedia ? "..." : "Gửi"}
@@ -462,7 +480,7 @@ const FeedbackConversationDetail: React.FC<FeedbackConversationDetailProps> = ({
               multiple
               onChange={handleFileSelect}
               className="hidden"
-              disabled={isUploadingMedia || !conversationId}
+              disabled={!canAttachMedia}
             />
           </div>
           <MediaPreviewModal
