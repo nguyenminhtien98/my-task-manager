@@ -358,14 +358,14 @@ const LoginRegisterModal: React.FC<{
                 type={showConfirm ? "text" : "password"}
                 {...registerField("confirmPassword", {
                   required: "Vui lòng xác nhận mật khẩu",
-                  validate: (v) =>
-                    !v
+                  validate: (value?: string) => {
+                    if (!value) return true;
+                    const emojiCheck = validateNoEmoji(value);
+                    if (emojiCheck !== true) return emojiCheck;
+                    return value === watch("password")
                       ? true
-                      : containsEmoji(v)
-                      ? validateNoEmoji(v)
-                      : v === watch("password")
-                      ? true
-                      : "Mật khẩu không khớp",
+                      : "Mật khẩu không khớp";
+                  },
                 })}
                 className="mt-1 w-full p-2 border border-black rounded text-black pr-10"
               />

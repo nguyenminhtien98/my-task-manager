@@ -166,13 +166,15 @@ const DesktopHeader: React.FC<DesktopHeaderProps> = ({
                   >
                     Hồ sơ của tôi
                   </Button>
-                  <Button
-                    variant="ghost"
-                    onClick={onOpenProjectManager}
-                    className="w-full justify-start px-4 py-2 text-left text-[#111827]"
-                  >
-                    Quản lý dự án
-                  </Button>
+                  {projects.length > 0 && (
+                    <Button
+                      variant="ghost"
+                      onClick={onOpenProjectManager}
+                      className="w-full justify-start px-4 py-2 text-left text-[#111827]"
+                    >
+                      Quản lý dự án
+                    </Button>
+                  )}
                   <Button
                     variant="ghost"
                     onClick={onOpenTheme}

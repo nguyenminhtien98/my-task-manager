@@ -294,6 +294,7 @@ const Header: React.FC<HeaderProps> = ({
         onOpenProjectManager={handleOpenProjectManager}
         onOpenTheme={handleOpenThemeModal}
         onLogout={handleLogoutClick}
+        hasProjects={projects.length > 0}
       />
 
       <MobileFooterBar

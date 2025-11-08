@@ -16,6 +16,7 @@ interface MobileDrawerProps {
   onOpenProjectManager: () => void;
   onOpenTheme: () => void;
   onLogout: () => void;
+  hasProjects: boolean;
 }
 
 const MOBILE_FOOTER_HEIGHT_VAR = "var(--mobile-footer-height, 72px)";
@@ -29,6 +30,7 @@ const MobileDrawer: React.FC<MobileDrawerProps> = ({
   onOpenProjectManager,
   onOpenTheme,
   onLogout,
+  hasProjects,
 }) => {
   const [isPersonalOpen, setIsPersonalOpen] = useState(false);
 
@@ -127,16 +129,18 @@ const MobileDrawer: React.FC<MobileDrawerProps> = ({
                   >
                     Hồ sơ
                   </button>
-                  <button
-                    type="button"
-                    className="w-full px-4 py-3 text-left text-sm font-semibold text-white transition hover:bg-white/5"
-                    onClick={() => {
-                      onOpenProjectManager();
-                      onClose();
-                    }}
-                  >
-                    Quản lý dự án
-                  </button>
+                  {hasProjects && (
+                    <button
+                      type="button"
+                      className="w-full px-4 py-3 text-left text-sm font-semibold text-white transition hover:bg-white/5"
+                      onClick={() => {
+                        onOpenProjectManager();
+                        onClose();
+                      }}
+                    >
+                      Quản lý dự án
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="w-full px-4 py-3 text-left text-sm font-semibold text-white transition hover:bg-white/5"

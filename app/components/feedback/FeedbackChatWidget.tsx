@@ -141,6 +141,7 @@ const FeedbackChatWidget: React.FC = () => {
 
   const showListView =
     !shouldForceFeedbackOnly && !selectedConversationId && !pendingConversation;
+  const pendingTargetId = pendingConversation?.targetId ?? null;
 
   useEffect(() => {
     if (!isOpen) {
@@ -266,7 +267,7 @@ const FeedbackChatWidget: React.FC = () => {
                     presenceMap={presenceMap}
                     currentUserId={currentUserId}
                     selectedConversationId={selectedConversationId}
-                    pendingTargetId={pendingConversation?.targetId ?? null}
+                    pendingTargetId={pendingTargetId}
                     onSelectConversation={(conversation) => {
                       suppressAutoSelectRef.current = false;
                       const placeholderTargetId =
