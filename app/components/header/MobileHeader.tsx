@@ -8,6 +8,7 @@ import ProjectSelector from "./ProjectSelector";
 import { Project } from "../../types/Types";
 import { User } from "../../context/AuthContext";
 import AnimatedGradientLogo from "../common/AnimatedGradientLogo";
+import { LuClipboardList } from "react-icons/lu";
 
 interface MobileHeaderProps {
   user: User | null;
@@ -17,6 +18,8 @@ interface MobileHeaderProps {
   onProjectSelect: (project: Project) => void;
   onLoginClick: () => void;
   onAddProject?: () => void;
+  onOpenReportRoom: () => void;
+  canOpenReportRoom: boolean;
 }
 
 const MobileHeader: React.FC<MobileHeaderProps> = ({
@@ -27,6 +30,8 @@ const MobileHeader: React.FC<MobileHeaderProps> = ({
   onProjectSelect,
   onLoginClick,
   onAddProject,
+  onOpenReportRoom,
+  canOpenReportRoom,
 }) => {
   const showProjectSelector = user && projects.length > 0;
   const showCreateProjectButton = showProjectSelector && !!onAddProject;
@@ -54,6 +59,21 @@ const MobileHeader: React.FC<MobileHeaderProps> = ({
                 buttonStyle={{ background: currentTheme }}
               />
             </div>
+            <button
+              type="button"
+              aria-label="Báo cáo công việc"
+              className={`rounded-full border p-2 text-white transition ${
+                canOpenReportRoom
+                  ? "border-white/30 hover:border-white hover:bg-white/10"
+                  : "cursor-not-allowed border-white/10 opacity-50"
+              }`}
+              onClick={() => {
+                if (!canOpenReportRoom) return;
+                onOpenReportRoom();
+              }}
+            >
+              <LuClipboardList className="h-5 w-5" />
+            </button>
             {onAddProject && (
               <button
                 type="button"

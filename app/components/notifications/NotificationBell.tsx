@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LuBell } from "react-icons/lu";
 import { useAuth } from "../../context/AuthContext";
 import Tooltip from "../common/Tooltip";
@@ -9,6 +9,7 @@ import { useNotifications } from "../../hooks/useNotifications";
 import { NotificationRecord } from "../../types/Types";
 import { useFeedbackChat } from "../../context/FeedbackChatContext";
 import { cn } from "../../utils/cn";
+import FloatingDropdown from "../common/FloatingDropdown";
 
 const formatUnreadCount = (count: number) => {
   if (count > 99) return "99+";
@@ -24,32 +25,16 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
 }) => {
   const { user } = useAuth();
   const hook = useNotifications({ recipientId: user?.id });
+  const { unreadCount, markAllAsRead, markAllAsSeen } = hook;
   const [isOpen, setIsOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement | null>(null);
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
   const feedbackChat = useFeedbackChat();
 
   const hasUser = Boolean(user);
-  const unreadCount = hook.unreadCount;
   const badgeLabel = useMemo(
     () => formatUnreadCount(unreadCount),
     [unreadCount]
   );
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (!containerRef.current) return;
-      if (
-        isOpen &&
-        !containerRef.current.contains(event.target as Node)
-      ) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [isOpen]);
 
   useEffect(() => {
     if (!hasUser) {
@@ -65,14 +50,35 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
     }
   };
 
+  const openDropdown = useCallback(() => {
+    if (isOpen) return;
+    setIsOpen(true);
+    void markAllAsSeen();
+  }, [isOpen, markAllAsSeen]);
+
+  const closeDropdown = useCallback(() => {
+    if (!isOpen) return;
+    setIsOpen(false);
+    void markAllAsRead();
+  }, [isOpen, markAllAsRead]);
+
+  const toggleDropdown = () => {
+    if (isOpen) {
+      closeDropdown();
+    } else {
+      openDropdown();
+    }
+  };
+
   if (!hasUser) return null;
 
   return (
-    <div ref={containerRef} className="relative">
+    <div className="relative">
       <Tooltip content="Thông báo">
         <button
+          ref={buttonRef}
           type="button"
-          onClick={() => setIsOpen((prev) => !prev)}
+          onClick={toggleDropdown}
           className={cn(
             "relative flex h-9 w-9 items-center justify-center text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 hover:text-white/90 hover:cursor-pointer",
             buttonClassName
@@ -94,21 +100,25 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
         </button>
       </Tooltip>
 
-      <div
-        className="absolute right-0 z-50 mt-2"
-        style={{ pointerEvents: isOpen ? "auto" : "none" }}
+      <FloatingDropdown
+        anchorRef={buttonRef}
+        isOpen={isOpen}
+        onClose={closeDropdown}
+        placement="bottom-right"
+        offset={{ y: 0 }}
+        unstyled
+        contentClassName={cn(
+          "w-[360px] max-w-[92vw] p-0 transition-all duration-150",
+          isOpen ? "translate-y-0 opacity-100" : "-translate-y-1 opacity-0"
+        )}
       >
-        <div
-          className={`transform transition-all duration-150 ${isOpen ? "translate-y-0 opacity-100" : "-translate-y-1 opacity-0"
-            }`}
-        >
-          <NotificationList
-            hook={hook}
-            isOpen={isOpen}
-            onAction={handleAction}
-          />
-        </div>
-      </div>
+        <NotificationList
+          hook={hook}
+          isOpen={isOpen}
+          onAction={handleAction}
+          panelClassName="w-full"
+        />
+      </FloatingDropdown>
     </div>
   );
 };

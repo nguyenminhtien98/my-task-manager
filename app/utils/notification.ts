@@ -75,6 +75,7 @@ const isNotificationType = (value: unknown): value is NotificationType => {
       "feedback.message.fromAdmin",
       "system.moderation.rateLimit",
       "system.moderation.suspended",
+      "dailyReport.reminder",
     ].includes(value)
   );
 };

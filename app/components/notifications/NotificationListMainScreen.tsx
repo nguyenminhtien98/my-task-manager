@@ -6,6 +6,7 @@ import NotificationCard from "./NotificationCard";
 import { NotificationFilter } from "../../hooks/useNotifications";
 import Button from "../common/Button";
 import { cn } from "../../utils/cn";
+import LoadingSpinner from "../loading/LoadingSpinner";
 
 interface NotificationListMainScreenProps {
   notifications: NotificationRecord[];
@@ -87,7 +88,7 @@ const NotificationListMainScreen: React.FC<NotificationListMainScreenProps> = ({
   return (
     <div
       className={cn(
-        "w-[360px] max-w-[92vw] rounded-lg bg-white p-3 shadow-lg",
+        "w-full rounded-lg bg-white p-3 shadow-lg",
         className
       )}
     >
@@ -121,7 +122,12 @@ const NotificationListMainScreen: React.FC<NotificationListMainScreenProps> = ({
       >
         {isLoading && (
           <div className="flex min-h-[120px] items-center justify-center">
-            <div className="h-6 w-6 animate-spin rounded-full border-2 border-black/80 border-t-transparent" />
+            <LoadingSpinner
+              size={24}
+              thickness={3}
+              variant="dark"
+              label="Đang tải thông báo"
+            />
           </div>
         )}
 
@@ -144,7 +150,12 @@ const NotificationListMainScreen: React.FC<NotificationListMainScreenProps> = ({
 
         {isFetchingMore && enableInfiniteScroll && (
           <div className="flex items-center justify-center py-2">
-            <div className="h-5 w-5 animate-spin rounded-full border-2 border-black/80 border-t-transparent" />
+            <LoadingSpinner
+              size={20}
+              thickness={3}
+              variant="dark"
+              label="Đang tải thêm thông báo"
+            />
           </div>
         )}
 

@@ -21,6 +21,7 @@ import DesktopHeader from "./header/DesktopHeader";
 import MobileHeader from "./header/MobileHeader";
 import MobileDrawer from "./header/MobileDrawer";
 import MobileFooterBar from "./header/MobileFooterBar";
+import { useRouter } from "next/navigation";
 
 const Header: React.FC<HeaderProps> = ({
   onCreateTask,
@@ -54,6 +55,7 @@ const Header: React.FC<HeaderProps> = ({
   const { isSaving: isSavingTheme, saveTheme } = useProjectTheme();
   const { isOpen: isChatOpen, open: openChat } = useFeedbackChat();
   const pendingAddActionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const router = useRouter();
 
   const clearPendingAddActionTimeout = useCallback(() => {
     if (pendingAddActionTimeoutRef.current) {
@@ -248,6 +250,19 @@ const Header: React.FC<HeaderProps> = ({
   }, [openChat]);
 
   const currentTheme = currentProject?.themeColor || DEFAULT_THEME_GRADIENT;
+  const canOpenReportRoom = Boolean(user && currentProject);
+
+  const handleOpenReportRoom = useCallback(() => {
+    if (!user) {
+      toast.error("Vui lòng đăng nhập để sử dụng phòng báo cáo.");
+      return;
+    }
+    if (!currentProject) {
+      toast.error("Hãy chọn một dự án trước khi vào phòng báo cáo.");
+      return;
+    }
+    router.push("/daily-report");
+  }, [currentProject, router, user]);
 
   return (
     <>
@@ -274,6 +289,8 @@ const Header: React.FC<HeaderProps> = ({
         onOpenTheme={handleOpenThemeModal}
         onLogout={handleLogoutClick}
         currentTheme={currentTheme}
+        onOpenReportRoom={handleOpenReportRoom}
+        canOpenReportRoom={canOpenReportRoom}
       />
 
       <MobileHeader
@@ -284,6 +301,8 @@ const Header: React.FC<HeaderProps> = ({
         onProjectSelect={handleProjectSelect}
         onLoginClick={onLoginClick}
         onAddProject={onCreateProject}
+        onOpenReportRoom={handleOpenReportRoom}
+        canOpenReportRoom={canOpenReportRoom}
       />
 
       <MobileDrawer

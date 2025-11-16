@@ -71,7 +71,7 @@ const NotificationList: React.FC<NotificationListProps> = ({
   }
 
   return (
-    <div className="relative">
+    <div className="relative w-full p-3">
       {activeView === "main" ? (
         <NotificationListMainScreen
           notifications={filteredNotifications}

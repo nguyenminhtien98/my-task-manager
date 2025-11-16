@@ -183,6 +183,34 @@ export const createNotifications = async (
   await Promise.all(entries.map((entry) => createNotification(entry)));
 };
 
+export interface DailyReportReminderParams {
+  recipientIds: string[];
+  projectId: string;
+  projectName?: string;
+  remindTime?: string;
+  message?: string;
+}
+
+export const sendDailyReportReminders = async (
+  params: DailyReportReminderParams
+) => {
+  const { recipientIds, projectId, projectName, remindTime, message } = params;
+  if (!recipientIds.length || !projectId) return;
+  await createNotifications(
+    recipientIds.map((recipientId) => ({
+      recipientId,
+      type: "dailyReport.reminder",
+      scope: "project",
+      projectId,
+      metadata: {
+        projectName,
+        remindTime,
+      },
+      message,
+    }))
+  );
+};
+
 interface ProjectMembersOptions {
   includeLeader?: boolean;
 }

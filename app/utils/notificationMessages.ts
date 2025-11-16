@@ -507,6 +507,12 @@ const messageBuilders: Record<
       ),
     ]);
   },
+  "dailyReport.reminder": () =>
+    createMessage([
+      text(
+        "Đã đến giờ, các thành viên hãy vào phòng báo cáo để báo cáo công việc ngày hôm nay của bạn."
+      ),
+    ]),
 };
 
 export const buildNotificationMessage = (

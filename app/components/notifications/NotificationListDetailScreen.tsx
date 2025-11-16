@@ -20,7 +20,7 @@ const NotificationListDetailScreen: React.FC<
     return (
       <div
         className={cn(
-          "w-[360px] max-w-[92vw] rounded-lg bg-white p-4 shadow-lg",
+          "w-full rounded-lg bg-white p-4 shadow-lg",
           className
         )}
       >
@@ -34,7 +34,7 @@ const NotificationListDetailScreen: React.FC<
   return (
     <div
       className={cn(
-        "w-[360px] max-w-[92vw] rounded-lg bg-white p-3 shadow-lg",
+        "w-full rounded-lg bg-white p-3 shadow-lg",
         className
       )}
     >

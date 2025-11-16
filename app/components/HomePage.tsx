@@ -1,8 +1,6 @@
 "use client";
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import dynamic from "next/dynamic";
-import Header from "./Header";
-import LoginRegisterModal from "./modal/LoginRegisterModal";
 import TaskModal from "./modal/taskModal/TaskModal";
 import { Task, TaskStatus, BasicProfile } from "../types/Types";
 import { useAuth } from "../context/AuthContext";
@@ -10,7 +8,6 @@ import { DragEndEvent } from "@dnd-kit/core";
 import { subscribeToRealtime } from "../../lib/appwrite";
 import toast from "react-hot-toast";
 import { useProject } from "../context/ProjectContext";
-import ProjectModal from "./modal/ProjectModal";
 import { useTheme } from "../context/ThemeContext";
 import { useProjectOperations } from "../hooks/useProjectOperations";
 import { useTask } from "../hooks/useTask";
@@ -22,6 +19,8 @@ import {
 import { mapTaskDocument, RawTaskDocument } from "../utils/taskMapping";
 import { useTaskFilter } from "../context/TaskFilterContext";
 import { matchesTaskFilters } from "../utils/taskFilters";
+import { useRouter, useSearchParams } from "next/navigation";
+import MainLayout from "./MainLayout";
 
 const Board = dynamic(() => import("./Board"), { ssr: false });
 
@@ -46,6 +45,8 @@ const defaultGuideTask: Task = {
   priority: "High",
 };
 
+const looksLikeAppwriteId = (value: string) => /^[a-zA-Z0-9]{15,}$/i.test(value);
+
 const HomePage: React.FC = () => {
   const { user } = useAuth();
   const { theme } = useTheme();
@@ -55,21 +56,15 @@ const HomePage: React.FC = () => {
     setTasksHydrated,
     isProjectClosed,
   } = useProject();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { members } = useProjectOperations();
   const currentUserName = user?.name || "";
   const isLeader = currentProjectRole === "leader";
 
   const [allTasks, setAllTasks] = useState<Task[]>([]);
-  const [loginModalOpen, setLoginModalOpen] = useState(false);
-  const [taskModalOpen, setTaskModalOpen] = useState(false);
   const [taskDetailOpen, setTaskDetailOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  const [openCreateAfterLogin, setOpenCreateAfterLogin] = useState(false);
-  const [projectModalOpen, setProjectModalOpen] = useState(false);
-  const [
-    shouldOpenTaskAfterProjectCreation,
-    setShouldOpenTaskAfterProjectCreation,
-  ] = useState(false);
   const [hasLoaded, setHasLoaded] = useState<boolean>(false);
   const { moveTask } = useTask();
   const { filters } = useTaskFilter();
@@ -81,13 +76,12 @@ const HomePage: React.FC = () => {
   }, [hasLoaded, setTasksHydrated]);
 
   useEffect(() => {
-    const handleOpenLoginModal = () => setLoginModalOpen(true);
-    const listener = () => handleOpenLoginModal();
-    window.addEventListener("open-login-modal", listener as EventListener);
-    return () => {
-      window.removeEventListener("open-login-modal", listener as EventListener);
-    };
-  }, []);
+    const loginParam = searchParams.get("login");
+    if (loginParam === "1") {
+      window.dispatchEvent(new Event("open-main-layout-login-modal"));
+      router.replace("/", { scroll: false });
+    }
+  }, [router, searchParams]);
 
   const memberMap = useMemo(() => {
     const map = new Map<string, BasicProfile>();
@@ -110,6 +104,82 @@ const HomePage: React.FC = () => {
     return map;
   }, [members, currentProject?.leader]);
 
+  const leaderProfile = useMemo(() => {
+    if (!currentProject?.leader) return null;
+    return {
+      $id: currentProject.leader.$id,
+      name: currentProject.leader.name,
+      email: currentProject.leader.email,
+      avatarUrl: currentProject.leader.avatarUrl ?? undefined,
+    };
+  }, [currentProject?.leader]);
+
+  const annotateTask = useCallback(
+    (input: Task): Task => {
+      const resolveValue = (
+        value: string | BasicProfile | null | undefined
+      ): string | BasicProfile | null => {
+        if (!value) return null;
+        if (typeof value === "string") {
+          const trimmed = value.trim();
+          if (!trimmed) return null;
+          const matched = memberMap.get(trimmed);
+          return matched ?? trimmed;
+        }
+        const maybeProfile = value as BasicProfile;
+        if (maybeProfile.$id && memberMap.has(maybeProfile.$id)) {
+          return memberMap.get(maybeProfile.$id)!;
+        }
+        return maybeProfile;
+      };
+
+      const deriveDisplayName = (
+        value: string | BasicProfile | null | undefined
+      ): string | null => {
+        if (!value) return null;
+        if (typeof value === "string") {
+          const trimmed = value.trim();
+          if (!trimmed) return null;
+          if (looksLikeAppwriteId(trimmed)) {
+            const fallback = memberMap.get(trimmed);
+            return fallback?.name ?? null;
+          }
+          return trimmed;
+        }
+        const profile = value as BasicProfile;
+        if (profile.name && profile.name.trim().length > 0) {
+          return profile.name;
+        }
+        if (profile.$id && memberMap.has(profile.$id)) {
+          return memberMap.get(profile.$id)?.name ?? null;
+        }
+        return null;
+      };
+
+      const resolvedAssignee = resolveValue(input.assignee ?? null);
+      let resolvedCompletedBy = resolveValue(
+        (input.completedBy as string | BasicProfile | null | undefined) ?? null
+      );
+
+      if (!resolvedCompletedBy && input.status === "completed" && leaderProfile) {
+        resolvedCompletedBy = leaderProfile;
+      }
+
+      return {
+        ...input,
+        assignee: resolvedAssignee ?? undefined,
+        completedBy: resolvedCompletedBy ?? undefined,
+        assigneeDisplayName:
+          deriveDisplayName(resolvedAssignee) ?? input.assigneeDisplayName ?? null,
+        completedByDisplayName:
+          deriveDisplayName(resolvedCompletedBy) ??
+          input.completedByDisplayName ??
+          null,
+      };
+    },
+    [leaderProfile, memberMap]
+  );
+
   const dedupeTasks = useCallback((list: Task[]) => {
     const seen = new Set<string>();
     const output: Task[] = [];
@@ -125,13 +195,14 @@ const HomePage: React.FC = () => {
 
   const applyTasks = useCallback(
     (updater: (prev: Task[]) => Task[]) => {
-      setAllTasks((prev) =>
-        dedupeTasks(updater(prev)).filter((task) =>
+      setAllTasks((prev) => {
+        const updated = dedupeTasks(updater(prev)).map(annotateTask);
+        return updated.filter((task) =>
           matchesTaskFilters(task, filters, { currentUserId: user?.id ?? null })
-        )
-      );
+        );
+      });
     },
-    [dedupeTasks, filters, user?.id]
+    [annotateTask, dedupeTasks, filters, user?.id]
   );
 
   const fetchTasks = useCallback(
@@ -171,16 +242,18 @@ const HomePage: React.FC = () => {
         const raw = (await response.json()) as RawTaskDocument[];
         const mapped = raw
           .map((doc) => mapTaskDocument(doc))
-          .map((task) =>
-            preserveAssignee(
-              enrichTaskAssignee(task, memberMap),
+          .map((task) => {
+            const enriched = enrichTaskAssignee(task, memberMap);
+            return preserveAssignee(
+              enriched,
               memberMap,
-              task.assignee
-            )
-          )
+              (task.assignee as string | BasicProfile | undefined) ?? undefined
+            );
+          })
           .filter((task) =>
             matchesTaskFilters(task, filters, { currentUserId: user.id })
-          );
+          )
+          .map(annotateTask);
 
         setAllTasks(dedupeTasks(mapped));
       } catch (error) {
@@ -197,6 +270,7 @@ const HomePage: React.FC = () => {
       memberMap,
       dedupeTasks,
       markHydrated,
+      annotateTask,
     ]
   );
 
@@ -226,56 +300,18 @@ const HomePage: React.FC = () => {
   }, [user, currentProject, fetchTasks]);
 
   useEffect(() => {
-    setAllTasks((prev) =>
-      dedupeTasks(enrichTasksAssignee(prev, memberMap)).filter((task) =>
+    setAllTasks((prev) => {
+      const enriched = dedupeTasks(enrichTasksAssignee(prev, memberMap)).map(
+        annotateTask
+      );
+      return enriched.filter((task) =>
         matchesTaskFilters(task, filters, { currentUserId: user?.id ?? null })
-      )
-    );
+      );
+    });
     setSelectedTask((task) =>
-      task ? enrichTaskAssignee(task, memberMap) : task
+      task ? annotateTask(enrichTaskAssignee(task, memberMap)) : task
     );
-  }, [memberMap, dedupeTasks, filters, user?.id]);
-
-  const handleCreateClick = () => {
-    if (user) {
-      if (!currentProject) {
-        setProjectModalOpen(true);
-        setShouldOpenTaskAfterProjectCreation(true);
-      } else if (isProjectClosed) {
-        toast.error("Dự án đã bị đóng, không thể tạo task mới.");
-      } else {
-        setTaskModalOpen(true);
-      }
-    } else {
-      setOpenCreateAfterLogin(true);
-      setLoginModalOpen(true);
-    }
-  };
-
-  const handleCreateProject = () => {
-    setProjectModalOpen(true);
-    setShouldOpenTaskAfterProjectCreation(false);
-  };
-
-  const handleLoginClick = () => {
-    setOpenCreateAfterLogin(false);
-    setLoginModalOpen(true);
-  };
-
-  const onLoginSuccess = () => {
-    setLoginModalOpen(false);
-    if (openCreateAfterLogin) {
-      if (!currentProject) {
-        setProjectModalOpen(true);
-        setShouldOpenTaskAfterProjectCreation(true);
-      } else if (isProjectClosed) {
-        toast.error("Dự án đã bị đóng, không thể tạo task mới.");
-      } else {
-        setTaskModalOpen(true);
-      }
-      setOpenCreateAfterLogin(false);
-    }
-  };
+  }, [annotateTask, memberMap, dedupeTasks, filters, user?.id]);
 
   const boardTasks = useMemo(
     () => dedupeTasks(allTasks),
@@ -294,7 +330,7 @@ const HomePage: React.FC = () => {
           memberMap
         ),
         memberMap,
-        task.assignee
+        task.assignee ?? undefined
       );
       applyTasks((prev) => [...prev, enrichedTask]);
     }
@@ -306,13 +342,18 @@ const HomePage: React.FC = () => {
     const ensured = preserveAssignee(
       enriched,
       memberMap,
-      previous?.assignee ?? updated.assignee
+      (previous?.assignee ?? updated.assignee ?? undefined)
     );
+    const annotatedEnsured = annotateTask(ensured);
     applyTasks((prev) =>
-      prev.map((t) => (t.id === ensured.id ? { ...t, ...ensured } : t))
+      prev.map((t) =>
+        t.id === annotatedEnsured.id ? { ...t, ...annotatedEnsured } : t
+      )
     );
     setSelectedTask((task) =>
-      task && task.id === ensured.id ? { ...task, ...ensured } : task
+      task && task.id === annotatedEnsured.id
+        ? { ...task, ...annotatedEnsured }
+        : task
     );
   };
 
@@ -393,7 +434,7 @@ const HomePage: React.FC = () => {
     const targetOrder = tasksInTarget.length;
 
     const newCompletedBy =
-      isLeader && targetStatus === "completed" ? currentUserName : undefined;
+      isLeader && targetStatus === "completed" ? user?.id ?? undefined : undefined;
 
     const optimisticTask: Task = preserveAssignee(
       enrichTaskAssignee(
@@ -406,7 +447,7 @@ const HomePage: React.FC = () => {
         memberMap
       ),
       memberMap,
-      currentTask.assignee
+      currentTask.assignee ?? undefined
     );
 
     applyTasks((prev) =>
@@ -431,7 +472,7 @@ const HomePage: React.FC = () => {
     const enrichedResult = preserveAssignee(
       enrichTaskAssignee(result.task, memberMap),
       memberMap,
-      currentTask.assignee
+      currentTask.assignee ?? undefined
     );
     applyTasks((prev) =>
       prev.map((t) => (t.id === enrichedResult.id ? enrichedResult : t))
@@ -439,67 +480,38 @@ const HomePage: React.FC = () => {
   };
 
   return (
-    <div
-      className="h-screen overflow-hidden flex flex-col transition-colors duration-500"
-      style={{ background: theme }}
-    >
-      <Header
-        onCreateTask={handleCreateClick}
-        onLoginClick={handleLoginClick}
-        onCreateProject={handleCreateProject}
-        isProjectClosed={isProjectClosed}
-        isTaskModalOpen={taskModalOpen}
-        isProjectModalOpen={projectModalOpen}
-      />
-
-      <div className="flex-1 overflow-hidden p-2 min-h-0">
-        <Board
-          tasks={boardTasks}
-          currentUser={currentUserName}
-          currentUserId={user?.id ?? null}
-          isLeader={isLeader}
-          onMove={handleDragEnd}
-          onTaskClick={(t) => {
-            setSelectedTask(t);
-            setTaskDetailOpen(true);
-          }}
-          isProjectClosed={isProjectClosed}
+    <MainLayout
+      background={theme ?? undefined}
+      className="transition-colors duration-500"
+      contentWrapper="div"
+      contentClassName="flex-1 overflow-hidden p-2 min-h-0"
+      taskCreateConfig={{
+        nextSeq: allTasks.length + 1,
+        onCreate: handleCreateTask,
+      }}
+      extraModals={
+        <TaskModal
+          mode="detail"
+          isOpen={taskDetailOpen}
+          setIsOpen={setTaskDetailOpen}
+          task={selectedTask}
+          onUpdate={handleUpdateTask}
         />
-      </div>
-
-      <ProjectModal
-        isOpen={projectModalOpen}
-        setIsOpen={setProjectModalOpen}
-        onProjectCreate={() => {
-          if (shouldOpenTaskAfterProjectCreation) {
-            setTaskModalOpen(true);
-            setShouldOpenTaskAfterProjectCreation(false);
-          }
+      }
+    >
+      <Board
+        tasks={boardTasks}
+        currentUser={currentUserName}
+        currentUserId={user?.id ?? null}
+        isLeader={isLeader}
+        onMove={handleDragEnd}
+        onTaskClick={(t) => {
+          setSelectedTask(t);
+          setTaskDetailOpen(true);
         }}
+        isProjectClosed={isProjectClosed}
       />
-
-      <LoginRegisterModal
-        isOpen={loginModalOpen}
-        setIsOpen={setLoginModalOpen}
-        onLoginSuccess={onLoginSuccess}
-      />
-
-      <TaskModal
-        mode="create"
-        isOpen={taskModalOpen}
-        setIsOpen={setTaskModalOpen}
-        onCreate={handleCreateTask}
-        nextSeq={allTasks.length + 1}
-      />
-
-      <TaskModal
-        mode="detail"
-        isOpen={taskDetailOpen}
-        setIsOpen={setTaskDetailOpen}
-        task={selectedTask}
-        onUpdate={handleUpdateTask}
-      />
-    </div>
+    </MainLayout>
   );
 };
 

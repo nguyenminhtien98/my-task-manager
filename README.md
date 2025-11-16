@@ -27,6 +27,12 @@
 - **Thông báo:** Luôn cập nhật thông tin với một hệ thống thông báo toàn diện cảnh báo bạn về các sự kiện quan trọng, chẳng hạn như phân công nhiệm vụ, cập nhật và nhận xét mới.
 - **Tải lên tệp:** Đính kèm tệp, hình ảnh và video vào nhiệm vụ. Các tệp được lưu trữ an toàn trên Cloudinary.
 
+### Phòng báo cáo hằng ngày
+
+- **Trang báo cáo riêng:** Mỗi dự án có một “phòng báo cáo” với danh sách báo cáo theo ngày, bộ lọc “Của tôi” và chọn ngày cụ thể.
+- **Soạn báo cáo giàu định dạng:** Khung nhập hỗ trợ định dạng (đậm, nghiêng, danh sách, gạch đầu dòng), nhắc tên thành viên (`@member`).
+- **Nhắc báo cáo tự động:** Dựa trên cấu hình giờ/ngày và múi giờ của từng dự án, tự động tạo thông báo nhắc nhở thành viên làm báo cáo.
+
 ### Kiểm duyệt và bảo mật
 
 - **Kiểm duyệt người dùng:** Ứng dụng bao gồm một hệ thống kiểm duyệt để ngăn chặn thư rác và lạm dụng, đảm bảo một môi trường an toàn và hiệu quả.

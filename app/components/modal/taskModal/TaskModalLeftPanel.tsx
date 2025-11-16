@@ -315,6 +315,7 @@ const TaskModalLeftPanel: React.FC<TaskModalLeftPanelProps> = ({
                               ...enrichedTask,
                               startDate: enrichedTask?.startDate ?? "",
                               endDate: enrichedTask?.endDate ?? "",
+                              assignee: member.$id,
                             });
                           }
 

@@ -122,3 +122,56 @@ select {
   background-position: 0 0, 0 0;
   animation: high-priority-border 4s linear infinite;
 }
+
+.rich-text-editor {
+  line-height: 1.5;
+}
+
+.rich-text-editor ol,
+.rich-text-editor ul {
+  list-style-position: inside;
+  margin-left: 0.6rem;
+  padding-left: 0.2rem;
+  color: inherit;
+}
+
+.rich-text-editor ul {
+  list-style-type: disc;
+}
+
+.rich-text-editor ol {
+  list-style-type: decimal;
+}
+
+.rich-text-editor li {
+  margin: 0.1rem 0;
+  color: inherit;
+}
+
+.rich-text-editor ol li::marker,
+.rich-text-editor ul li::marker {
+  color: inherit;
+}
+
+.rich-text-editor ul[data-bullet-style="dash"] {
+  list-style: none;
+  margin-left: 1rem;
+  padding-left: 0;
+}
+
+.rich-text-editor ul[data-bullet-style="dash"] li {
+  position: relative;
+  padding-left: 0.7rem;
+}
+
+.rich-text-editor ul[data-bullet-style="dash"] li::before {
+  content: "-";
+  position: absolute;
+  left: 0;
+  color: inherit;
+}
+
+.rich-text-editor [data-mention="true"] {
+  color: #34d399 !important;
+  font-weight: 600;
+}

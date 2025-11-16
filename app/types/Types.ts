@@ -29,7 +29,8 @@ export type NotificationType =
   | "feedback.message.fromUser"
   | "feedback.message.fromAdmin"
   | "system.moderation.rateLimit"
-  | "system.moderation.suspended";
+  | "system.moderation.suspended"
+  | "dailyReport.reminder";
 
 export type NotificationScope = "system" | "profile" | "project" | "task";
 
@@ -64,6 +65,7 @@ export interface NotificationMetadata {
   commentPreview?: string;
   statusLabel?: string;
   event?: string;
+  remindTime?: string;
   [key: string]: unknown;
 }
 
@@ -104,18 +106,21 @@ export interface Task {
   id: string;
   title: string;
   description: string;
-  assignee?: string | BasicProfile;
+  assignee?: string | BasicProfile | null;
   status: TaskStatus;
   order: number;
   startDate?: string | null;
   endDate?: string | null;
   predictedHours?: number;
-  completedBy?: string;
+  completedBy?: string | BasicProfile | null;
   issueType: IssueType;
   priority: Priority;
   projectId?: string;
   projectName?: string;
   attachedFile?: (TaskAttachment | string)[];
+  assigneeDisplayName?: string | null;
+  completedByDisplayName?: string | null;
+  assigneeRemoved?: boolean;
 }
 
 export interface ModalProps {

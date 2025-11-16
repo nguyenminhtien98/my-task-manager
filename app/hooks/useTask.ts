@@ -166,23 +166,6 @@ export const useTask = () => {
         return { success: false, message };
       }
 
-      const baseTaskFields = {
-        seq: nextSeq,
-        title: data.title,
-        description: data.description,
-        status: "list" as const,
-        order: 0,
-        startDate: data.startDate.trim() === "" ? null : data.startDate,
-        endDate: data.endDate.trim() === "" ? null : data.endDate,
-        predictedHours: data.predictedHours,
-        issueType: data.issueType!,
-        priority: data.priority!,
-        projectId: projectId ?? "",
-        projectName: projectName ?? "",
-        completedBy: user.id,
-        attachedFile: attachments,
-      };
-
       const attributeId =
         (
           globalThis as unknown as { crypto?: { randomUUID?: () => string } }
@@ -209,6 +192,23 @@ export const useTask = () => {
       } else {
         assigneeProfile = user ? { $id: user.id, name: user.name } : undefined;
       }
+
+      const baseTaskFields = {
+        seq: nextSeq,
+        title: data.title,
+        description: data.description,
+        status: "list" as const,
+        order: 0,
+        startDate: data.startDate.trim() === "" ? null : data.startDate,
+        endDate: data.endDate.trim() === "" ? null : data.endDate,
+        predictedHours: data.predictedHours,
+        issueType: data.issueType!,
+        priority: data.priority!,
+        projectId: projectId ?? "",
+        projectName: projectName ?? "",
+        completedBy: user.id,
+        attachedFile: attachments,
+      };
 
       const payloadForAppwrite = {
         ...baseTaskFields,

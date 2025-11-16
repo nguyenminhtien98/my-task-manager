@@ -395,7 +395,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
             attachments={detailAttachments}
             taskId={task?.id}
             taskTitle={task?.title}
-            assignee={task?.assignee}
+            assignee={(task?.assignee ?? undefined) as string | { $id: string; name: string } | undefined}
             className="max-h-[75vh]"
           />
         </div>

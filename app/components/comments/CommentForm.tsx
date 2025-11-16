@@ -1,7 +1,6 @@
 "use client";
 
-import React, { Fragment, useEffect, useRef, useState } from "react";
-import { Transition } from "@headlessui/react";
+import React, { useEffect, useRef, useState } from "react";
 import { FiImage, FiPaperclip } from "react-icons/fi";
 import { v4 as uuidv4 } from "uuid";
 import toast from "react-hot-toast";
@@ -28,6 +27,8 @@ const CommentForm: React.FC<CommentFormProps> = ({ taskId, onSubmit, isSubmittin
   const [commentText, setCommentText] = useState("");
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
   const [isCommentActive, setIsCommentActive] = useState(false);
+  const [renderControls, setRenderControls] = useState(false);
+  const [controlsVisible, setControlsVisible] = useState(false);
 
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -143,6 +144,17 @@ const CommentForm: React.FC<CommentFormProps> = ({ taskId, onSubmit, isSubmittin
     (Boolean(commentText.trim()) || pendingAttachments.length > 0);
   const shouldShowControls = isCommentActive || pendingAttachments.length > 0 || Boolean(commentText.trim());
 
+  useEffect(() => {
+    if (shouldShowControls) {
+      setRenderControls(true);
+      requestAnimationFrame(() => setControlsVisible(true));
+      return;
+    }
+    setControlsVisible(false);
+    const timeout = window.setTimeout(() => setRenderControls(false), 200);
+    return () => window.clearTimeout(timeout);
+  }, [shouldShowControls]);
+
   const handleSubmit = async () => {
     if (!user || !canSubmit || isSubmitting || disabled) {
       return;
@@ -189,17 +201,11 @@ const CommentForm: React.FC<CommentFormProps> = ({ taskId, onSubmit, isSubmittin
         onChange={handleFileSelect}
       />
 
-      <Transition
-        show={shouldShowControls}
-        as={Fragment}
-        enter="transition-all duration-200 ease-out"
-        enterFrom="opacity-0 -translate-y-2"
-        enterTo="opacity-100 translate-y-0"
-        leave="transition-all duration-150 ease-in"
-        leaveFrom="opacity-100 translate-y-0"
-        leaveTo="opacity-0 -translate-y-2"
-      >
-        <div className="flex items-center justify-between gap-3 rounded-t-lg bg-black/70 px-3 py-2">
+      {renderControls && (
+        <div
+          className={`flex items-center justify-between gap-3 rounded-t-lg bg-black/70 px-3 py-2 transition-all duration-200 ${controlsVisible ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-2"
+            }`}
+        >
           <div className="flex items-center gap-3 text-white">
             <button
               type="button"
@@ -236,7 +242,7 @@ const CommentForm: React.FC<CommentFormProps> = ({ taskId, onSubmit, isSubmittin
             {isSubmitting ? "Đang gửi..." : "Đăng"}
           </button>
         </div>
-      </Transition>
+      )}
 
       <div
         className={`${shouldShowControls ? "rounded-b-lg bg-black/60" : "rounded-lg bg-black/55"

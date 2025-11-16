@@ -141,16 +141,18 @@ const MobileDrawer: React.FC<MobileDrawerProps> = ({
                       Quản lý dự án
                     </button>
                   )}
-                  <button
-                    type="button"
-                    className="w-full px-4 py-3 text-left text-sm font-semibold text-white transition hover:bg-white/5"
-                    onClick={() => {
-                      onOpenTheme();
-                      onClose();
-                    }}
-                  >
-                    Thay đổi màu nền
-                  </button>
+                  {hasProjects && currentProject && (
+                    <button
+                      type="button"
+                      className="w-full px-4 py-3 text-left text-sm font-semibold text-white transition hover:bg-white/5"
+                      onClick={() => {
+                        onOpenTheme();
+                        onClose();
+                      }}
+                    >
+                      Thay đổi màu nền
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

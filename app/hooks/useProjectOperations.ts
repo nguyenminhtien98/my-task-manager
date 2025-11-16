@@ -20,6 +20,11 @@ import {
   CreateNotificationParams,
 } from "../services/notificationService";
 import { checkUserSuspended } from "../utils/moderation";
+import {
+  DEFAULT_DAILY_REPORT_REMIND_MINUTES,
+  DEFAULT_DAILY_REPORT_TIMEZONE,
+  DEFAULT_DAILY_REPORT_WEEKDAYS,
+} from "../utils/dailyReportDefaults";
 
 const ensureProjectStatus = (project: Project): Project => ({
   ...project,
@@ -56,6 +61,38 @@ export const useProjectOperations = () => {
     }
     await checkUserSuspended(user.id);
   }, [user?.id]);
+
+  const createDailyReportRoomForProject = useCallback(
+    async (projectId: string) => {
+      const databaseId = process.env.NEXT_PUBLIC_DATABASE_ID;
+      const roomsCollectionId =
+        process.env.NEXT_PUBLIC_COLLECTION_ID_DAILY_REPORT_ROOMS;
+      if (!databaseId || !roomsCollectionId || !user?.id) {
+        return;
+      }
+      try {
+        await database.createDocument(
+          String(databaseId),
+          String(roomsCollectionId),
+          "unique()",
+          {
+            project_id: projectId,
+            leader_id: user.id,
+            remind_enabled: true,
+            remind_time_minutes: DEFAULT_DAILY_REPORT_REMIND_MINUTES,
+            remind_weekdays: DEFAULT_DAILY_REPORT_WEEKDAYS,
+            timezone: DEFAULT_DAILY_REPORT_TIMEZONE,
+          }
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "";
+        if (!message.includes("duplicate")) {
+          console.error("Failed to initialize daily report room:", error);
+        }
+      }
+    },
+    [user?.id]
+  );
 
   useEffect(() => {
     if (!currentProject) {
@@ -542,6 +579,8 @@ export const useProjectOperations = () => {
           ]
         );
 
+        await createDailyReportRoomForProject(projectDocument.$id);
+
         await createNotification({
           recipientId: user.id,
           actorId: user.id,
@@ -584,6 +623,7 @@ export const useProjectOperations = () => {
       }
     },
     [
+      createDailyReportRoomForProject,
       ensureUserNotSuspended,
       setCurrentProject,
       setCurrentProjectRole,

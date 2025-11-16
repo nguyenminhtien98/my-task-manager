@@ -17,6 +17,8 @@ import {
 } from "react-icons/fc";
 import "../globals.css";
 
+const looksLikeAppwriteId = (value: string) => /^[a-zA-Z0-9]{15,}$/i.test(value);
+
 function formatDateDisplay(dateString: string): string {
   if (!dateString) return "";
   const date = new Date(dateString);
@@ -71,28 +73,67 @@ const TaskCard: React.FC<TaskCardProps> = ({
       : () => <FcLowPriority />;
 
   const assigneeDisplay = React.useMemo(() => {
+    if (
+      typeof task.assigneeDisplayName === "string" &&
+      task.assigneeDisplayName.trim().length > 0
+    ) {
+      return task.assigneeDisplayName.trim();
+    }
     const a = task.assignee as unknown;
     if (!a) return "Chưa set";
-    if (typeof a === "string") return a.trim() || "Chưa set";
-    if (typeof a === "object" && (a as { name?: string }).name)
-      return (a as { name?: string }).name as string;
+    if (typeof a === "string") {
+      return looksLikeAppwriteId(a) ? "Đang cập nhật" : a.trim() || "Chưa set";
+    }
+    if (typeof a === "object") {
+      const profile = a as { name?: string; $id?: string };
+      if (profile.name && profile.name.trim().length > 0) {
+        return profile.name;
+      }
+      if (profile.$id) {
+        return looksLikeAppwriteId(profile.$id)
+          ? "Đang cập nhật"
+          : profile.$id;
+      }
+    }
     return "Chưa set";
-  }, [task.assignee]);
+  }, [task.assignee, task.assigneeDisplayName]);
 
   const completedByDisplay = React.useMemo(() => {
+    if (
+      typeof task.completedByDisplayName === "string" &&
+      task.completedByDisplayName.trim().length > 0
+    ) {
+      return task.completedByDisplayName.trim();
+    }
     const c = task.completedBy as unknown;
     if (!c) return undefined;
-    if (typeof c === "string") return c.trim() || undefined;
-    if (typeof c === "object" && (c as { name?: string }).name)
-      return (c as { name?: string }).name as string;
+    if (typeof c === "string") {
+      return looksLikeAppwriteId(c) ? "Đang cập nhật" : c.trim() || undefined;
+    }
+    if (typeof c === "object") {
+      const profile = c as { name?: string; $id?: string };
+      if (profile.name && profile.name.trim().length > 0) {
+        return profile.name;
+      }
+      if (profile.$id) {
+        return looksLikeAppwriteId(profile.$id)
+          ? "Đang cập nhật"
+          : profile.$id;
+      }
+    }
     return undefined;
-  }, [task.completedBy]);
+  }, [task.completedBy, task.completedByDisplayName]);
 
   const startDateDisplay = task.startDate
     ? formatDateDisplay(task.startDate)
     : "";
   const endDateDisplay = task.endDate ? formatDateDisplay(task.endDate) : "";
   const showDateBlock = Boolean(startDateDisplay || endDateDisplay);
+  const isRemovedFallback = assigneeDisplay === "Đang cập nhật";
+  const assigneeText =
+    task.assigneeRemoved || isRemovedFallback
+      ? "Thành viên đã bị xóa"
+      : assigneeDisplay;
   return (
     <div
       ref={setNodeRef}
@@ -147,8 +188,12 @@ const TaskCard: React.FC<TaskCardProps> = ({
         <span>
           <LuCircleUser className="text-[#40a8f6]" />
         </span>
-        <span className="overflow-hidden whitespace-nowrap text-ellipsis">
-          {assigneeDisplay}
+        <span
+          className={`overflow-hidden whitespace-nowrap text-ellipsis ${
+            task.assigneeRemoved || isRemovedFallback ? "text-red-500" : ""
+          }`}
+        >
+          {assigneeText}
         </span>
       </div>
       {task.status === "completed" && completedByDisplay && (

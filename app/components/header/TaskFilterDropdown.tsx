@@ -18,6 +18,11 @@ import {
   countActiveTaskFilters,
 } from "../../utils/taskFilters";
 import { useTaskFilter } from "../../context/TaskFilterContext";
+import { usePathname, useRouter } from "next/navigation";
+import {
+  MAIN_LAYOUT_PENDING_ACTION_KEY,
+  OPEN_TASK_FILTER_EVENT,
+} from "../../utils/layoutActions";
 
 interface TaskFilterDropdownProps {
   members: EnrichedProjectMember[];
@@ -53,9 +58,24 @@ const TaskFilterDropdown: React.FC<TaskFilterDropdownProps> = ({
   const [showMemberPicker, setShowMemberPicker] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const { filters, updateFilters, resetFilters } = useTaskFilter();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  const ensureHomeForFilter = useCallback(() => {
+    if (pathname === "/") return true;
+    if (typeof window !== "undefined") {
+      window.sessionStorage.setItem(
+        MAIN_LAYOUT_PENDING_ACTION_KEY,
+        "openTaskFilters"
+      );
+    }
+    router.push("/");
+    return false;
+  }, [pathname, router]);
 
   const toggleDropdown = () => {
     if (disabled) return;
+    if (!ensureHomeForFilter()) return;
     setIsOpen((prev) => !prev);
   };
 
@@ -74,6 +94,25 @@ const TaskFilterDropdown: React.FC<TaskFilterDropdownProps> = ({
     document.addEventListener("mousedown", handleOutsideClick);
     return () => document.removeEventListener("mousedown", handleOutsideClick);
   }, [handleOutsideClick, isOpen]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handler = () => setIsOpen(true);
+    window.addEventListener(OPEN_TASK_FILTER_EVENT, handler);
+    return () => window.removeEventListener(OPEN_TASK_FILTER_EVENT, handler);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (pathname !== "/") return;
+    const pending = window.sessionStorage.getItem(
+      MAIN_LAYOUT_PENDING_ACTION_KEY
+    );
+    if (pending === "openTaskFilters") {
+      window.sessionStorage.removeItem(MAIN_LAYOUT_PENDING_ACTION_KEY);
+      setIsOpen(true);
+    }
+  }, [pathname]);
 
   type BooleanFilterKey = "noAssignee" | "myTasks" | "noDueDate" | "overdue";
 

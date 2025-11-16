@@ -1,16 +1,20 @@
 "use client";
 
 import React from "react";
+import { useRouter } from "next/navigation";
 import AnimatedGradientLogo from "../common/AnimatedGradientLogo";
 import AvatarUser from "../common/AvatarUser";
 import BrandOrbHeaderIcon from "../common/LogoComponent";
 import Button from "../common/Button";
+import Tooltip from "../common/Tooltip";
 import NotificationBell from "../notifications/NotificationBell";
 import ProjectSelector from "./ProjectSelector";
 import { Project } from "../../types/Types";
 import { User } from "../../context/AuthContext";
 import { EnrichedProjectMember } from "../../hooks/useProjectOperations";
 import TaskFilterDropdown from "./TaskFilterDropdown";
+import { LuClipboardList } from "react-icons/lu";
+import LoadingSpinner from "../loading/LoadingSpinner";
 
 interface DesktopHeaderProps {
   user: User | null;
@@ -35,6 +39,8 @@ interface DesktopHeaderProps {
   onOpenTheme: () => void;
   onLogout: () => void;
   currentTheme: string;
+  onOpenReportRoom: () => void;
+  canOpenReportRoom: boolean;
 }
 
 const DesktopHeader: React.FC<DesktopHeaderProps> = ({
@@ -60,20 +66,31 @@ const DesktopHeader: React.FC<DesktopHeaderProps> = ({
   onOpenTheme,
   onLogout,
   currentTheme,
+  onOpenReportRoom,
+  canOpenReportRoom,
 }) => {
+  const router = useRouter();
+  const handleLogoClick = () => {
+    router.push("/");
+  };
+
   return (
     <header className="sticky top-0 z-50 hidden w-full flex-col items-center justify-between gap-4 border-b border-white/20 bg-black/60 p-2 backdrop-blur-lg sm:flex sm:flex-row">
-      <div className="flex items-center gap-2">
+      <button
+        type="button"
+        onClick={handleLogoClick}
+        className="cursor-pointer flex items-center gap-2 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+      >
         <BrandOrbHeaderIcon size={28} />
         <AnimatedGradientLogo className="text-xl font-bold sm:text-2xl" />
-      </div>
+      </button>
 
       <div className="flex flex-col items-center space-y-2 sm:flex-row sm:space-y-0 sm:space-x-4">
         {user && currentProject && (
           <div className="flex items-center">
             {isMembersLoading ? (
               <div className="flex h-[34px] w-[34px] items-center justify-center">
-                <div className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                <LoadingSpinner size={16} thickness={2} label="Đang tải thành viên" />
               </div>
             ) : (
               <div className="flex items-center">
@@ -112,10 +129,34 @@ const DesktopHeader: React.FC<DesktopHeaderProps> = ({
         )}
 
         {user && projects.length > 0 && (
-          <TaskFilterDropdown
-            members={projectMembers}
-            disabled={!currentProject}
-          />
+          <div className="flex items-center gap-2">
+            <TaskFilterDropdown
+              members={projectMembers}
+              disabled={!currentProject}
+            />
+            <Tooltip content="Báo cáo công việc">
+              <div className="flex items-center gap-2 rounded-full bg-white/10 p-2 transition hover:bg-white/20">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!canOpenReportRoom) return;
+                    onOpenReportRoom();
+                  }}
+                  disabled={!canOpenReportRoom}
+                  className={`flex items-center gap-2 text-white ${canOpenReportRoom
+                    ? ""
+                    : "cursor-not-allowed opacity-50"
+                    }`}
+                  aria-label="Đi đến báo cáo công việc"
+                >
+                  <LuClipboardList className="h-4 w-4" />
+                  <span className="cursor-pointer text-xs uppercase tracking-[0.3em]">
+                    Báo cáo
+                  </span>
+                </button>
+              </div>
+            </Tooltip>
+          </div>
         )}
 
         {user && projects.length > 0 && (
@@ -123,7 +164,7 @@ const DesktopHeader: React.FC<DesktopHeaderProps> = ({
             projects={projects}
             currentProject={currentProject}
             onSelect={onProjectSelect}
-            buttonClassName="px-3 py-1 text-white"
+            buttonClassName="p-3 py-1 text-white"
             buttonStyle={{ background: currentTheme }}
           />
         )}
@@ -185,13 +226,15 @@ const DesktopHeader: React.FC<DesktopHeaderProps> = ({
                       Quản lý dự án
                     </Button>
                   )}
-                  <Button
-                    variant="ghost"
-                    onClick={onOpenTheme}
-                    className="w-full justify-start px-4 py-2 text-left text-[#111827]"
-                  >
-                    Thay đổi màu nền
-                  </Button>
+                  {projects.length > 0 && currentProject && (
+                    <Button
+                      variant="ghost"
+                      onClick={onOpenTheme}
+                      className="w-full justify-start px-4 py-2 text-left text-[#111827]"
+                    >
+                      Thay đổi màu nền
+                    </Button>
+                  )}
                   <Button
                     variant="ghost"
                     onClick={onLogout}
