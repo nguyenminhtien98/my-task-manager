@@ -5,8 +5,7 @@ import { Query } from "appwrite";
 import toast from "react-hot-toast";
 import { database, subscribeToRealtime } from "../../lib/appwrite";
 import type { User } from "../context/AuthContext";
-import type { Project } from "../types/Types";
-import type { ProjectMemberProfile } from "./useProjectOperations";
+import type { Project, ProjectMemberProfile } from "../types/Types";
 import { sanitizeReportHtml } from "../utils/richText";
 import {
   DEFAULT_DAILY_REPORT_REMIND_MINUTES,
@@ -246,7 +245,9 @@ export const useDailyReportRoom = ({
 
   const myMembershipId = useMemo(() => {
     if (!currentUser) return null;
-    const match = projectMembers.find((member) => member.$id === currentUser.id);
+    const match = projectMembers.find(
+      (member) => member.$id === currentUser.id
+    );
     return match?.membershipId ?? null;
   }, [currentUser, projectMembers]);
 
@@ -294,10 +295,7 @@ export const useDailyReportRoom = ({
     (key: keyof DailyReportToolbarState, value?: boolean) => {
       setToolbarState((prev) => ({
         ...prev,
-        [key]:
-          typeof value === "boolean"
-            ? value
-            : !prev[key],
+        [key]: typeof value === "boolean" ? value : !prev[key],
       }));
     },
     []
@@ -325,22 +323,21 @@ export const useDailyReportRoom = ({
     setIsMentioning(false);
   }, []);
 
-  const fetchRoom = useCallback(
-    async (project: Project) => {
-      setIsRoomLoading(true);
-      try {
-        const { databaseId, roomsCollectionId } = getDailyReportCollections();
-        const queries = [
-          Query.equal("project_id.$id", project.$id),
-          Query.limit(1),
-        ];
-        const { documents } = await database.listDocuments(
-          databaseId,
-          roomsCollectionId,
-          queries
-        );
-        let doc = documents[0] as RawDailyReportRoomDocument | undefined;
-        if (!doc) {
+  const fetchRoom = useCallback(async (project: Project) => {
+    setIsRoomLoading(true);
+    try {
+      const { databaseId, roomsCollectionId } = getDailyReportCollections();
+      const queries = [
+        Query.equal("project_id.$id", project.$id),
+        Query.limit(1),
+      ];
+      const { documents } = await database.listDocuments(
+        databaseId,
+        roomsCollectionId,
+        queries
+      );
+      let doc = documents[0] as RawDailyReportRoomDocument | undefined;
+      if (!doc) {
         const basePayload = {
           project_id: project.$id,
           leader_id: project.leader.$id,
@@ -371,23 +368,21 @@ export const useDailyReportRoom = ({
             }
           )) as RawDailyReportRoomDocument;
         }
-        }
-        if (projectIdRef.current !== project.$id) return;
-        setRoomDoc(doc);
-      } catch (error) {
-        console.error("Tải phòng báo cáo thất bại:", error);
-        toast.error("Không thể tải cài đặt phòng báo cáo.");
-        if (projectIdRef.current === project.$id) {
-          setRoomDoc(null);
-        }
-      } finally {
-        if (projectIdRef.current === project.$id) {
-          setIsRoomLoading(false);
-        }
       }
-    },
-    []
-  );
+      if (projectIdRef.current !== project.$id) return;
+      setRoomDoc(doc);
+    } catch (error) {
+      console.error("Tải phòng báo cáo thất bại:", error);
+      toast.error("Không thể tải cài đặt phòng báo cáo.");
+      if (projectIdRef.current === project.$id) {
+        setRoomDoc(null);
+      }
+    } finally {
+      if (projectIdRef.current === project.$id) {
+        setIsRoomLoading(false);
+      }
+    }
+  }, []);
 
   const fetchReports = useCallback(async (projectId: string) => {
     setIsReportsLoading(true);
@@ -441,7 +436,9 @@ export const useDailyReportRoom = ({
 
   useEffect(() => {
     if (projectMemberIds.size === 0) return;
-    setReports((prev) => prev.filter((entry) => projectMemberIds.has(entry.userId)));
+    setReports((prev) =>
+      prev.filter((entry) => projectMemberIds.has(entry.userId))
+    );
   }, [projectMemberIds]);
 
   useEffect(() => {
