@@ -51,7 +51,6 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({
   useEffect(() => {
     currentProjectRef.current = currentProject;
   }, [currentProject]);
-
   useEffect(() => {
     projectsRef.current = projects;
   }, [projects]);
