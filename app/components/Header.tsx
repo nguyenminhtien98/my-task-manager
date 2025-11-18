@@ -9,10 +9,8 @@ import ThemePickerModal from "./modal/ThemePickerModal";
 import EditProfileModal from "./modal/editProfileModal";
 import { DEFAULT_THEME_GRADIENT } from "../utils/themeColors";
 import toast from "react-hot-toast";
-import {
-  useProjectOperations,
-  EnrichedProjectMember,
-} from "../hooks/useProjectOperations";
+import { useProjectOperations } from "../hooks/useProjectOperations";
+import { EnrichedProjectMember } from "../types/Types";
 import ProjectMembersModal from "./modal/projectMemberModal";
 import ProjectManagerModal from "./modal/projectModal/ProjectManagerModal";
 import { useProjectTheme } from "../hooks/useProjectTheme";

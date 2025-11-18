@@ -101,6 +101,15 @@ export interface BasicProfile {
   [key: string]: unknown;
 }
 
+export interface EnrichedProjectMember extends BasicProfile {
+  isLeader: boolean;
+  membershipId?: string;
+}
+
+export interface ProjectMemberProfile extends EnrichedProjectMember {
+  joinedAt?: string;
+}
+
 export interface Task {
   seq: number;
   id: string;
@@ -273,6 +282,9 @@ export interface ProjectContextType {
   isTasksHydrated?: boolean;
   setTasksHydrated?: (ready: boolean) => void;
   isProjectClosed: boolean;
+  members: ProjectMemberProfile[];
+  isMembersLoading: boolean;
+  refreshMembers: () => Promise<void>;
 }
 
 export interface AssigneeDropdownProps {

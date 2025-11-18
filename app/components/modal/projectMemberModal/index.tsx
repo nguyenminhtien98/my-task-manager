@@ -7,10 +7,8 @@ import { database } from "../../../../lib/appwrite";
 import ModalComponent from "../../common/ModalComponent";
 import ProjectMemberListView from "./ProjectMemberListView";
 import ProjectMemberProfileView from "./ProjectMemberProfileView";
-import {
-  useProjectOperations,
-  type EnrichedProjectMember,
-} from "../../../hooks/useProjectOperations";
+import { useProjectOperations } from "../../../hooks/useProjectOperations";
+import { EnrichedProjectMember } from "../../../types/Types";
 import { useProject } from "../../../context/ProjectContext";
 
 interface ProjectMembersModalProps {

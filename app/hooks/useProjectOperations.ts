@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import { Query } from "appwrite";
-import { database, subscribeToRealtime } from "../../lib/appwrite";
+import { database } from "../../lib/appwrite";
 import { useProject } from "../context/ProjectContext";
 import { useAuth } from "../context/AuthContext";
 import {
@@ -11,7 +11,7 @@ import {
   ProjectStatus,
   NotificationMetadata,
 } from "../types/Types";
-import { emitMembersChanged, onMembersChanged } from "../utils/membersBus";
+import { emitMembersChanged } from "../utils/membersBus";
 import toast from "react-hot-toast";
 import {
   createNotification,
@@ -31,15 +31,6 @@ const ensureProjectStatus = (project: Project): Project => ({
   status: project.status ?? "active",
 });
 
-export interface EnrichedProjectMember extends BasicProfile {
-  isLeader: boolean;
-  membershipId?: string;
-}
-
-export interface ProjectMemberProfile extends EnrichedProjectMember {
-  joinedAt?: string;
-}
-
 export const useProjectOperations = () => {
   const { user } = useAuth();
   const {
@@ -47,13 +38,11 @@ export const useProjectOperations = () => {
     setCurrentProject,
     setCurrentProjectRole,
     setProjects,
+    members,
+    isMembersLoading,
+    refreshMembers,
   } = useProject();
-  const [members, setMembers] = useState<ProjectMemberProfile[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [version, setVersion] = useState(0);
   const locallyCreatedProjectIdsRef = useRef<Set<string>>(new Set());
-
-  const refetch = useCallback(() => setVersion((v) => v + 1), []);
 
   const ensureUserNotSuspended = useCallback(async () => {
     if (!user?.id) {
@@ -93,251 +82,6 @@ export const useProjectOperations = () => {
     },
     [user?.id]
   );
-
-  useEffect(() => {
-    if (!currentProject) {
-      setMembers([]);
-      return;
-    }
-
-    const fetchMembers = async () => {
-      setIsLoading(true);
-      try {
-        await ensureUserNotSuspended();
-
-        const databaseId = String(process.env.NEXT_PUBLIC_DATABASE_ID);
-        const membershipsCollectionId = String(
-          process.env.NEXT_PUBLIC_COLLECTION_ID_PROJECT_MEMBERSHIPS
-        );
-
-        const response = await database.listDocuments(
-          databaseId,
-          membershipsCollectionId,
-          [Query.equal("project", currentProject.$id), Query.limit(100)]
-        );
-
-        const nonLeaderMembers: ProjectMemberProfile[] = response.documents
-          .map((membershipDoc) => {
-            const userProfile = membershipDoc.user as BasicProfile;
-            const profile: ProjectMemberProfile = {
-              ...(userProfile as BasicProfile),
-              isLeader: false,
-              membershipId: membershipDoc.$id,
-              joinedAt: membershipDoc.joinedAt as string | undefined,
-            };
-            return profile;
-          })
-          .filter((m) => m.$id !== currentProject.leader.$id);
-
-        const leaderMatch = response.documents.find(
-          (d) => (d.user as BasicProfile)?.$id === currentProject.leader.$id
-        );
-        const leaderProfile: ProjectMemberProfile = {
-          ...currentProject.leader,
-          isLeader: true,
-          membershipId: leaderMatch?.$id,
-          joinedAt: (leaderMatch?.joinedAt as string | undefined) ?? undefined,
-        };
-
-        const allMembers: ProjectMemberProfile[] = [
-          leaderProfile,
-          ...nonLeaderMembers,
-        ];
-        setMembers(allMembers);
-      } catch (error) {
-        console.error("Failed to fetch project members:", error);
-        setMembers([]);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchMembers();
-  }, [currentProject, ensureUserNotSuspended, version]);
-
-  useEffect(() => {
-    if (!currentProject) return;
-    const unsubscribe = onMembersChanged((projectId) => {
-      if (currentProject && projectId === currentProject.$id) {
-        refetch();
-      }
-    });
-    return unsubscribe;
-  }, [currentProject, refetch]);
-
-  useEffect(() => {
-    if (!currentProject) return;
-
-    const databaseId = process.env.NEXT_PUBLIC_DATABASE_ID;
-    const membershipsCollectionId =
-      process.env.NEXT_PUBLIC_COLLECTION_ID_PROJECT_MEMBERSHIPS;
-
-    if (!databaseId || !membershipsCollectionId) {
-      return;
-    }
-
-    const currentProjectId = currentProject.$id;
-    const channel = `databases.${databaseId}.collections.${membershipsCollectionId}.documents`;
-
-    const unsubscribe = subscribeToRealtime([channel], (res: unknown) => {
-      const event = res as {
-        events?: string[];
-        payload?: {
-          $id?: string;
-          project?: unknown;
-          data?: { project?: unknown };
-        };
-      };
-
-      const events = event.events ?? [];
-      if (!events.length) return;
-
-      const membershipData =
-        (event.payload?.data as { project?: unknown } | undefined) ??
-        event.payload ??
-        null;
-
-      const membershipProjectId =
-        typeof membershipData?.project === "string"
-          ? membershipData.project
-          : undefined;
-
-      if (membershipProjectId && membershipProjectId !== currentProjectId) {
-        return;
-      }
-
-      if (
-        events.some(
-          (e) =>
-            e.endsWith(".create") ||
-            e.endsWith(".update") ||
-            e.endsWith(".delete")
-        )
-      ) {
-        refetch();
-      }
-    });
-
-    return () => {
-      unsubscribe();
-    };
-  }, [currentProject, refetch]);
-
-  useEffect(() => {
-    if (!user) return;
-
-    const databaseId = String(process.env.NEXT_PUBLIC_DATABASE_ID);
-    const projectsCollectionId = String(
-      process.env.NEXT_PUBLIC_COLLECTION_ID_PROJECTS
-    );
-    const channel = `databases.${databaseId}.collections.${projectsCollectionId}.documents`;
-
-    const unsubscribe = subscribeToRealtime([channel], (res: unknown) => {
-      const payload = res as {
-        payload: { data?: unknown; $id?: string };
-        events: string[];
-      };
-
-      if (!payload?.events?.length) return;
-
-      const events = payload.events;
-      const documentId = payload.payload?.$id;
-      const rawData =
-        (payload.payload?.data as unknown as Project | undefined) ??
-        (payload.payload as unknown as Project | undefined);
-
-      if (events.some((e) => e.endsWith(".delete"))) {
-        if (documentId) {
-          setProjects((prev) => {
-            const updated = prev.filter((p) => p.$id !== documentId);
-            if (currentProject?.$id === documentId) {
-              const nextProject = updated[0] ?? null;
-              setCurrentProject(nextProject ?? null);
-              setCurrentProjectRole(
-                nextProject
-                  ? nextProject.leader.$id === user.id
-                    ? "leader"
-                    : "user"
-                  : null
-              );
-            }
-            return updated;
-          });
-        }
-        return;
-      }
-
-      if (events.some((e) => e.endsWith(".create"))) {
-        if (!rawData) return;
-        const newProject = ensureProjectStatus(rawData as Project);
-
-        if (locallyCreatedProjectIdsRef.current.has(newProject.$id)) {
-          locallyCreatedProjectIdsRef.current.delete(newProject.$id);
-          return;
-        }
-        setProjects((prev) => {
-          if (prev.some((p) => p.$id === newProject.$id)) {
-            return prev;
-          }
-          return [...prev, newProject];
-        });
-      } else if (events.some((e) => e.endsWith(".update"))) {
-        if (!rawData) return;
-        const updatedProject = ensureProjectStatus(rawData as Project);
-
-        const incomingLeader = (() => {
-          const value = (
-            updatedProject as unknown as {
-              leader?: unknown;
-            }
-          ).leader;
-          if (
-            value &&
-            typeof value === "object" &&
-            "$id" in (value as Record<string, unknown>)
-          ) {
-            return value as Project["leader"];
-          }
-          return undefined;
-        })();
-
-        setProjects((prev) =>
-          prev.map((p) =>
-            p.$id === updatedProject.$id
-              ? {
-                  ...p,
-                  ...updatedProject,
-                  leader: incomingLeader ?? p.leader,
-                  status: updatedProject.status ?? p.status ?? "active",
-                }
-              : p
-          )
-        );
-
-        if (currentProject?.$id === updatedProject.$id) {
-          const leader = incomingLeader ?? currentProject.leader;
-          const nextProject: Project = {
-            ...currentProject,
-            ...updatedProject,
-            leader,
-            status: updatedProject.status ?? currentProject.status ?? "active",
-          };
-          setCurrentProject(nextProject);
-          setCurrentProjectRole(leader.$id === user.id ? "leader" : "user");
-        }
-      }
-    });
-
-    return () => {
-      unsubscribe();
-    };
-  }, [
-    user,
-    currentProject,
-    setProjects,
-    setCurrentProject,
-    setCurrentProjectRole,
-  ]);
 
   const addMember = useCallback(
     async (email: string): Promise<{ success: boolean; message: string }> => {
@@ -436,7 +180,7 @@ export const useProjectOperations = () => {
         await createNotifications(notifications);
 
         emitMembersChanged(currentProject.$id);
-        refetch();
+        await refreshMembers();
         return { success: true, message: "Đã thêm thành viên thành công" };
       } catch (error) {
         if (!(error instanceof Error && error.message?.includes("khóa"))) {
@@ -449,7 +193,7 @@ export const useProjectOperations = () => {
         return { success: false, message };
       }
     },
-    [currentProject, ensureUserNotSuspended, refetch, user]
+    [currentProject, ensureUserNotSuspended, refreshMembers, user]
   );
 
   const removeMember = useCallback(
@@ -518,7 +262,7 @@ export const useProjectOperations = () => {
         await createNotifications(notifications);
 
         emitMembersChanged(currentProject.$id);
-        refetch();
+        await refreshMembers();
         return { success: true, message: "Đã xóa thành viên" };
       } catch (error) {
         if (!(error instanceof Error && error.message?.includes("khóa"))) {
@@ -531,7 +275,7 @@ export const useProjectOperations = () => {
         return { success: false, message };
       }
     },
-    [currentProject, ensureUserNotSuspended, members, refetch, user]
+    [currentProject, ensureUserNotSuspended, members, refreshMembers, user]
   );
 
   const createProject = useCallback(
@@ -950,7 +694,7 @@ export const useProjectOperations = () => {
 
   return {
     members,
-    isLoading,
+    isLoading: isMembersLoading,
     leader,
     addMember,
     removeMember,

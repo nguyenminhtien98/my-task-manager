@@ -10,7 +10,7 @@ import {
   FcMediumPriority,
 } from "react-icons/fc";
 import AvatarUser from "../common/AvatarUser";
-import { EnrichedProjectMember } from "../../hooks/useProjectOperations";
+import { EnrichedProjectMember } from "../../types/Types";
 import { cn } from "../../utils/cn";
 import {
   PriorityKey,

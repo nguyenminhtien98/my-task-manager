@@ -2,7 +2,7 @@
 
 import React from "react";
 import AvatarUser from "../../common/AvatarUser";
-import { EnrichedProjectMember } from "../../../hooks/useProjectOperations";
+import { EnrichedProjectMember } from "../../../types/Types";
 import UserSearchInput from "./UserSearchInput";
 
 interface ProjectMemberListViewProps {

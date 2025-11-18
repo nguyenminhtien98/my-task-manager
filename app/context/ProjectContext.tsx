@@ -10,8 +10,14 @@ import React, {
 } from "react";
 import { database, subscribeToRealtime } from "../../lib/appwrite";
 import { Query } from "appwrite";
-import { Project, ProjectContextType } from "../types/Types";
+import {
+  Project,
+  ProjectContextType,
+  ProjectMemberProfile,
+  BasicProfile,
+} from "../types/Types";
 import { useAuth } from "./AuthContext";
+import { emitMembersChanged } from "../utils/membersBus";
 
 const applyProjectStatus = (project: Project): Project => ({
   ...project,
@@ -38,6 +44,9 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({
   const { user } = useAuth();
   const [isProjectsHydrated, setIsProjectsHydrated] = useState(false);
   const [isTasksHydrated, setIsTasksHydrated] = useState(false);
+  const [members, setMembers] = useState<ProjectMemberProfile[]>([]);
+  const [isMembersLoading, setIsMembersLoading] = useState(false);
+  const lastRefreshTimeRef = useRef<number>(0);
 
   useEffect(() => {
     currentProjectRef.current = currentProject;
@@ -46,6 +55,74 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({
   useEffect(() => {
     projectsRef.current = projects;
   }, [projects]);
+
+  const refreshMembers = useCallback(async () => {
+    if (!currentProject) {
+      setMembers([]);
+      return;
+    }
+    const databaseId = process.env.NEXT_PUBLIC_DATABASE_ID;
+    const membershipsCollectionId =
+      process.env.NEXT_PUBLIC_COLLECTION_ID_PROJECT_MEMBERSHIPS;
+    if (!databaseId || !membershipsCollectionId) {
+      setMembers([]);
+      return;
+    }
+
+    // Skip nếu vừa mới refresh trong vòng 1 giây
+    const now = Date.now();
+    if (now - lastRefreshTimeRef.current < 1000) {
+      return;
+    }
+    lastRefreshTimeRef.current = now;
+
+    setIsMembersLoading(true);
+    try {
+      const response = await database.listDocuments(
+        String(databaseId),
+        String(membershipsCollectionId),
+        [Query.equal("project", currentProject.$id), Query.limit(100)]
+      );
+
+      const nonLeaderMembers: ProjectMemberProfile[] = response.documents
+        .map((membershipDoc) => {
+          const userProfile = membershipDoc.user as BasicProfile;
+          const profile: ProjectMemberProfile = {
+            ...(userProfile as BasicProfile),
+            isLeader: false,
+            membershipId: membershipDoc.$id,
+            joinedAt: membershipDoc.joinedAt as string | undefined,
+          };
+          return profile;
+        })
+        .filter((m) => m.$id !== currentProject.leader.$id);
+
+      const leaderMatch = response.documents.find(
+        (d) => (d.user as BasicProfile)?.$id === currentProject.leader.$id
+      );
+      const leaderProfile: ProjectMemberProfile = {
+        ...currentProject.leader,
+        isLeader: true,
+        membershipId: leaderMatch?.$id,
+        joinedAt: (leaderMatch?.joinedAt as string | undefined) ?? undefined,
+      };
+
+      setMembers([leaderProfile, ...nonLeaderMembers]);
+    } catch (error) {
+      console.error("Failed to fetch project members:", error);
+      setMembers([]);
+    } finally {
+      setIsMembersLoading(false);
+    }
+  }, [currentProject]);
+
+  useEffect(() => {
+    if (!currentProject) {
+      setMembers([]);
+      return;
+    }
+    void refreshMembers();
+  }, [currentProject, refreshMembers]);
 
   const setCurrentProject = useCallback((project: Project | null) => {
     const normalized = normalizeProject(project);
@@ -192,6 +269,40 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({
     setCurrentProjectRole,
     user?.id,
   ]);
+
+  useEffect(() => {
+    if (!currentProject) return;
+    const databaseId = process.env.NEXT_PUBLIC_DATABASE_ID;
+    const membershipsCollectionId =
+      process.env.NEXT_PUBLIC_COLLECTION_ID_PROJECT_MEMBERSHIPS;
+    if (!databaseId || !membershipsCollectionId) return;
+    const channel = `databases.${databaseId}.collections.${membershipsCollectionId}.documents`;
+    const unsubscribe = subscribeToRealtime([channel], (res: unknown) => {
+      const event = res as {
+        events?: string[];
+        payload?: {
+          $id?: string;
+          project?: unknown;
+          data?: { project?: unknown };
+        };
+      };
+      const events = event.events ?? [];
+      if (!events.length) return;
+      const payload =
+        (event.payload?.data as { project?: unknown } | undefined) ??
+        event.payload ??
+        null;
+      const projectValue =
+        typeof payload?.project === "string"
+          ? payload.project
+          : (payload?.project as { $id?: string } | undefined)?.$id;
+      if (projectValue && projectValue === currentProject.$id) {
+        void refreshMembers();
+        emitMembersChanged(currentProject.$id);
+      }
+    });
+    return () => unsubscribe();
+  }, [currentProject, refreshMembers]);
 
   useEffect(() => {
     if (!user) return;
@@ -391,6 +502,9 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({
     setCurrentProjectRole,
   ]);
 
+  const isProjectClosed =
+    (currentProject?.status ?? "active") === "closed";
+
   return (
     <ProjectContext.Provider
       value={{
@@ -403,7 +517,10 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({
         isProjectsHydrated,
         isTasksHydrated,
         setTasksHydrated: setIsTasksHydrated,
-        isProjectClosed: (currentProject?.status ?? "active") === "closed",
+        isProjectClosed,
+        members,
+        isMembersLoading,
+        refreshMembers,
       }}
     >
       {children}
