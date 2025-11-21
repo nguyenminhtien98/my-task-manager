@@ -173,7 +173,7 @@ const DesktopHeader: React.FC<DesktopHeaderProps> = ({
             onClick={onCreateProject}
             className="bg-green-600 px-3 py-1 text-white"
           >
-            Add Project
+            Tạo dự án
           </Button>
         )}
 
@@ -189,7 +189,7 @@ const DesktopHeader: React.FC<DesktopHeaderProps> = ({
           disabled={isProjectClosed}
           title={isProjectClosed ? "Dự án đã đóng, không thể tạo task" : ""}
         >
-          Add Task
+          Tạo Task
         </Button>
 
         {user ? (

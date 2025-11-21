@@ -236,7 +236,7 @@ const FeedbackConversationDetail: React.FC<FeedbackConversationDetailProps> = ({
 
   const handleLoginPrompt = useCallback(() => {
     if (typeof window !== "undefined") {
-      window.dispatchEvent(new Event("open-login-modal"));
+      window.dispatchEvent(new Event("open-main-layout-login-modal"));
     }
     onClose?.();
   }, [onClose]);
@@ -387,12 +387,12 @@ const FeedbackConversationDetail: React.FC<FeedbackConversationDetailProps> = ({
                   const seenAvatars =
                     showSeenAvatars && message.seenBy
                       ? message.seenBy
-                          .filter((id) => id !== currentUserId)
-                          .map((id) => ({
-                            id,
-                            name: otherProfile?.name,
-                            avatarUrl: otherProfile?.avatarUrl,
-                          }))
+                        .filter((id) => id !== currentUserId)
+                        .map((id) => ({
+                          id,
+                          name: otherProfile?.name,
+                          avatarUrl: otherProfile?.avatarUrl,
+                        }))
                       : [];
                   const attachments = message.attachments ?? [];
 

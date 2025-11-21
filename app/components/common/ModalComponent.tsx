@@ -18,6 +18,7 @@ const ModalComponent: React.FC<ModalProps> = ({
     showBackButton = false,
     onBack,
     backButtonContent,
+    hiddenHeader = false,
 }) => {
     const shouldShowBack = showBackButton && typeof onBack === "function";
     const [mounted, setMounted] = useState(false);
@@ -54,7 +55,7 @@ const ModalComponent: React.FC<ModalProps> = ({
 
     const panelClasses = useMemo(
         () =>
-            `w-full ${panelClassName ?? "sm:max-w-md md:max-w-lg"} transform overflow-hidden rounded-2xl bg-white p-6 text-left shadow-xl transition-all duration-300`,
+            `w-full ${panelClassName ?? "sm:max-w-md md:max-w-lg"} transform overflow-y-auto max-h-[95vh] [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none'] rounded-2xl bg-white p-6 text-left shadow-xl transition-all duration-300`,
         [panelClassName]
     );
 
@@ -78,35 +79,40 @@ const ModalComponent: React.FC<ModalProps> = ({
                 onClick={closeModal}
                 aria-hidden="true"
             />
-            <div className="relative z-[1000] flex min-h-full w-full items-center justify-center overflow-y-auto p-4 text-center">
+            <div
+                className="relative z-[1000] flex min-h-full w-full items-center justify-center overflow-y-auto p-4 text-center"
+                onClick={closeModal}
+            >
                 <div
                     className={`${panelClasses} ${isVisible ? "opacity-100 scale-100" : "opacity-0 scale-95"} transition-all duration-200`}
                     role="dialog"
                     aria-modal="true"
                     onClick={(event) => event.stopPropagation()}
                 >
-                    <div className="mb-4 flex items-center justify-between gap-4">
-                        {shouldShowBack ? (
-                            <button
-                                type="button"
-                                onClick={() => onBack && onBack()}
-                                className="cursor-pointer flex h-9 w-9 items-center justify-center rounded-full bg-black/10 text-lg text-sub hover:bg-black/20"
-                                aria-label="Quay lại"
+                    {!hiddenHeader && (
+                        <div className="mb-4 flex items-center justify-between gap-4">
+                            {shouldShowBack ? (
+                                <button
+                                    type="button"
+                                    onClick={() => onBack && onBack()}
+                                    className="cursor-pointer flex h-9 w-9 items-center justify-center rounded-full bg-black/10 text-lg text-sub hover:bg-black/20"
+                                    aria-label="Quay lại"
+                                >
+                                    {backButtonContent ?? <FiArrowLeft />}
+                                </button>
+                            ) : (
+                                <span className="h-9 w-9" />
+                            )}
+                            <h2 className="flex-1 text-center text-lg font-semibold text-gray-900">{title}</h2>
+                            <Button
+                                onClick={closeModal}
+                                className="flex h-9 w-9 items-center justify-center rounded-full bg-black/10 text-xl text-sub hover:bg-black/20"
+                                aria-label="Đóng"
                             >
-                                {backButtonContent ?? <FiArrowLeft />}
-                            </button>
-                        ) : (
-                            <span className="h-9 w-9" />
-                        )}
-                        <h2 className="flex-1 text-center text-lg font-semibold text-gray-900">{title}</h2>
-                        <Button
-                            onClick={closeModal}
-                            className="flex h-9 w-9 items-center justify-center rounded-full bg-black/10 text-xl text-sub hover:bg-black/20"
-                            aria-label="Đóng"
-                        >
-                            ×
-                        </Button>
-                    </div>
+                                ×
+                            </Button>
+                        </div>
+                    )}
                     {children}
                 </div>
             </div>

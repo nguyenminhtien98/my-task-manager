@@ -11,6 +11,8 @@ import Button from "../common/Button";
 import { FcGoogle } from "react-icons/fc";
 import { localizeAuthError } from "../../utils/authErrors";
 import { validateNoEmoji } from "../../utils/inputValidation";
+import BrandOrbHeaderIcon from "../common/LogoComponent";
+import AnimatedGradientLogo from "../common/AnimatedGradientLogo";
 
 const LoginRegisterModal: React.FC<{
   isOpen: boolean;
@@ -116,7 +118,7 @@ const LoginRegisterModal: React.FC<{
   const onSubmit = async (data: FormUserValues) => {
     if (isLogin) {
       try {
-        await account.deleteSession("current").catch(() => {});
+        await account.deleteSession("current").catch(() => { });
         await account.createEmailPasswordSession(data.email, data.password);
         const userInfo = await account.get();
         await login(userInfo.$id, userInfo.name);
@@ -189,30 +191,40 @@ const LoginRegisterModal: React.FC<{
     <ModalComponent
       isOpen={isOpen}
       setIsOpen={setIsOpen}
-      title={isLogin ? "Đăng nhập" : "Đăng ký"}
+      title=""
+      hiddenHeader
     >
       <div className="space-y-4">
-        <button
-          type="button"
-          onClick={handleGoogleLogin}
-          disabled={isGoogleLoading}
-          className={`flex w-full items-center justify-center gap-3 rounded-lg border border-black/10 bg-black/80 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-black focus:outline-none focus-visible:ring-2 focus-visible:ring-black/40 ${isGoogleLoading ? "cursor-not-allowed opacity-70" : "cursor-pointer"}`}
-        >
-          {isGoogleLoading ? (
-            "Đang mở Google..."
-          ) : (
-            <>
-              <FcGoogle className="text-lg" />
-              <span>Đăng nhập với Google</span>
-            </>
-          )}
-        </button>
-
-        <div className="flex items-center gap-2">
-          <span className="h-px flex-1 bg-gray-300" />
-          <span className="text-xs uppercase text-gray-500">Hoặc</span>
-          <span className="h-px flex-1 bg-gray-300" />
+        <div className="flex flex-col items-center justify-center gap-2 pb-2">
+          <BrandOrbHeaderIcon size={60} />
+          <AnimatedGradientLogo className="text-2xl font-bold" />
         </div>
+
+        {isLogin && (
+          <>
+            <button
+              type="button"
+              onClick={handleGoogleLogin}
+              disabled={isGoogleLoading}
+              className={`flex w-full items-center justify-center gap-3 rounded-lg border border-black/10 bg-black/80 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-black focus:outline-none focus-visible:ring-2 focus-visible:ring-black/40 ${isGoogleLoading ? "cursor-not-allowed opacity-70" : "cursor-pointer"}`}
+            >
+              {isGoogleLoading ? (
+                "Đang mở Google..."
+              ) : (
+                <>
+                  <FcGoogle className="text-lg" />
+                  <span>Đăng nhập với Google</span>
+                </>
+              )}
+            </button>
+
+            <div className="flex items-center gap-2">
+              <span className="h-px flex-1 bg-gray-300" />
+              <span className="text-xs uppercase text-gray-500">Hoặc</span>
+              <span className="h-px flex-1 bg-gray-300" />
+            </div>
+          </>
+        )}
       </div>
 
       <form onSubmit={handleFormSubmit} className="mt-4 space-y-4">

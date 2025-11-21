@@ -142,6 +142,7 @@ export interface ModalProps {
   showBackButton?: boolean;
   onBack?: () => void;
   backButtonContent?: ReactNode;
+  hiddenHeader?: boolean;
 }
 
 export interface TaskCardProps {
