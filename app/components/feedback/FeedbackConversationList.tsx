@@ -1,15 +1,16 @@
 "use client";
 
-import React from "react";
+import React, { useEffect } from "react";
 import { FiX } from "react-icons/fi";
 import AvatarUser from "../common/AvatarUser";
 import Button from "../common/Button";
-import {
+import ConversationSkeleton from "../loading/ConversationSkeleton";
+import { useSocket } from "../../context/SocketContext";
+import type {
   ConversationListEntry,
-  PresenceDocument,
   ProfileDocument,
-} from "../../services/feedbackService";
-import Tooltip from "../common/Tooltip";
+  PresenceDocument,
+} from "../../types/Types";
 
 interface FeedbackConversationListProps {
   conversations: ConversationListEntry[];
@@ -25,6 +26,9 @@ interface FeedbackConversationListProps {
   headerDescription?: string;
   actions?: React.ReactNode;
   pendingTargetId?: string | null;
+  hasMore?: boolean;
+  isLoading?: boolean;
+  onLoadMore?: () => Promise<void>;
 }
 
 const FeedbackConversationList: React.FC<FeedbackConversationListProps> = ({
@@ -41,7 +45,42 @@ const FeedbackConversationList: React.FC<FeedbackConversationListProps> = ({
   headerDescription,
   actions,
   pendingTargetId = null,
+  hasMore = false,
+  isLoading = false,
+  onLoadMore,
 }) => {
+  const listRef = React.useRef<HTMLDivElement | null>(null);
+  const { socket, isConnected } = useSocket();
+
+  useEffect(() => {
+    if (!socket || !isConnected || conversations.length === 0) return;
+
+    const participantIds = Array.from(
+      new Set(
+        conversations.flatMap(conv =>
+          (conv.participants ?? []).filter(id => id !== currentUserId)
+        )
+      )
+    );
+    if (participantIds.length === 0) return;
+    socket.emit('presence:get', { userIds: participantIds });
+  }, [socket, isConnected, conversations, currentUserId]);
+
+  const handleScroll = React.useCallback(() => {
+    const container = listRef.current;
+    if (!container) return;
+
+    const { scrollTop, scrollHeight, clientHeight } = container;
+    if (
+      scrollHeight - scrollTop - clientHeight < 50 &&
+      hasMore &&
+      !isLoading &&
+      onLoadMore
+    ) {
+      void onLoadMore();
+    }
+  }, [hasMore, isLoading, onLoadMore]);
+
   const renderActions = () => {
     if (actions) return actions;
     return (
@@ -49,22 +88,20 @@ const FeedbackConversationList: React.FC<FeedbackConversationListProps> = ({
         <Button
           variant="solid"
           onClick={() => onFilterChange("all")}
-          className={`rounded-full !px-3 !py-1 !text-xs ${
-            filter === "all"
-              ? "border bg-black text-white"
-              : "border border-gray-300 bg-white text-[#111827]"
-          }`}
+          className={`rounded-full !px-3 !py-1 !text-xs ${filter === "all"
+            ? "border bg-black text-white"
+            : "border border-gray-300 bg-white text-[#111827]"
+            }`}
         >
           Tất cả
         </Button>
         <Button
           variant="solid"
           onClick={() => onFilterChange("unread")}
-          className={`rounded-full border !px-3 !py-1 !text-xs font-medium ${
-            filter === "unread"
-              ? "border bg-black text-white"
-              : "border-gray-300 bg-white text-[#111827]"
-          }`}
+          className={`rounded-full border !px-3 !py-1 !text-xs font-medium ${filter === "unread"
+            ? "border bg-black text-white"
+            : "border-gray-300 bg-white text-[#111827]"
+            }`}
         >
           Chưa đọc
         </Button>
@@ -96,68 +133,133 @@ const FeedbackConversationList: React.FC<FeedbackConversationListProps> = ({
         ) : null}
       </div>
 
-      <div className="flex-1 overflow-y-auto p-2 pr-1 no-scrollbar">
-        {conversations.length === 0 ? (
-          <div className="flex h-full items-center justify-center text-sm text-gray-500">
-            Không có đoạn chat nào
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {conversations.map((conversation) => {
-              const others = (conversation.participants ?? []).filter(
-                (id) => id !== currentUserId
-              );
-              const otherId = others[0];
-              const profile = otherId ? profileMap[otherId] : undefined;
-              const displayName = profile?.name ?? "Người dùng";
-              const lastMessage =
-                conversation.lastMessage ?? "(Không có tin nhắn)";
-              const unreadBy = conversation.unreadBy ?? [];
-              const hasUnread = unreadBy.includes(currentUserId);
-              const presence = otherId ? presenceMap[otherId] : undefined;
-              const isActive =
-                selectedConversationId === conversation.$id ||
-                (pendingTargetId &&
-                  conversation.__placeholderTargetId === pendingTargetId);
+      <div
+        ref={listRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-y-auto p-2 pr-1 no-scrollbar"
+      >
+        {(() => {
+          const realConversations = conversations.filter(
+            conv => !conv.__placeholderTargetId
+          );
+          const hasRealConversations = realConversations.length > 0;
 
-              return (
-                <button
-                  type="button"
-                  key={conversation.$id}
-                  onClick={() => onSelectConversation(conversation)}
-                  className={`cursor-pointer flex w-full items-center gap-3 rounded-xl border border-transparent px-1 py-1 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-black/30 ${
-                    isActive
-                      ? "bg-black text-white"
-                      : "bg-black/60 text-white hover:bg-black/70"
-                  }`}
-                >
-                  <AvatarUser
-                    name={displayName}
-                    avatarUrl={profile?.avatarUrl}
-                    size={40}
-                    showTooltip={false}
-                    status={presence?.isOnline ? "online" : undefined}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-left text-sm font-semibold">
-                      {displayName}
+          if (isLoading && !hasRealConversations) {
+            return (
+              <div className="space-y-2">
+                {[1, 2, 3].map((i) => (
+                  <ConversationSkeleton key={i} />
+                ))}
+              </div>
+            );
+          }
+
+          if (!hasRealConversations) {
+            return (
+              <div className="flex h-full items-center justify-center text-sm text-gray-500">
+                Không có đoạn chat nào
+              </div>
+            );
+          }
+
+          return (
+            <>
+              <div className="space-y-1">
+                {conversations.map((conversation) => {
+                  const isPending =
+                    pendingTargetId &&
+                    conversation.__placeholderTargetId === pendingTargetId;
+                  return (
+                    <div
+                      key={conversation._id}
+                      onClick={() => onSelectConversation(conversation)}
+                      className={`cursor-pointer rounded-lg p-2 transition-colors hover:bg-gray-50 ${selectedConversationId === conversation._id || isPending
+                        ? "bg-gray-100"
+                        : ""
+                        }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="relative">
+                          <AvatarUser
+                            name={
+                              profileMap[
+                                (conversation.participants ?? []).find(
+                                  (id) => id !== currentUserId
+                                ) ?? ""
+                              ]?.name || "User"
+                            }
+                            avatarUrl={
+                              profileMap[
+                                (conversation.participants ?? []).find(
+                                  (id) => id !== currentUserId
+                                ) ?? ""
+                              ]?.avatarUrl
+                            }
+                            size={40}
+                            className="rounded-full border border-gray-200"
+                          />
+                          {presenceMap[
+                            (conversation.participants ?? []).find(
+                              (id) => id !== currentUserId
+                            ) ?? ""
+                          ]?.isOnline && (
+                              <span
+                                className="absolute right-0 block h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-white"
+                                style={{ bottom: '10px' }}
+                              />
+                            )}
+                        </div>
+                        <div className="flex-1 overflow-hidden">
+                          <div className="flex items-center justify-between">
+                            <span className="truncate text-sm font-medium text-[#111827]">
+                              {
+                                profileMap[
+                                  (conversation.participants ?? []).find(
+                                    (id) => id !== currentUserId
+                                  ) ?? ""
+                                ]?.name
+                              }
+                            </span>
+                            {conversation.lastMessageAt && (
+                              <span className="text-xs text-gray-400">
+                                {new Date(
+                                  conversation.lastMessageAt
+                                ).toLocaleDateString("vi-VN", {
+                                  day: "2-digit",
+                                  month: "2-digit",
+                                })}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <p
+                              className={`truncate text-xs ${conversation.unreadBy?.includes(currentUserId)
+                                ? "font-semibold text-[#111827]"
+                                : "text-gray-500"
+                                }`}
+                            >
+                              {conversation.lastMessage || "Chưa có tin nhắn"}
+                            </p>
+                            {conversation.unreadBy?.includes(currentUserId) && (
+                              <span className="h-2 w-2 rounded-full bg-blue-500" />
+                            )}
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                    <div className="truncate text-left text-xs text-gray-300">
-                      {lastMessage}
-                    </div>
-                  </div>
-                  {hasUnread && (
-                    <div className="flex h-full w-3 items-center justify-center">
-                      <Tooltip content="Chưa đọc">
-                        <span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-500" />
-                      </Tooltip>
-                    </div>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        )}
+                  );
+                })}
+              </div>
+              {isLoading && hasMore && (
+                <div className="space-y-2 py-2">
+                  {[1].map((i) => (
+                    <ConversationSkeleton key={`loading-${i}`} />
+                  ))}
+                </div>
+              )}
+            </>
+          );
+        })()}
       </div>
     </div>
   );

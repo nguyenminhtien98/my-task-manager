@@ -9,6 +9,7 @@ import DailyReportCard from "./DailyReportCard";
 import { formatVietnameseDateTime } from "../../utils/date";
 import { cn } from "../../utils/cn";
 import LoadingSpinner from "../loading/LoadingSpinner";
+import DailyReportSkeleton from "../loading/DailyReportSkeleton";
 
 interface DailyReportListProps {
   groups: DailyReportGroup[];
@@ -17,6 +18,9 @@ interface DailyReportListProps {
   onDelete: (entry: DailyReportEntry) => void;
   className?: string;
   isLoading?: boolean;
+  onLoadMore?: () => void;
+  hasMore?: boolean;
+  isLoadingMore?: boolean;
 }
 
 const DailyReportList: React.FC<DailyReportListProps> = ({
@@ -26,7 +30,21 @@ const DailyReportList: React.FC<DailyReportListProps> = ({
   onDelete,
   className,
   isLoading,
+  onLoadMore,
+  hasMore,
+  isLoadingMore,
 }) => {
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+
+  const handleScroll = () => {
+    if (!scrollRef.current || isLoadingMore || !hasMore || !onLoadMore) return;
+
+    const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
+    if (scrollHeight - scrollTop - clientHeight < 300) {
+      onLoadMore();
+    }
+  };
+
   if (isLoading) {
     return (
       <div
@@ -59,7 +77,11 @@ const DailyReportList: React.FC<DailyReportListProps> = ({
 
   return (
     <div className={cn("flex-1 overflow-hidden", className)}>
-      <div className="h-full overflow-y-auto p-2 no-scrollbar">
+      <div
+        ref={scrollRef}
+        onScroll={handleScroll}
+        className="h-full overflow-y-auto p-2 no-scrollbar"
+      >
         {groups.map((group, groupIndex) => {
           const sampleEntry = group.entries[0];
           const label = sampleEntry
@@ -82,9 +104,9 @@ const DailyReportList: React.FC<DailyReportListProps> = ({
               <div className="space-y-3">
                 {group.entries.map((entry) => (
                   <DailyReportCard
-                    key={entry.id}
+                    key={entry._id}
                     entry={entry}
-                    isOwn={entry.userId === currentUserId}
+                    isOwn={entry.author._id === currentUserId}
                     onEdit={() => onEdit(entry)}
                     onDelete={() => onDelete(entry)}
                   />
@@ -93,6 +115,12 @@ const DailyReportList: React.FC<DailyReportListProps> = ({
             </div>
           );
         })}
+
+        {isLoadingMore && (
+          <div className="py-4">
+            <DailyReportSkeleton />
+          </div>
+        )}
       </div>
     </div>
   );

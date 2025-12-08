@@ -27,7 +27,7 @@ const ProjectMemberListView: React.FC<ProjectMemberListViewProps> = ({
   isAddingMember = false,
 }) => {
   const existingMemberIds = React.useMemo(
-    () => members.map((m) => m.$id),
+    () => members.map((m) => m._id),
     [members]
   );
 
@@ -88,7 +88,7 @@ const ProjectMemberListView: React.FC<ProjectMemberListViewProps> = ({
           <div className="flex flex-wrap gap-3">
             {members.map((member, index) => (
               <button
-                key={member.$id || `${member.name}-${index}`}
+                key={member._id || `${member.name}-${index}`}
                 type="button"
                 onClick={() => onMemberClick(member)}
                 className="inline-flex focus:outline-none"

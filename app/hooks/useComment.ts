@@ -2,32 +2,14 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
-import { Query } from "appwrite";
-import { database, subscribeToRealtime } from "../../lib/appwrite";
+import { useSocket } from "../context/SocketContext";
 import { uploadFilesToCloudinary } from "../utils/upload";
-import {
+import type {
+  Comment,
   CommentAttachment,
   PendingAttachment,
-  TaskComment,
-} from "../components/comments/types";
-import { mapCommentDocument, RawCommentDocument } from "../utils/comment";
-import { createNotifications } from "../services/notificationService";
-import { checkUserActionAllowed } from "../utils/moderation";
-
-interface CreateCommentParams {
-  taskId: string;
-  userId: string;
-  userName: string;
-  content: string;
-  attachments: PendingAttachment[];
-}
-
-interface UpdateCommentParams {
-  comment: TaskComment;
-  content: string;
-  retainedAttachments: CommentAttachment[];
-  newAttachments: PendingAttachment[];
-}
+} from "../types/Types";
+import * as commentAPI from "../services/commentService";
 
 interface UseCommentOptions {
   locked?: boolean;
@@ -40,69 +22,37 @@ interface UseCommentOptions {
   leaderName?: string;
 }
 
-const getCollectionInfo = () => {
-  const databaseId = process.env.NEXT_PUBLIC_DATABASE_ID;
-  const collectionId = process.env.NEXT_PUBLIC_COLLECTION_ID_COMMENTS;
-  if (!databaseId || !collectionId) {
-    throw new Error("Thiếu cấu hình collection bình luận");
-  }
-  return { databaseId, collectionId };
-};
-
-const serializeAttachment = (attachment: CommentAttachment) =>
-  JSON.stringify({
-    url: attachment.url,
-    type: attachment.type,
-    name: attachment.name,
-    size: attachment.size,
-    mimeType: attachment.mimeType,
-  });
-
 export const useComment = (taskId?: string, options?: UseCommentOptions) => {
   const isLocked = options?.locked ?? false;
-  const [comments, setComments] = useState<TaskComment[]>([]);
+  const [comments, setComments] = useState<Comment[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
   const isCreatingRef = useRef(false);
-
-  const mergeComment = useCallback(
-    (existing: TaskComment | undefined, incoming: TaskComment): TaskComment => {
-      const hasValidIncomingName =
-        incoming.user.name &&
-        incoming.user.name.trim().length > 0 &&
-        incoming.user.name !== "Người dùng";
-      const user = hasValidIncomingName
-        ? incoming.user
-        : existing?.user ?? incoming.user;
-
-      return {
-        ...(existing ?? incoming),
-        ...incoming,
-        user,
-      };
-    },
-    []
-  );
+  const COMMENTS_PER_PAGE = 15;
 
   useEffect(() => {
     if (!taskId) {
       setComments([]);
+      setCurrentPage(1);
+      setHasMore(true);
       return;
     }
     let cancelled = false;
     const fetchComments = async () => {
       try {
         setIsLoading(true);
-        const { databaseId, collectionId } = getCollectionInfo();
-        const res = await database.listDocuments(databaseId, collectionId, [
-          Query.equal("taskId", taskId),
-          Query.orderDesc("$createdAt"),
-        ]);
-        if (cancelled) return;
-        const mapped = (res.documents as unknown as RawCommentDocument[]).map(
-          (doc) => mapCommentDocument(doc)
+        const result = await commentAPI.getComments(
+          taskId,
+          1,
+          COMMENTS_PER_PAGE
         );
-        setComments(mapped);
+        if (cancelled) return;
+        setComments(result.comments);
+        setCurrentPage(1);
+        setHasMore(result.pagination.page < result.pagination.totalPages);
       } catch (error) {
         console.error("Fetch comments failed:", error);
         if (!cancelled) {
@@ -117,66 +67,84 @@ export const useComment = (taskId?: string, options?: UseCommentOptions) => {
     return () => {
       cancelled = true;
     };
-  }, [taskId]);
+  }, [taskId, COMMENTS_PER_PAGE]);
+
+  const { socket, isConnected } = useSocket();
 
   useEffect(() => {
-    if (!taskId) return;
-    const { databaseId, collectionId } = getCollectionInfo();
-    const channel = `databases.${databaseId}.collections.${collectionId}.documents`;
-    const unsubscribe = subscribeToRealtime([channel], (res: unknown) => {
-      const payload = res as {
-        events: string[];
-        payload: { $id?: string; data?: unknown };
-      };
-      if (!payload?.events?.length) return;
-      const events = payload.events;
-      const rawData =
-        (payload.payload?.data as RawCommentDocument | undefined) ??
-        (payload.payload as unknown as RawCommentDocument | undefined);
+    if (!socket || !isConnected || !taskId) return;
 
-      const documentId = payload.payload?.$id;
+    const handleCommentAdded = (comment: Comment) => {
+      if (comment.task !== taskId) return;
+      setComments((prev) => {
+        if (prev.some((item) => item._id === comment._id)) return prev;
+        return [comment, ...prev];
+      });
+    };
 
-      if (events.some((e) => e.endsWith(".delete"))) {
-        if (documentId) {
-          setComments((prev) => prev.filter((item) => item.id !== documentId));
-        }
-        return;
-      }
+    const handleCommentUpdated = (comment: Comment) => {
+      if (comment.task !== taskId) return;
+      setComments((prev) =>
+        prev.map((item) => (item._id === comment._id ? comment : item))
+      );
+    };
 
-      if (!rawData) return;
-      const docTaskId = (rawData as unknown as { taskId?: string }).taskId;
-      if (!docTaskId || docTaskId !== taskId) return;
+    const handleCommentDeleted = (data: {
+      commentId: string;
+      taskId: string;
+    }) => {
+      if (data.taskId !== taskId) return;
+      setComments((prev) => prev.filter((item) => item._id !== data.commentId));
+    };
 
-      const incoming = mapCommentDocument(rawData);
-
-      if (events.some((e) => e.endsWith(".create"))) {
-        setComments((prev) => {
-          if (prev.some((item) => item.id === incoming.id)) return prev;
-          return [incoming, ...prev];
-        });
-      } else if (events.some((e) => e.endsWith(".update"))) {
-        setComments((prev) =>
-          prev.map((item) =>
-            item.id === incoming.id ? mergeComment(item, incoming) : item
-          )
-        );
-      }
-    });
+    socket.on("comment:added", handleCommentAdded);
+    socket.on("comment:updated", handleCommentUpdated);
+    socket.on("comment:deleted", handleCommentDeleted);
 
     return () => {
-      unsubscribe();
+      socket.off("comment:added", handleCommentAdded);
+      socket.off("comment:updated", handleCommentUpdated);
+      socket.off("comment:deleted", handleCommentDeleted);
     };
-  }, [taskId, mergeComment]);
+  }, [socket, isConnected, taskId]);
+
+  const loadMoreComments = useCallback(async () => {
+    if (!taskId || !hasMore || isLoadingMore || isLoading) return;
+
+    try {
+      setIsLoadingMore(true);
+      const nextPage = currentPage + 1;
+      const result = await commentAPI.getComments(
+        taskId,
+        nextPage,
+        COMMENTS_PER_PAGE
+      );
+
+      setComments((prev) => [...prev, ...result.comments]);
+      setCurrentPage(nextPage);
+      setHasMore(result.pagination.page < result.pagination.totalPages);
+    } catch (error) {
+      console.error("Load more comments failed:", error);
+      toast.error("Không thể tải thêm bình luận");
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [
+    taskId,
+    hasMore,
+    isLoadingMore,
+    isLoading,
+    currentPage,
+    COMMENTS_PER_PAGE,
+  ]);
 
   const createComment = useCallback(
-    async ({
-      taskId: targetTaskId,
-      userId,
-      userName,
-      content,
-      attachments,
-    }: CreateCommentParams): Promise<TaskComment | null> => {
-      if (!targetTaskId) return null;
+    async (
+      taskId: string,
+      content: string,
+      attachments: PendingAttachment[]
+    ): Promise<Comment | null> => {
+      if (!taskId) return null;
       if (isLocked) {
         toast.error("Dự án đã bị đóng, không thể bình luận.");
         return null;
@@ -192,116 +160,41 @@ export const useComment = (taskId?: string, options?: UseCommentOptions) => {
       }
 
       try {
-        await checkUserActionAllowed(userId);
-        const { databaseId, collectionId } = getCollectionInfo();
-
         isCreatingRef.current = true;
         setIsCreating(true);
 
-        let parsedAttachments: CommentAttachment[] = [];
-        let serializedAttachments: string[] = [];
+        let uploadedAttachments: CommentAttachment[] = [];
 
         if (attachments.length > 0) {
           const uploaded = await uploadFilesToCloudinary(
             attachments.map((item) => item.file)
           );
-          parsedAttachments = uploaded.map((item) => {
-            const normalizedType: CommentAttachment["type"] =
+          uploadedAttachments = uploaded.map((item) => ({
+            url: item.url,
+            name: item.name,
+            type:
               item.type === "image" || item.type === "video"
                 ? item.type
-                : "file";
-            return {
-              url: item.url,
-              type: normalizedType,
-              name: item.name,
-              size: item.size,
-              mimeType: item.mimeType,
-            };
-          });
-          serializedAttachments = parsedAttachments.map(serializeAttachment);
+                : "file",
+            size: item.size,
+            mimeType: item.mimeType,
+          }));
         }
 
-        const created = await database.createDocument(
-          databaseId,
-          collectionId,
-          "unique()",
-          {
-            taskId: targetTaskId,
-            content: cleanContent,
-            attachments: serializedAttachments,
-            userProfile: userId,
-            isVisible: true,
-          }
-        );
-
-        const newComment: TaskComment = {
-          id: created.$id,
+        const newComment = await commentAPI.createComment(taskId, {
           content: cleanContent,
-          createdAt: created.$createdAt ?? new Date().toISOString(),
-          isVisible: created.isVisible ?? true,
-          user: {
-            id: userId,
-            name: userName,
-          },
-          attachments: parsedAttachments,
-        };
+          attachments:
+            uploadedAttachments.length > 0 ? uploadedAttachments : undefined,
+        });
 
         setComments((prev) => {
-          const existing = prev.find((item) => item.id === newComment.id);
-          if (existing) {
-            const merged = mergeComment(existing, newComment);
-            return prev.map((item) => (item.id === merged.id ? merged : item));
+          if (prev.some((item) => item._id === newComment._id)) {
+            return prev.map((item) =>
+              item._id === newComment._id ? newComment : item
+            );
           }
           return [newComment, ...prev];
         });
-
-        const recipients = new Set<string>();
-        const notificationsPayload: Parameters<typeof createNotifications>[0] =
-          [];
-        const taskTitle = options?.taskTitle ?? "";
-        const projectId = options?.projectId;
-
-        if (options?.leaderId && options.leaderId !== userId) {
-          if (!recipients.has(options.leaderId)) {
-            recipients.add(options.leaderId);
-            notificationsPayload.push({
-              recipientId: options.leaderId,
-              actorId: userId,
-              type: "task.comment.added",
-              scope: "task",
-              projectId,
-              taskId: targetTaskId,
-              metadata: {
-                actorName: userName,
-                taskTitle,
-                projectName: options?.projectName,
-              },
-            });
-          }
-        }
-
-        if (options?.assigneeId && options.assigneeId !== userId) {
-          if (!recipients.has(options.assigneeId)) {
-            recipients.add(options.assigneeId);
-            notificationsPayload.push({
-              recipientId: options.assigneeId,
-              actorId: userId,
-              type: "task.comment.added",
-              scope: "task",
-              projectId,
-              taskId: targetTaskId,
-              metadata: {
-                actorName: userName,
-                taskTitle,
-                projectName: options?.projectName,
-              },
-            });
-          }
-        }
-
-        if (notificationsPayload.length > 0) {
-          await createNotifications(notificationsPayload);
-        }
 
         toast.success("Đã gửi bình luận");
         return newComment;
@@ -315,22 +208,21 @@ export const useComment = (taskId?: string, options?: UseCommentOptions) => {
         setIsCreating(false);
       }
     },
-    [mergeComment, isLocked, options]
+    [isLocked]
   );
 
   const updateComment = useCallback(
-    async ({
-      comment,
-      content,
-      retainedAttachments,
-      newAttachments,
-    }: UpdateCommentParams): Promise<TaskComment | null> => {
+    async (
+      commentId: string,
+      content: string,
+      retainedAttachments: CommentAttachment[],
+      newAttachments: PendingAttachment[]
+    ): Promise<Comment | null> => {
       if (isLocked) {
         toast.error("Dự án đã bị đóng, không thể chỉnh sửa bình luận.");
         return null;
       }
       try {
-        const { databaseId, collectionId } = getCollectionInfo();
         const trimmedContent = content.trim();
         const hasAttachments =
           retainedAttachments.length > 0 || newAttachments.length > 0;
@@ -344,54 +236,31 @@ export const useComment = (taskId?: string, options?: UseCommentOptions) => {
           const uploaded = await uploadFilesToCloudinary(
             newAttachments.map((item) => item.file)
           );
-          uploadedAttachments = uploaded.map((item) => {
-            const normalizedType: CommentAttachment["type"] =
+          uploadedAttachments = uploaded.map((item) => ({
+            url: item.url,
+            name: item.name,
+            type:
               item.type === "image" || item.type === "video"
                 ? item.type
-                : "file";
-            return {
-              url: item.url,
-              type: normalizedType,
-              name: item.name,
-              size: item.size,
-              mimeType: item.mimeType,
-            };
-          });
+                : "file",
+            size: item.size,
+            mimeType: item.mimeType,
+          }));
         }
 
-        const combinedAttachments = [
-          ...retainedAttachments.map((attachment) => ({ ...attachment })),
+        const combinedAttachments: CommentAttachment[] = [
+          ...retainedAttachments,
           ...uploadedAttachments,
         ];
 
-        const serializedAttachments =
-          combinedAttachments.map(serializeAttachment);
-
-        const updated = await database.updateDocument(
-          databaseId,
-          collectionId,
-          comment.id,
-          {
-            content: trimmedContent,
-            attachments: serializedAttachments,
-          }
-        );
-
-        const updatedComment: TaskComment = {
-          ...comment,
+        const updatedComment = await commentAPI.updateComment(commentId, {
           content: trimmedContent,
           attachments: combinedAttachments,
-          isVisible:
-            typeof updated.isVisible === "boolean"
-              ? updated.isVisible
-              : comment.isVisible,
-        };
+        });
 
         setComments((prev) =>
           prev.map((item) =>
-            item.id === updatedComment.id
-              ? mergeComment(item, updatedComment)
-              : item
+            item._id === updatedComment._id ? updatedComment : item
           )
         );
         toast.success("Đã cập nhật bình luận");
@@ -405,7 +274,7 @@ export const useComment = (taskId?: string, options?: UseCommentOptions) => {
         return null;
       }
     },
-    [mergeComment, isLocked]
+    [isLocked]
   );
 
   const deleteComment = useCallback(
@@ -415,9 +284,8 @@ export const useComment = (taskId?: string, options?: UseCommentOptions) => {
         return false;
       }
       try {
-        const { databaseId, collectionId } = getCollectionInfo();
-        await database.deleteDocument(databaseId, collectionId, commentId);
-        setComments((prev) => prev.filter((item) => item.id !== commentId));
+        await commentAPI.deleteComment(commentId);
+        setComments((prev) => prev.filter((item) => item._id !== commentId));
         toast.success("Đã xóa bình luận");
         return true;
       } catch (error) {
@@ -434,6 +302,9 @@ export const useComment = (taskId?: string, options?: UseCommentOptions) => {
     comments,
     isLoading,
     isCreating,
+    isLoadingMore,
+    hasMore,
+    loadMoreComments,
     createComment,
     updateComment,
     deleteComment,
@@ -441,4 +312,3 @@ export const useComment = (taskId?: string, options?: UseCommentOptions) => {
 };
 
 export type UseCommentResult = ReturnType<typeof useComment>;
-export type { CreateCommentParams, UpdateCommentParams };

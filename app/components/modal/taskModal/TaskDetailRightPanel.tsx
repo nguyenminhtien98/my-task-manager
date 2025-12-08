@@ -15,7 +15,7 @@ interface TaskDetailRightPanelProps {
   className?: string;
   taskId?: string;
   taskTitle?: string;
-  assignee?: string | { $id: string; name: string };
+  assignee?: string | { _id: string; name: string };
 }
 
 const TaskDetailRightPanel: React.FC<TaskDetailRightPanelProps> = ({
@@ -29,9 +29,9 @@ const TaskDetailRightPanel: React.FC<TaskDetailRightPanelProps> = ({
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const { user } = useAuth();
   const { currentProject, isProjectClosed } = useProject();
-  const leaderId = currentProject?.leader?.$id;
+  const leaderId = currentProject?.leader?._id;
   const assigneeIdValue =
-    typeof assignee === "object" ? assignee?.$id : assignee ?? undefined;
+    typeof assignee === "object" ? assignee?._id : assignee ?? undefined;
   const assigneeNameValue =
     typeof assignee === "object" ? assignee?.name : undefined;
   const canComment =

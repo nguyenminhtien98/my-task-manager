@@ -5,9 +5,9 @@ import AvatarUser from "../common/AvatarUser";
 import Tooltip from "../common/Tooltip";
 import type {
   ConversationDocument,
-  PresenceDocument,
   ProfileDocument,
-} from "../../services/feedbackService";
+  PresenceDocument,
+} from "../../types/Types";
 
 interface MemberConversationListProps {
   conversations: ConversationDocument[];
@@ -51,13 +51,12 @@ const MemberConversationList: React.FC<MemberConversationListProps> = ({
         return (
           <button
             type="button"
-            key={conversation.$id}
-            onClick={() => onSelectConversation(conversation.$id)}
-            className={`flex w-full items-center gap-3 rounded-xl border border-transparent px-3 py-2 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-black/30 ${
-              selectedConversationId === conversation.$id
-                ? "bg-black text-white"
-                : "bg-black/60 text-white hover:bg-black/70"
-            }`}
+            key={conversation._id}
+            onClick={() => onSelectConversation(conversation._id)}
+            className={`flex w-full items-center gap-3 rounded-xl border border-transparent px-3 py-2 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-black/30 ${selectedConversationId === conversation._id
+              ? "bg-black text-white"
+              : "bg-black/60 text-white hover:bg-black/70"
+              }`}
           >
             <AvatarUser
               name={displayName}

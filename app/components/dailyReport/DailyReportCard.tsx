@@ -33,15 +33,15 @@ const DailyReportCard: React.FC<DailyReportCardProps> = ({
     <article className="flex w-fit max-w-4xl flex-wrap items-start gap-3 rounded-2xl border border-white/10 bg-black/60 p-3 shadow-lg shadow-black/50">
       <div className="flex-shrink-0">
         <AvatarUser
-          name={entry.userName}
-          avatarUrl={entry.avatarUrl ?? undefined}
+          name={entry.author.name}
+          avatarUrl={entry.author.avatarUrl}
           size={40}
           showTooltip={false}
         />
       </div>
       <div className="rich-text-editor min-w-[200px] flex-1 text-sm text-white/90">
         <div className="flex flex-wrap items-center gap-3 text-white">
-          <span className="font-semibold">{entry.userName}</span>
+          <span className="font-semibold">{entry.author.name}</span>
           <span className="text-xs text-white/50">
             {formatRelativeTimeFromNow(entry.createdAt)}
           </span>

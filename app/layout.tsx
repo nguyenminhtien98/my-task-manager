@@ -1,10 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { AuthProvider } from "./context/AuthContext";
-import { ThemeProvider } from "./context/ThemeContext";
 import { Toaster } from "react-hot-toast";
-import { ProjectProvider } from "./context/ProjectContext";
-import { FeedbackChatProvider } from "./context/FeedbackChatContext";
+import { ConditionalProviders } from "./context/ConditionalProviders";
 import AppBootstrap from "./AppBootstrap";
 import {
   DEFAULT_LOGO_DATA_URL,
@@ -12,13 +9,13 @@ import {
 } from "./utils/logoSvg";
 import FeedbackChatWidget from "./components/feedback/FeedbackChatWidget";
 import { spaceMono, geistMono, geistSans } from "@/lib/fonts";
-import { TaskFilterProvider } from "./context/TaskFilterContext";
+import { ServerErrorHandler } from "./components/ServerErrorHandler";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://my-task-manager-web.vercel.app"),
-  title: "My Task Manager Web",
+  title: "My Task Manager",
   description:
-    "Tạo, sắp xếp và giải quyết các công việc cần làm. Công cụ sẽ thúc đẩy năng suất làm việc của bạn. My Task Manager Web sẽ giúp bạn làm được nhiều việc hơn.",
+    "Tạo, sắp xếp và giải quyết các công việc cần làm. Công cụ sẽ thúc đẩy năng suất làm việc của bạn. My Task Manager sẽ giúp bạn làm được nhiều việc hơn.",
   keywords: [
     "công việc",
     "task",
@@ -35,25 +32,25 @@ export const metadata: Metadata = {
     apple: [{ url: DEFAULT_LOGO_DATA_URL, type: "image/svg+xml" }],
   },
   openGraph: {
-    title: "My Task Manager Web",
+    title: "My Task Manager",
     description:
-      "Tạo, sắp xếp và giải quyết các công việc cần làm. Công cụ sẽ thúc đẩy năng suất làm việc của bạn. My Task Manager Web sẽ giúp bạn làm được nhiều việc hơn.",
+      "Tạo, sắp xếp và giải quyết các công việc cần làm. Công cụ sẽ thúc đẩy năng suất làm việc của bạn. My Task Manager sẽ giúp bạn làm được nhiều việc hơn.",
     url: "https://my-task-manager-web.vercel.app",
-    siteName: "My Task Manager Web",
+    siteName: "My Task Manager",
     type: "website",
     images: [
       {
         url: DEFAULT_LOGO_DATA_URL,
-        alt: "My Task Manager Web logo",
+        alt: "My Task Manager logo",
         type: "image/svg+xml",
       },
     ],
   },
   twitter: {
     card: "summary",
-    title: "My Task Manager Web",
+    title: "My Task Manager",
     description:
-      "Tạo, sắp xếp và giải quyết các công việc cần làm. Công cụ sẽ thúc đẩy năng suất làm việc của bạn. My Task Manager Web sẽ giúp bạn làm được nhiều việc hơn.",
+      "Tạo, sắp xếp và giải quyết các công việc cần làm. Công cụ sẽ thúc đẩy năng suất làm việc của bạn. My Task Manager sẽ giúp bạn làm được nhiều việc hơn.",
     images: [DEFAULT_LOGO_DATA_URL],
   },
   other: {
@@ -69,10 +66,10 @@ export default function RootLayout({
   const schema = {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
-    name: "My Task Manager Web",
+    name: "My Task Manager",
     url: "https://my-task-manager-web.vercel.app",
     description:
-      "Tạo, sắp xếp và giải quyết các công việc cần làm. Công cụ sẽ thúc đẩy năng suất làm việc của bạn. My Task Manager Web sẽ giúp bạn làm được nhiều việc hơn.",
+      "Tạo, sắp xếp và giải quyết các công việc cần làm. Công cụ sẽ thúc đẩy năng suất làm việc của bạn. My Task Manager sẽ giúp bạn làm được nhiều việc hơn.",
     applicationCategory: "ProjectManagementApplication",
     operatingSystem: "Web",
     offers: {
@@ -90,26 +87,20 @@ export default function RootLayout({
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
         />
+        <script src="https://accounts.google.com/gsi/client" async defer></script>
       </head>
       <body
         suppressHydrationWarning
         className={`${spaceMono.variable} ${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <AuthProvider>
-          <ProjectProvider>
-            <ThemeProvider>
-              <FeedbackChatProvider>
-                <TaskFilterProvider>
-                  <AppBootstrap>
-                    <Toaster position="top-right" />
-                    {children}
-                    <FeedbackChatWidget />
-                  </AppBootstrap>
-                </TaskFilterProvider>
-              </FeedbackChatProvider>
-            </ThemeProvider>
-          </ProjectProvider>
-        </AuthProvider>
+        <ServerErrorHandler />
+        <ConditionalProviders>
+          <AppBootstrap>
+            <Toaster position="top-right" />
+            {children}
+            <FeedbackChatWidget />
+          </AppBootstrap>
+        </ConditionalProviders>
       </body>
     </html>
   );

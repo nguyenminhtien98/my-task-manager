@@ -20,6 +20,7 @@ interface DailyReportHeaderProps {
   selectedDate: string | null;
   onDateChange: (value: string | null) => void;
   onOpenSettings: () => void;
+  showSettingsButton?: boolean;
   className?: string;
 }
 
@@ -30,7 +31,12 @@ const formatDateLabel = (value: string | null) => {
   return date.toLocaleDateString("vi-VN");
 };
 
-const toISODate = (date: Date) => date.toISOString().split("T")[0];
+const toISODate = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
 const daysOfWeek = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
 const todayISO = toISODate(new Date());
 
@@ -42,6 +48,7 @@ const DailyReportHeader: React.FC<DailyReportHeaderProps> = ({
   selectedDate,
   onDateChange,
   onOpenSettings,
+  showSettingsButton = true,
   className,
 }) => {
   const dateLabel = useMemo(() => formatDateLabel(selectedDate), [selectedDate]);
@@ -175,14 +182,16 @@ const DailyReportHeader: React.FC<DailyReportHeaderProps> = ({
         <h1 className="text-xl font-semibold text-white"># {projectName}</h1>
         <div className="flex flex-col gap-2 text-sm text-white/70">
           <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={onOpenSettings}
-              className="flex items-center gap-2 rounded-full border border-white/10 bg-black/70 p-2.5 text-white/80 transition hover:border-white/30 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 cursor-pointer"
-              aria-label="Cài đặt báo cáo"
-            >
-              <LuSettings2 className="h-4 w-4" />
-            </button>
+            {showSettingsButton && (
+              <button
+                type="button"
+                onClick={onOpenSettings}
+                className="flex items-center gap-2 rounded-full border border-white/10 bg-black/70 p-2.5 text-white/80 transition hover:border-white/30 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 cursor-pointer"
+                aria-label="Cài đặt báo cáo"
+              >
+                <LuSettings2 className="h-4 w-4" />
+              </button>
+            )}
             <div className="flex items-center gap-2 rounded-full border border-white/10 bg-black/70 px-2 py-1">
               <button
                 type="button"

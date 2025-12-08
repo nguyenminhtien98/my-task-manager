@@ -39,6 +39,9 @@ const DailyReportRoom: React.FC = () => {
     updateReportSettings,
     isReportsLoading,
     isRoomReady,
+    loadMoreReports,
+    hasMoreReports,
+    isLoadingMoreReports,
   } = useDailyReportRoom({
     currentUser: user,
     currentProject,
@@ -62,6 +65,11 @@ const DailyReportRoom: React.FC = () => {
           onToggleMyReports={setMyReportFilter}
           onDateChange={setDateFilter}
           onOpenSettings={() => setSettingsOpen(true)}
+          showSettingsButton={
+            typeof currentProject?.leader === "object"
+              ? currentProject?.leader?._id === user?.id
+              : currentProject?.leader === user?.id
+          }
         />
         <DailyReportList
           className="flex-1 min-h-0 bg-black/60"
@@ -70,6 +78,9 @@ const DailyReportRoom: React.FC = () => {
           onEdit={handleEdit}
           onDelete={handleDelete}
           isLoading={isReportsLoading}
+          onLoadMore={loadMoreReports}
+          hasMore={hasMoreReports}
+          isLoadingMore={isLoadingMoreReports}
         />
         <DailyReportForm
           className="border-t border-white/10 bg-black/70 px-2 pt-2"
@@ -87,7 +98,7 @@ const DailyReportRoom: React.FC = () => {
           isMentioning={isMentioning}
           mentionOptions={mentionableMembers}
           isEditing={Boolean(editingEntry)}
-          editingEntryName={editingEntry?.userName}
+          editingEntryName={editingEntry?.author.name}
           onCancelEdit={handleCancelEdit}
         />
       </div>

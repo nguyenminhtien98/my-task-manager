@@ -8,16 +8,15 @@ import React, {
   useCallback,
   useRef,
 } from "react";
-import { database, subscribeToRealtime } from "../../lib/appwrite";
-import { Query } from "appwrite";
 import {
   Project,
   ProjectContextType,
   ProjectMemberProfile,
-  BasicProfile,
 } from "../types/Types";
 import { useAuth } from "./AuthContext";
+import { useSocket } from "./SocketContext";
 import { emitMembersChanged } from "../utils/membersBus";
+import * as projectAPI from "../services/projectService";
 
 const applyProjectStatus = (project: Project): Project => ({
   ...project,
@@ -27,7 +26,7 @@ const applyProjectStatus = (project: Project): Project => ({
 const normalizeProject = (project: Project | null): Project | null =>
   project ? applyProjectStatus(project) : null;
 
-const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
+export const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
 
 export const ProjectProvider: React.FC<{ children: ReactNode }> = ({
   children,
@@ -41,12 +40,26 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({
     "leader" | "user" | null
   >(null);
   const [projects, setProjects] = useState<Project[]>([]);
-  const { user } = useAuth();
+  const [allProjects, setAllProjects] = useState<Project[]>([]);
+  const [isLoadingAllProjects, setIsLoadingAllProjects] = useState(false);
+  const { user, isAuthHydrated } = useAuth();
+  const { socket, isConnected } = useSocket();
   const [isProjectsHydrated, setIsProjectsHydrated] = useState(false);
   const [isTasksHydrated, setIsTasksHydrated] = useState(false);
   const [members, setMembers] = useState<ProjectMemberProfile[]>([]);
   const [isMembersLoading, setIsMembersLoading] = useState(false);
+  const [projectsPage, setProjectsPage] = useState(1);
+  const [hasMoreProjects, setHasMoreProjects] = useState(false);
+  const [isLoadingMoreProjects, setIsLoadingMoreProjects] = useState(false);
+  const totalProjectsPagesRef = useRef(1);
   const lastRefreshTimeRef = useRef<number>(0);
+  const lastFetchedUserIdRef = useRef<string | null>(null);
+  const locallyCreatedProjectIdsRef = useRef<Set<string>>(new Set());
+  const isRefreshingRef = useRef<boolean>(false);
+  const hasInitializedRef = useRef<boolean>(false);
+  const hasFetchedMembersRef = useRef<boolean>(false);
+  const isFetchingMembersRef = useRef<boolean>(false);
+  const currentProjectIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     currentProjectRef.current = currentProject;
@@ -60,15 +73,11 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({
       setMembers([]);
       return;
     }
-    const databaseId = process.env.NEXT_PUBLIC_DATABASE_ID;
-    const membershipsCollectionId =
-      process.env.NEXT_PUBLIC_COLLECTION_ID_PROJECT_MEMBERSHIPS;
-    if (!databaseId || !membershipsCollectionId) {
-      setMembers([]);
+
+    if (isFetchingMembersRef.current) {
       return;
     }
 
-    // Skip nếu vừa mới refresh trong vòng 1 giây
     const now = Date.now();
     if (now - lastRefreshTimeRef.current < 1000) {
       return;
@@ -76,51 +85,50 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({
     lastRefreshTimeRef.current = now;
 
     setIsMembersLoading(true);
+    isFetchingMembersRef.current = true;
     try {
-      const response = await database.listDocuments(
-        String(databaseId),
-        String(membershipsCollectionId),
-        [Query.equal("project", currentProject.$id), Query.limit(100)]
-      );
+      const detail = await projectAPI.getProjectDetail(currentProject._id);
 
-      const nonLeaderMembers: ProjectMemberProfile[] = response.documents
-        .map((membershipDoc) => {
-          const userProfile = membershipDoc.user as BasicProfile;
-          const profile: ProjectMemberProfile = {
-            ...(userProfile as BasicProfile),
-            isLeader: false,
-            membershipId: membershipDoc.$id,
-            joinedAt: membershipDoc.joinedAt as string | undefined,
-          };
-          return profile;
-        })
-        .filter((m) => m.$id !== currentProject.leader.$id);
+      const projectMembers: ProjectMemberProfile[] = detail.members.map((m) => ({
+        _id: m._id,
+        name: m.name,
+        email: m.email,
+        avatarUrl: m.avatarUrl,
+        role: m.role,
+        createdAt: m.createdAt,
+        updatedAt: m.updatedAt,
+        isLeader: m._id === detail.leader._id,
+      }));
 
-      const leaderMatch = response.documents.find(
-        (d) => (d.user as BasicProfile)?.$id === currentProject.leader.$id
-      );
-      const leaderProfile: ProjectMemberProfile = {
-        ...currentProject.leader,
-        isLeader: true,
-        membershipId: leaderMatch?.$id,
-        joinedAt: (leaderMatch?.joinedAt as string | undefined) ?? undefined,
-      };
-
-      setMembers([leaderProfile, ...nonLeaderMembers]);
+      setMembers(projectMembers);
     } catch (error) {
       console.error("Failed to fetch project members:", error);
       setMembers([]);
     } finally {
       setIsMembersLoading(false);
+      isFetchingMembersRef.current = false;
     }
   }, [currentProject]);
-
   useEffect(() => {
-    if (!currentProject) {
+    const projectId = currentProject?._id;
+
+    if (!currentProject || !projectId) {
       setMembers([]);
       return;
     }
+
+    if (currentProjectIdRef.current !== projectId) {
+      hasFetchedMembersRef.current = false;
+      currentProjectIdRef.current = projectId;
+    }
+
+    if (hasFetchedMembersRef.current) {
+      return;
+    }
+
+    hasFetchedMembersRef.current = true;
     void refreshMembers();
+
   }, [currentProject, refreshMembers]);
 
   const setCurrentProject = useCallback((project: Project | null) => {
@@ -129,13 +137,18 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({
     if (typeof window === "undefined") return;
     const storage = window.sessionStorage;
     if (normalized) {
-      storage.setItem("activeProjectId", normalized.$id);
+      storage.setItem("activeProjectId", normalized._id);
     } else {
       storage.removeItem("activeProjectId");
     }
   }, []);
 
-  const refreshProjects = useCallback(async () => {
+  const refreshProjects = useCallback(async (force = false) => {
+
+    if (isRefreshingRef.current && !force) {
+      return;
+    }
+
     if (!user) {
       if (typeof window !== "undefined") {
         window.sessionStorage.removeItem("activeProjectId");
@@ -144,72 +157,54 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({
       setCurrentProject(null);
       setCurrentProjectRole(null);
       setIsProjectsHydrated(true);
+      lastFetchedUserIdRef.current = null;
+      return;
+    }
+
+    if (!user.id) {
+      setProjects([]);
+      setCurrentProjectRole(null);
+      setIsProjectsHydrated(true);
+      return;
+    }
+
+    if (!force && lastFetchedUserIdRef.current === user.id) {
       return;
     }
 
     try {
-      const membershipResponse = await database.listDocuments(
-        String(process.env.NEXT_PUBLIC_DATABASE_ID),
-        String(process.env.NEXT_PUBLIC_COLLECTION_ID_PROJECT_MEMBERSHIPS),
-        [Query.equal("user", user.id)]
-      );
-      const memberProjectIds = membershipResponse.documents.map(
-        (doc) => doc.project.$id
-      );
-      const leaderResponse = await database.listDocuments(
-        String(process.env.NEXT_PUBLIC_DATABASE_ID),
-        String(process.env.NEXT_PUBLIC_COLLECTION_ID_PROJECTS),
-        [Query.equal("leader", user.id)]
-      );
-      const leaderProjectIds = leaderResponse.documents.map((doc) => doc.$id);
+      isRefreshingRef.current = true;
+      lastFetchedUserIdRef.current = user.id;
+      setProjectsPage(1);
+      const { projects: fetchedProjects, pagination } = await projectAPI.getProjects({
+        page: 1,
+        limit: 10,
+      });
 
-      const allProjectIds = [
-        ...new Set([...memberProjectIds, ...leaderProjectIds]),
-      ].filter((id) => id);
-
-      if (allProjectIds.length === 0) {
-        setProjects([]);
-        setCurrentProject(null);
-        setCurrentProjectRole(null);
-        setIsProjectsHydrated(true);
-        return;
-      }
-
-      const projectResponse = await database.listDocuments(
-        String(process.env.NEXT_PUBLIC_DATABASE_ID),
-        String(process.env.NEXT_PUBLIC_COLLECTION_ID_PROJECTS),
-        [Query.equal("$id", allProjectIds)]
-      );
-
-      const myProjects = (
-        projectResponse.documents as unknown as Project[]
-      ).map((proj) => applyProjectStatus(proj));
+      const myProjects: Project[] = fetchedProjects;
+      totalProjectsPagesRef.current = pagination.totalPages;
+      setHasMoreProjects(pagination.page < pagination.totalPages);
 
       setProjects(myProjects);
 
       const prevProject = currentProjectRef.current;
       const currentProjectStillExists = prevProject
-        ? myProjects.some((p) => p.$id === prevProject.$id)
+        ? myProjects.some((p) => p._id === prevProject._id)
         : false;
 
       if (myProjects.length) {
-        const sortedProjects = [...myProjects].sort((a, b) => {
-          if (a.$createdAt && b.$createdAt)
-            return (
-              new Date(b.$createdAt).getTime() -
-              new Date(a.$createdAt).getTime()
-            );
-          return 0;
-        });
+        const sortedProjects = [...myProjects].sort((a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
 
         if (prevProject && currentProjectStillExists) {
           const updatedCurrentProject = myProjects.find(
-            (p) => p.$id === prevProject.$id
+            (p) => p._id === prevProject._id
           );
           if (updatedCurrentProject) {
             setCurrentProject(updatedCurrentProject);
             setCurrentProjectRole(
-              updatedCurrentProject.leader.$id === user.id ? "leader" : "user"
+              updatedCurrentProject.leader._id === user.id ? "leader" : "user"
             );
           }
         } else {
@@ -222,36 +217,112 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({
 
           if (storedActiveProjectId) {
             const found = myProjects.find(
-              (proj) => proj.$id === storedActiveProjectId
+              (proj) => proj._id === storedActiveProjectId
             );
             if (found) {
               activeProject = found;
-            } else {
             }
           }
           setCurrentProject(activeProject);
           setCurrentProjectRole(
-            activeProject.leader.$id === user.id ? "leader" : "user"
+            activeProject.leader._id === user.id ? "leader" : "user"
           );
         }
       } else {
         setCurrentProject(null);
         setCurrentProjectRole(null);
       }
-    } catch (error) {
-      console.error("❌ Failed to fetch projects:", error);
-    } finally {
       setIsProjectsHydrated(true);
+    } catch (error) {
+      const response = error && typeof error === 'object' && 'response' in error
+        ? (error as { response?: { status?: number } }).response
+        : undefined;
+      const isServerError = !response || (response?.status && response.status >= 500);
+
+      if (isServerError) {
+        isRefreshingRef.current = false;
+        return;
+      }
+
+      setIsProjectsHydrated(true);
+    } finally {
+      isRefreshingRef.current = false;
     }
   }, [user, setCurrentProject, setCurrentProjectRole, setProjects]);
 
+  const loadMoreProjects = useCallback(async () => {
+    if (isLoadingMoreProjects || !hasMoreProjects || !user?.id) return;
+
+    setIsLoadingMoreProjects(true);
+    try {
+      const nextPage = projectsPage + 1;
+      const { projects: fetchedProjects, pagination } = await projectAPI.getProjects({
+        page: nextPage,
+        limit: 10,
+      });
+
+      setProjects((prev) => [...prev, ...fetchedProjects]);
+      setProjectsPage(nextPage);
+      setHasMoreProjects(pagination.page < pagination.totalPages);
+    } catch (error) {
+      console.error("Failed to load more projects:", error);
+    } finally {
+      setIsLoadingMoreProjects(false);
+    }
+  }, [isLoadingMoreProjects, hasMoreProjects, user?.id, projectsPage]);
+
+  const loadAllProjects = useCallback(async () => {
+    if (!user?.id || isLoadingAllProjects) return;
+
+    setIsLoadingAllProjects(true);
+    try {
+      let allFetchedProjects: Project[] = [];
+      let currentPage = 1;
+      let totalPages = 1;
+
+      do {
+        const { projects: fetchedProjects, pagination } = await projectAPI.getProjects({
+          page: currentPage,
+          limit: 100,
+        });
+        allFetchedProjects = [...allFetchedProjects, ...fetchedProjects];
+        totalPages = pagination.totalPages;
+        currentPage++;
+      } while (currentPage <= totalPages);
+
+      setAllProjects(allFetchedProjects);
+    } catch (error) {
+      console.error("Failed to load all projects:", error);
+    } finally {
+      setIsLoadingAllProjects(false);
+    }
+  }, [user?.id, isLoadingAllProjects]);
+
   useEffect(() => {
+    if (hasInitializedRef.current) return;
+
+    if (!isAuthHydrated) return;
+
+    if (!user?.id) {
+      setProjects([]);
+      setAllProjects([]);
+      setCurrentProject(null);
+      setCurrentProjectRole(null);
+      setIsProjectsHydrated(true);
+      return;
+    }
+
+    hasInitializedRef.current = true;
     void refreshProjects();
-  }, [refreshProjects]);
+
+    return () => {
+      hasInitializedRef.current = false;
+    };
+  }, [user?.id, isAuthHydrated, refreshProjects, setCurrentProject]);
 
   useEffect(() => {
     if (!currentProject) return;
-    const latest = projects.find((proj) => proj.$id === currentProject.$id);
+    const latest = projects.find((proj) => proj._id === currentProject._id);
     if (!latest) return;
     if (
       latest.status !== currentProject.status ||
@@ -259,7 +330,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({
       latest.themeColor !== currentProject.themeColor
     ) {
       setCurrentProject(latest);
-      setCurrentProjectRole(latest.leader.$id === user?.id ? "leader" : "user");
+      setCurrentProjectRole(latest.leader._id === user?.id ? "leader" : "user");
     }
   }, [
     projects,
@@ -270,239 +341,176 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({
   ]);
 
   useEffect(() => {
-    if (!currentProject) return;
-    const databaseId = process.env.NEXT_PUBLIC_DATABASE_ID;
-    const membershipsCollectionId =
-      process.env.NEXT_PUBLIC_COLLECTION_ID_PROJECT_MEMBERSHIPS;
-    if (!databaseId || !membershipsCollectionId) return;
-    const channel = `databases.${databaseId}.collections.${membershipsCollectionId}.documents`;
-    const unsubscribe = subscribeToRealtime([channel], (res: unknown) => {
-      const event = res as {
-        events?: string[];
-        payload?: {
-          $id?: string;
-          project?: unknown;
-          data?: { project?: unknown };
-        };
-      };
-      const events = event.events ?? [];
-      if (!events.length) return;
-      const payload =
-        (event.payload?.data as { project?: unknown } | undefined) ??
-        event.payload ??
-        null;
-      const projectValue =
-        typeof payload?.project === "string"
-          ? payload.project
-          : (payload?.project as { $id?: string } | undefined)?.$id;
-      if (projectValue && projectValue === currentProject.$id) {
+    if (!socket || !isConnected || !currentProject) return;
+
+    const handleMemberChange = (data: { projectId: string }) => {
+      if (data.projectId === currentProject._id) {
         void refreshMembers();
-        emitMembersChanged(currentProject.$id);
+        emitMembersChanged(currentProject._id);
       }
-    });
-    return () => unsubscribe();
-  }, [currentProject, refreshMembers]);
+    };
+
+    socket.on("project:member:added", handleMemberChange);
+    socket.on("project:member:removed", handleMemberChange);
+
+    return () => {
+      socket.off("project:member:added", handleMemberChange);
+      socket.off("project:member:removed", handleMemberChange);
+    };
+  }, [socket, isConnected, currentProject, refreshMembers]);
 
   useEffect(() => {
-    if (!user) return;
-    const databaseId = process.env.NEXT_PUBLIC_DATABASE_ID;
-    const membershipsCollectionId =
-      process.env.NEXT_PUBLIC_COLLECTION_ID_PROJECT_MEMBERSHIPS;
-    const projectsCollectionId = process.env.NEXT_PUBLIC_COLLECTION_ID_PROJECTS;
 
-    if (!databaseId || !membershipsCollectionId || !projectsCollectionId) {
-      return;
-    }
+    if (!socket || !isConnected || !user) return;
 
-    const channel = `databases.${databaseId}.collections.${membershipsCollectionId}.documents`;
-    const unsubscribe = subscribeToRealtime([channel], async (res: unknown) => {
-      const payload = res as {
-        events?: string[];
-        payload?: {
-          $id?: string;
-          $permissions?: string[];
-          data?: {
-            user?: string | { $id?: string };
-            project?: string | { $id?: string };
-          };
-        };
-      };
+    const handleMembershipChange = async (data: {
+      projectId: string;
+      userId?: string;
+      profile?: { _id: string; name: string; email: string; avatarUrl?: string | null };
+    }) => {
+      const affectedUserId = data.userId || data.profile?._id;
 
-      const events = payload?.events ?? [];
-      if (!events.length) {
-        return;
-      }
+      if (affectedUserId === user.id) {
+        const hadNoProjects = !currentProjectRef.current && projectsRef.current.length === 0;
 
-      const rawData =
-        payload.payload?.data ??
-        (payload.payload as unknown as {
-          user?: string | { $id?: string };
-          project?: string | { $id?: string };
-        });
-      if (events.some((event) => event.endsWith(".delete"))) {
-        const permissions = payload.payload?.$permissions ?? [];
+        await refreshProjects(true);
 
-        const userIdFromPermission = permissions
-          .map((perm) => {
-            const match = perm.match(/user:([a-zA-Z0-9]+)/);
-            return match ? match[1] : null;
-          })
-          .filter(Boolean)[0];
+        const updatedProjects = projectsRef.current;
 
-        if (!userIdFromPermission || userIdFromPermission !== user.id) {
+        if (hadNoProjects && updatedProjects.length > 0) {
+          const newProject = updatedProjects.find(p => p._id === data.projectId) || updatedProjects[0];
+          setCurrentProject(newProject);
           return;
         }
-        await refreshProjects();
-        return;
+
+        if (currentProjectRef.current && data.projectId === currentProjectRef.current._id) {
+
+          const stillInProject = updatedProjects.some(p => p._id === data.projectId);
+
+          if (!stillInProject) {
+
+            const nextProject = updatedProjects.length > 0 ? updatedProjects[0] : null;
+            setCurrentProject(nextProject);
+          }
+        }
+      }
+    };
+
+    const handleNotification = (data: unknown) => {
+
+      const notifications = Array.isArray(data) ? data : [data];
+
+      if (notifications.length === 0) return;
+
+      const notification = notifications[0] as { type: string; recipient: string; metadata?: { projectId?: string } };
+
+      if (notification.type === 'project.member_added' && notification.recipient === user.id) {
+        const projectId = notification.metadata?.projectId;
+        if (projectId) {
+          socket.emit('project:join', projectId);
+
+          void handleMembershipChange({ userId: user.id, projectId });
+        }
       }
 
-      if (!rawData) {
-        return;
+      if (notification.type === 'project.member_removed' && notification.recipient === user.id) {
+        const projectId = notification.metadata?.projectId;
+        if (projectId) {
+          void handleMembershipChange({ userId: user.id, projectId });
+        }
       }
+    };
 
-      const membershipUserId =
-        typeof rawData.user === "string" ? rawData.user : rawData.user?.$id;
+    socket.on("project:member:added", handleMembershipChange);
+    socket.on("project:member:removed", handleMembershipChange);
+    socket.on("notification:new", handleNotification);
 
-      if (!membershipUserId || membershipUserId !== user.id) {
-        return;
-      }
-
-      const membershipProjectId =
-        typeof rawData.project === "string"
-          ? rawData.project
-          : rawData.project?.$id;
-
-      if (!membershipProjectId) {
-        return;
-      }
-
-      if (
-        events.some((event) => event.endsWith(".create")) ||
-        events.some((event) => event.endsWith(".update"))
-      ) {
-        await refreshProjects();
-      }
-    });
 
     return () => {
-      unsubscribe();
+      socket.off("project:member:added", handleMembershipChange);
+      socket.off("project:member:removed", handleMembershipChange);
+      socket.off("notification:new", handleNotification);
     };
-  }, [refreshProjects, user]);
+  }, [socket, isConnected, refreshProjects, user, setCurrentProject]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!socket || !isConnected || !user) return;
 
-    const databaseId = String(process.env.NEXT_PUBLIC_DATABASE_ID);
-    const projectsCollectionId = String(
-      process.env.NEXT_PUBLIC_COLLECTION_ID_PROJECTS
-    );
-    const channel = `databases.${databaseId}.collections.${projectsCollectionId}.documents`;
+    const handleProjectCreated = (project: Project) => {
 
-    const unsubscribe = subscribeToRealtime([channel], (res: unknown) => {
-      const payload = res as {
-        payload: { data?: unknown; $id?: string };
-        events: string[];
-      };
-
-      if (!payload?.events?.length) return;
-
-      const events = payload.events;
-      const documentId = payload.payload?.$id;
-      const rawData =
-        (payload.payload?.data as unknown as Project | undefined) ??
-        (payload.payload as unknown as Project | undefined);
-
-      if (events.some((e) => e.endsWith(".delete"))) {
-        if (documentId) {
-          setProjects((prev) => {
-            const updated = prev.filter((p) => p.$id !== documentId);
-            if (currentProject?.$id === documentId) {
-              const nextProject = updated[0] ?? null;
-              setCurrentProject(nextProject ?? null);
-              setCurrentProjectRole(
-                nextProject
-                  ? nextProject.leader.$id === user.id
-                    ? "leader"
-                    : "user"
-                  : null
-              );
-            }
-            return updated;
-          });
-        }
+      if (locallyCreatedProjectIdsRef.current.has(project._id)) {
+        locallyCreatedProjectIdsRef.current.delete(project._id);
         return;
       }
 
-      if (events.some((e) => e.endsWith(".create"))) {
-        if (!rawData) return;
-        const newProject = ensureProjectStatus(rawData as Project);
-
-        setProjects((prev) => {
-          if (prev.some((p) => p.$id === newProject.$id)) {
-            return prev;
-          }
-          return [...prev, newProject];
-        });
-      } else if (events.some((e) => e.endsWith(".update"))) {
-        if (!rawData) return;
-        const updatedProject = ensureProjectStatus(rawData as Project);
-
-        const incomingLeader = (() => {
-          const value = (
-            updatedProject as unknown as {
-              leader?: unknown;
-            }
-          ).leader;
-          if (
-            value &&
-            typeof value === "object" &&
-            "$id" in (value as Record<string, unknown>)
-          ) {
-            return value as Project["leader"];
-          }
-          return undefined;
-        })();
-
-        setProjects((prev) =>
-          prev.map((p) =>
-            p.$id === updatedProject.$id
-              ? {
-                ...p,
-                ...updatedProject,
-                leader: incomingLeader ?? p.leader,
-                status: updatedProject.status ?? p.status ?? "active",
-              }
-              : p
-          )
-        );
-
-        if (currentProject?.$id === updatedProject.$id) {
-          const leader = incomingLeader ?? currentProject.leader;
-          const nextProject: Project = {
-            ...currentProject,
-            ...updatedProject,
-            leader,
-            status: updatedProject.status ?? currentProject.status ?? "active",
-          };
-          setCurrentProject(nextProject);
-          setCurrentProjectRole(leader.$id === user.id ? "leader" : "user");
+      setProjects((prev) => {
+        const exists = prev.some((p) => p._id === project._id);
+        if (exists) {
+          return prev;
         }
+        return [...prev, project];
+      });
+    };
+
+    const handleProjectUpdated = (project: Project) => {
+      setProjects((prev) =>
+        prev.map((p) =>
+          p._id === project._id
+            ? {
+              ...p,
+              ...project,
+              leader: project.leader ?? p.leader,
+              status: project.status ?? p.status,
+            }
+            : p
+        )
+      );
+
+      if (currentProject?._id === project._id) {
+        const nextProject: Project = {
+          ...currentProject,
+          ...project,
+          leader: project.leader ?? currentProject.leader,
+          status: project.status ?? currentProject.status,
+        };
+        setCurrentProject(nextProject);
+        setCurrentProjectRole(nextProject.leader._id === user.id ? "leader" : "user");
       }
-    });
+    };
+
+    const handleProjectDeleted = (data: { projectId: string }) => {
+      setProjects((prev) => {
+        const updated = prev.filter((p) => p._id !== data.projectId);
+        if (currentProject?._id === data.projectId) {
+          const nextProject = updated[0] ?? null;
+          setCurrentProject(nextProject);
+          setCurrentProjectRole(
+            nextProject
+              ? nextProject.leader._id === user.id
+                ? "leader"
+                : "user"
+              : null
+          );
+        }
+        return updated;
+      });
+    };
+
+    socket.on("project:created", handleProjectCreated);
+    socket.on("project:updated", handleProjectUpdated);
+    socket.on("project:deleted", handleProjectDeleted);
 
     return () => {
-      unsubscribe();
+      socket.off("project:created", handleProjectCreated);
+      socket.off("project:updated", handleProjectUpdated);
+      socket.off("project:deleted", handleProjectDeleted);
     };
-  }, [
-    user,
-    currentProject,
-    setProjects,
-    setCurrentProject,
-    setCurrentProjectRole,
-  ]);
-
-  const isProjectClosed =
+  }, [socket, isConnected, user, currentProject, setProjects, setCurrentProject, setCurrentProjectRole]); const isProjectClosed =
     (currentProject?.status ?? "active") === "closed";
+
+  const markProjectAsLocallyCreated = useCallback((projectId: string) => {
+    locallyCreatedProjectIdsRef.current.add(projectId);
+  }, []);
 
   return (
     <ProjectContext.Provider
@@ -520,6 +528,13 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({
         members,
         isMembersLoading,
         refreshMembers,
+        markProjectAsLocallyCreated,
+        hasMoreProjects,
+        isLoadingMoreProjects,
+        loadMoreProjects,
+        allProjects,
+        isLoadingAllProjects,
+        loadAllProjects,
       }}
     >
       {children}
@@ -533,8 +548,3 @@ export const useProject = () => {
     throw new Error("useProject must be used within a ProjectProvider");
   return context;
 };
-
-const ensureProjectStatus = (project: Project): Project => ({
-  ...project,
-  status: project.status ?? "active",
-});

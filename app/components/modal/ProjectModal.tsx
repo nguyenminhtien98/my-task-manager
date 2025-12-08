@@ -19,6 +19,7 @@ const ProjectModal: React.FC<{
     reset,
     watch,
     formState: { errors },
+    setFocus,
   } = useForm<ProjectFormValues>({
     mode: "onChange",
     defaultValues: {
@@ -47,8 +48,13 @@ const ProjectModal: React.FC<{
     if (!isOpen) {
       reset();
       setIsCreating(false);
+    } else {
+      // Auto focus vào input khi modal mở
+      setTimeout(() => {
+        setFocus("name");
+      }, 100);
     }
-  }, [isOpen, reset]);
+  }, [isOpen, reset, setFocus]);
 
   return (
     <ModalComponent isOpen={isOpen} setIsOpen={setIsOpen} title="Tạo Dự Án">
@@ -70,11 +76,10 @@ const ProjectModal: React.FC<{
           <button
             type="submit"
             disabled={!projectName.trim() || isCreating}
-            className={`px-4 py-2 rounded text-white ${
-              !projectName.trim() || isCreating
+            className={`px-4 py-2 rounded text-white ${!projectName.trim() || isCreating
                 ? "bg-gray-400 cursor-not-allowed"
                 : "bg-black hover:bg-black/90 cursor-pointer"
-            }`}
+              }`}
           >
             {isCreating ? "Đang tạo..." : "Tạo"}
           </button>

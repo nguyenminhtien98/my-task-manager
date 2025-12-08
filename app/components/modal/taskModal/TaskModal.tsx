@@ -10,7 +10,6 @@ import {
 } from "../../../types/Types";
 import { useAuth } from "../../../context/AuthContext";
 import { useProject } from "../../../context/ProjectContext";
-import { database } from "../../../../lib/appwrite";
 import toast from "react-hot-toast";
 import {
   detectMediaTypeFromUrl,
@@ -32,10 +31,10 @@ function formatDateForInput(dateString?: string): string {
 }
 
 const normalizeAttachments = (
-  attachmentList: (TaskAttachment | string | null | undefined)[] = []
+  attachmentList: (TaskAttachment | string | { url: string; name: string; type: string; createdAt: string } | null | undefined)[] = []
 ): TaskAttachment[] =>
   attachmentList
-    .filter((item): item is TaskAttachment | string => Boolean(item))
+    .filter((item): item is TaskAttachment | string | { url: string; name: string; type: string; createdAt: string } => Boolean(item))
     .map((item) => {
       if (typeof item === "string") {
         return {
@@ -57,8 +56,8 @@ const normalizeAttachments = (
       };
     });
 
-const getAssigneeId = (a: string | { $id: string; name: string }) =>
-  typeof a === "string" ? a : a?.$id || "";
+const getAssigneeId = (a: string | { _id: string; name: string }) =>
+  typeof a === "string" ? a : a?._id || "";
 
 const TaskModal: React.FC<TaskModalProps> = ({
   mode, // "create" | "detail"
@@ -66,6 +65,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
   setIsOpen,
   onCreate,
   onUpdate,
+  onDelete,
   nextSeq,
   task,
 }) => {
@@ -73,29 +73,15 @@ const TaskModal: React.FC<TaskModalProps> = ({
   const { currentProject, currentProjectRole, isProjectClosed } = useProject();
   const currentUserName = user?.name || "";
   const isLeader = currentProjectRole === "leader";
-  const [existingUsers, setExistingUsers] = useState<string[]>([]);
-  const initialAttachments = useMemo(
-    () => normalizeAttachments(task?.attachedFile ?? []),
-    [task?.attachedFile]
+  const { members: projectMembers } = useProjectOperations();
+  const existingUsers = useMemo(
+    () => projectMembers.map((m) => m.name),
+    [projectMembers]
   );
-
-  useEffect(() => {
-    if (isLeader) {
-      database
-        .listDocuments(
-          String(process.env.NEXT_PUBLIC_DATABASE_ID),
-          String(process.env.NEXT_PUBLIC_COLLECTION_ID_PROFILE)
-        )
-        .then((res) => {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const users = (res.documents as any[]).map((doc) => doc.name);
-          setExistingUsers(users);
-        })
-        .catch(() => {
-          toast.error("Không tải được danh sách người dùng");
-        });
-    }
-  }, [isLeader]);
+  const initialAttachments = useMemo(
+    () => normalizeAttachments(task?.attachments ?? []),
+    [task?.attachments]
+  );
 
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -111,12 +97,12 @@ const TaskModal: React.FC<TaskModalProps> = ({
     defaultValues:
       mode === "create"
         ? {
-          issueType: "Feature",
-          priority: "Medium",
+          issueType: "feature",
+          priority: "medium",
           assignee: isLeader
             ? ""
             : user
-              ? { $id: user.id, name: user.name }
+              ? { _id: user.id, name: user.name }
               : "",
           title: "",
           description: "",
@@ -132,14 +118,14 @@ const TaskModal: React.FC<TaskModalProps> = ({
           startDate: task?.startDate || "",
           endDate: task?.endDate || "",
           predictedHours: task?.predictedHours || 0,
-          issueType: task?.issueType || "Feature",
-          priority: task?.priority || "Medium",
+          issueType: task?.issueType || "feature",
+          priority: task?.priority || "medium",
           attachments: initialAttachments,
         },
     mode: "onChange",
   });
 
-  const { addMember: addProjectMember, members } = useProjectOperations();
+  const { addMember: addProjectMember } = useProjectOperations();
   const { createTask, updateTask, receiveTask, deleteTask } = useTask();
 
   const watchedAssigneeRaw = watch("assignee");
@@ -157,16 +143,14 @@ const TaskModal: React.FC<TaskModalProps> = ({
     | undefined;
   const detailAttachments = useMemo(() => {
     if (mode !== "detail") return [];
-    const source = watchedAttachments ?? task?.attachedFile ?? [];
+    const source = watchedAttachments ?? task?.attachments ?? [];
     return normalizeAttachments(Array.isArray(source) ? source : []);
-  }, [mode, watchedAttachments, task?.attachedFile]);
+  }, [mode, watchedAttachments, task?.attachments]);
   const hasAssigneeDetail = React.useMemo(() => {
     const a = task?.assignee;
     if (!a) return false;
-    if (typeof a === "string")
-      return a.trim() !== "" && a.trim().toLowerCase() !== "null";
     if (typeof a === "object") {
-      return Boolean(a.$id && a.$id.trim() !== "");
+      return Boolean(a._id && a._id.trim() !== "");
     }
     return false;
   }, [task?.assignee]);
@@ -181,8 +165,8 @@ const TaskModal: React.FC<TaskModalProps> = ({
       return completed === user.id;
     }
     if (typeof completed === "object" && completed !== null) {
-      const maybeProfile = completed as { $id?: string };
-      return maybeProfile.$id === user.id;
+      const maybeProfile = completed as { _id?: string };
+      return maybeProfile._id === user.id;
     }
     return false;
   }, [isLeader, mode, task, user]);
@@ -206,16 +190,19 @@ const TaskModal: React.FC<TaskModalProps> = ({
     const result = await deleteTask(task);
     setIsDeleting(false);
     if (result.success) {
+      if (onDelete) {
+        onDelete(task);
+      }
       setIsOpen(false);
     }
-  }, [deleteTask, isDeleting, setIsOpen, task]);
+  }, [deleteTask, isDeleting, onDelete, setIsOpen, task]);
 
   useEffect(() => {
     if (!isOpen) return;
     if (mode === "create") {
       reset({
-        issueType: "Feature",
-        priority: "Medium",
+        issueType: "feature",
+        priority: "medium",
         assignee: "",
         title: "",
         description: "",
@@ -227,7 +214,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
       setSelectedFiles([]);
       setValue("attachments", []);
     } else if (task) {
-      const normalized = normalizeAttachments(task.attachedFile ?? []);
+      const normalized = normalizeAttachments(task.attachments ?? []);
       reset({
         title: task.title,
         description: task.description,
@@ -253,7 +240,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
     if (result.success && result.task) {
       setValue(
         "assignee",
-        { $id: user.id, name: user.name },
+        { _id: user.id, name: user.name },
         { shouldDirty: false }
       );
       if (onUpdate) {
@@ -304,13 +291,13 @@ const TaskModal: React.FC<TaskModalProps> = ({
       nextSeq,
       selectedFiles,
       isLeader,
-      members,
+      members: projectMembers,
     });
 
     if (result.success && result.task) {
       onCreate!(result.task);
       setSelectedFiles([]);
-      setValue("attachments", result.task.attachedFile as TaskAttachment[]);
+      setValue("attachments", result.task.attachments as TaskAttachment[]);
       setIsOpen(false);
     }
   };
@@ -381,21 +368,21 @@ const TaskModal: React.FC<TaskModalProps> = ({
           : `Chi tiết Task #${task?.seq}`
       }
       panelClassName={
-        mode === "detail" && task?.id !== "guideTask"
+        mode === "detail" && task?._id !== "guideTask"
           ? "w-full max-w-6xl xl:max-w-7xl"
           : undefined
       }
     >
-      {mode === "detail" && task?.id !== "guideTask" ? (
+      {mode === "detail" && task?._id !== "guideTask" ? (
         <div className="grid h-[75vh] gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,1fr)]">
           <div className="max-h-[75vh] overflow-y-auto pr-4 no-scrollbar">
             {leftPanel}
           </div>
           <TaskDetailRightPanel
             attachments={detailAttachments}
-            taskId={task?.id}
+            taskId={task?._id}
             taskTitle={task?.title}
-            assignee={(task?.assignee ?? undefined) as string | { $id: string; name: string } | undefined}
+            assignee={(task?.assignee ?? undefined) as string | { _id: string; name: string } | undefined}
             className="max-h-[75vh]"
           />
         </div>

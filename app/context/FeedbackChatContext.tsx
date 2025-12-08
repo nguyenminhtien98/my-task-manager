@@ -45,6 +45,8 @@ export const FeedbackChatProvider: React.FC<{ children: ReactNode }> = ({
   );
 };
 
+export { FeedbackChatContext };
+
 export const useFeedbackChat = (): FeedbackChatContextValue => {
   const context = useContext(FeedbackChatContext);
   if (!context) {

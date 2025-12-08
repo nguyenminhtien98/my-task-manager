@@ -118,6 +118,16 @@ const MainLayout: React.FC<MainLayoutProps> = ({
 
   const handleLoginSuccess = useCallback(() => {
     setLoginModalOpen(false);
+
+    if (typeof window !== "undefined") {
+      const pendingRedirect = window.sessionStorage.getItem("pendingRedirectAfterLogin");
+      if (pendingRedirect) {
+        window.sessionStorage.removeItem("pendingRedirectAfterLogin");
+        router.push(pendingRedirect);
+        return;
+      }
+    }
+
     if (!openCreateAfterLogin) return;
 
     if (!currentProject) {
@@ -129,7 +139,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
       setTaskModalOpen(true);
     }
     setOpenCreateAfterLogin(false);
-  }, [currentProject, isProjectClosed, openCreateAfterLogin]);
+  }, [currentProject, isProjectClosed, openCreateAfterLogin, router]);
 
   const handleProjectCreated = useCallback(() => {
     if (shouldOpenTaskAfterProjectCreation) {

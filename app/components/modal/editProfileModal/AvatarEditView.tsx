@@ -55,7 +55,7 @@ const AvatarEditView: React.FC<AvatarEditViewProps> = ({
     setCrop(centerAspectCrop(width, height, aspect));
   }
 
-  const updatePreview = () => {
+  const updatePreview = React.useCallback(() => {
     if (
       completedCrop?.width &&
       completedCrop?.height &&
@@ -96,7 +96,7 @@ const AvatarEditView: React.FC<AvatarEditViewProps> = ({
         outputSize
       );
     }
-  };
+  }, [completedCrop]);
 
   const handleSave = () => {
     if (!previewCanvasRef.current || isSaving) {
@@ -115,12 +115,10 @@ const AvatarEditView: React.FC<AvatarEditViewProps> = ({
 
   React.useEffect(() => {
     updatePreview();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [completedCrop]);
+  }, [completedCrop, updatePreview]);
 
   return (
     <div className="flex flex-col gap-6 p-1">
-      {/* Cropper Section */}
       <div className="flex justify-center bg-gray-100 p-4 rounded-lg">
         <ReactCrop
           crop={crop}
@@ -142,7 +140,6 @@ const AvatarEditView: React.FC<AvatarEditViewProps> = ({
         </ReactCrop>
       </div>
 
-      {/* Preview Section */}
       <div>
         <h3 className="text-sm text-gray-500 mb-2">Preview</h3>
         <div className="flex items-center gap-4 p-2 bg-gray-50 rounded-md">
@@ -163,7 +160,6 @@ const AvatarEditView: React.FC<AvatarEditViewProps> = ({
         </div>
       </div>
 
-      {/* Action Buttons */}
       <div className="mt-2 flex justify-end gap-3">
         <Button
           variant="solid"

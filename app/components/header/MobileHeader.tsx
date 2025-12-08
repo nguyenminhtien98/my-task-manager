@@ -20,6 +20,9 @@ interface MobileHeaderProps {
   onAddProject?: () => void;
   onOpenReportRoom: () => void;
   canOpenReportRoom: boolean;
+  hasMoreProjects?: boolean;
+  isLoadingMoreProjects?: boolean;
+  onLoadMoreProjects?: () => void;
 }
 
 const MobileHeader: React.FC<MobileHeaderProps> = ({
@@ -28,6 +31,9 @@ const MobileHeader: React.FC<MobileHeaderProps> = ({
   currentProject,
   currentTheme,
   onProjectSelect,
+  hasMoreProjects,
+  isLoadingMoreProjects,
+  onLoadMoreProjects,
   onLoginClick,
   onAddProject,
   onOpenReportRoom,
@@ -57,16 +63,18 @@ const MobileHeader: React.FC<MobileHeaderProps> = ({
                 buttonClassName="w-full justify-between gap-2 text-sm font-semibold"
                 dropdownClassName="right-0 left-auto w-60"
                 buttonStyle={{ background: currentTheme }}
+                hasMore={hasMoreProjects}
+                isLoadingMore={isLoadingMoreProjects}
+                onLoadMore={onLoadMoreProjects}
               />
             </div>
             <button
               type="button"
               aria-label="Báo cáo công việc"
-              className={`rounded-full border p-2 text-white transition ${
-                canOpenReportRoom
+              className={`rounded-full border p-2 text-white transition ${canOpenReportRoom
                   ? "border-white/30 hover:border-white hover:bg-white/10"
                   : "cursor-not-allowed border-white/10 opacity-50"
-              }`}
+                }`}
               onClick={() => {
                 if (!canOpenReportRoom) return;
                 onOpenReportRoom();

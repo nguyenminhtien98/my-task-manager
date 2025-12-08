@@ -28,6 +28,7 @@ interface MobileFooterBarProps {
   onMenuClick: () => void;
   isMenuOpen: boolean;
   onMenuClose: () => void;
+  notificationsHook: ReturnType<typeof useNotifications>;
 }
 
 type ExtendedFooterAction = FooterAction | "notifications" | "menu";
@@ -52,8 +53,8 @@ const MobileFooterBar: React.FC<MobileFooterBarProps> = ({
   onMenuClick,
   isMenuOpen,
   onMenuClose,
+  notificationsHook,
 }) => {
-  const notificationsHook = useNotifications({ recipientId: user?.id });
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const footerRef = useRef<HTMLElement | null>(null);
   const footerHeightVar = "--mobile-footer-height";

@@ -3,8 +3,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { useNotifications } from "../../hooks/useNotifications";
-import type { NotificationRecord } from "../../types/Types";
-import { useFeedbackChat } from "../../context/FeedbackChatContext";
 import NotificationList from "./NotificationList";
 import { cn } from "../../utils/cn";
 
@@ -23,9 +21,8 @@ const MobileNotificationPanel: React.FC<MobileNotificationPanelProps> = ({
   isOpen,
   onClose,
 }) => {
-  const feedbackChat = useFeedbackChat();
   const wasOpenRef = useRef(false);
-  const { markAllAsRead, markAllAsSeen } = hook;
+  const { markAllAsRead, reload, unreadCount } = hook;
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -33,21 +30,14 @@ const MobileNotificationPanel: React.FC<MobileNotificationPanelProps> = ({
   }, []);
 
   useEffect(() => {
-    if (isOpen) {
-      void markAllAsSeen();
-    } else if (wasOpenRef.current) {
-      void markAllAsRead();
+    if (isOpen && !wasOpenRef.current) {
+      void reload();
+      if (unreadCount > 0) {
+        void markAllAsRead();
+      }
     }
     wasOpenRef.current = isOpen;
-  }, [isOpen, markAllAsRead, markAllAsSeen]);
-
-  const handleAction = (actionKey: string, _notification: NotificationRecord) => {
-    void _notification;
-    if (actionKey === "open-feedback") {
-      feedbackChat.open();
-      onClose();
-    }
-  };
+  }, [isOpen, reload, markAllAsRead, unreadCount]);
 
   if (!mounted) return null;
 
@@ -73,7 +63,6 @@ const MobileNotificationPanel: React.FC<MobileNotificationPanelProps> = ({
           <NotificationList
             hook={hook}
             isOpen={isOpen}
-            onAction={handleAction}
             panelClassName="w-full max-w-full !rounded-none p-4 !shadow-none"
           />
         </div>

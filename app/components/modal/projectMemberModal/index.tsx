@@ -2,14 +2,13 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
-import { Query } from "appwrite";
-import { database } from "../../../../lib/appwrite";
 import ModalComponent from "../../common/ModalComponent";
 import ProjectMemberListView from "./ProjectMemberListView";
 import ProjectMemberProfileView from "./ProjectMemberProfileView";
 import { useProjectOperations } from "../../../hooks/useProjectOperations";
 import { EnrichedProjectMember } from "../../../types/Types";
 import { useProject } from "../../../context/ProjectContext";
+import * as projectAPI from "../../../services/projectService";
 
 interface ProjectMembersModalProps {
   isOpen: boolean;
@@ -52,12 +51,12 @@ const ProjectMembersModal: React.FC<ProjectMembersModalProps> = ({
   const [stats, setStats] = useState<TaskStats>(defaultStats);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const projectId = currentProject?.$id;
+  const projectId = currentProject?._id;
   const isLeader = currentProjectRole === "leader";
   const isProjectClosed = projectClosedProp ?? contextProjectClosed;
 
   const nonLeaderMembers = useMemo(
-    () => allMembers.filter((member) => !member.isLeader),
+    () => allMembers.filter((member) => !member.isLeader) as EnrichedProjectMember[],
     [allMembers]
   );
 
@@ -80,7 +79,7 @@ const ProjectMembersModal: React.FC<ProjectMembersModalProps> = ({
 
   useEffect(() => {
     if (!activeMember) return;
-    const match = allMembers.find((member) => member.$id === activeMember.$id);
+    const match = allMembers.find((member) => member._id === activeMember._id);
 
     if (!match) {
       setActiveMember(null);
@@ -89,7 +88,7 @@ const ProjectMembersModal: React.FC<ProjectMembersModalProps> = ({
     }
 
     if (match !== activeMember) {
-      setActiveMember(match);
+      setActiveMember(match as EnrichedProjectMember);
     }
   }, [allMembers, activeMember]);
 
@@ -102,53 +101,25 @@ const ProjectMembersModal: React.FC<ProjectMembersModalProps> = ({
         return;
       }
 
-      const databaseId = process.env.NEXT_PUBLIC_DATABASE_ID;
-      const tasksCollectionId = process.env.NEXT_PUBLIC_COLLECTION_ID_TASKS;
-
-      if (!databaseId || !tasksCollectionId) {
-        if (!cancelled) {
-          setStats({
-            total: 0,
-            done: 0,
-            loading: false,
-            error: "Thiếu cấu hình Appwrite",
-          });
-        }
-        return;
-      }
-
       setStats((prev) => ({ ...prev, loading: true, error: undefined }));
 
       try {
-        const assigneeId = activeMember.$id?.trim();
-        if (!assigneeId) {
+        const memberId = activeMember._id?.trim();
+        if (!memberId) {
           setStats({ total: 0, done: 0, loading: false });
           return;
         }
-        const res = await database.listDocuments(
-          String(databaseId),
-          String(tasksCollectionId),
-          [
-            Query.equal("projectId", projectId),
-            Query.equal("assignee", assigneeId),
-            Query.limit(200),
-          ]
-        );
+
+        const memberStats = await projectAPI.getMemberStatistics(projectId, memberId);
 
         if (cancelled) return;
 
-        const documents = res.documents as Array<Record<string, unknown>>;
-        const total = documents.length;
-        const done = documents.filter((doc) => {
-          const status =
-            typeof doc.status === "string"
-              ? doc.status.trim().toLowerCase()
-              : "";
-          return status === "completed";
-        }).length;
+        const total = memberStats.totalTasks;
+        const done = memberStats.tasksByStatus.completed;
 
         setStats({ total, done, loading: false });
-      } catch {
+      } catch (error) {
+        console.error("Failed to load member statistics:", error);
         if (!cancelled) {
           setStats({
             total: 0,
@@ -196,7 +167,7 @@ const ProjectMembersModal: React.FC<ProjectMembersModalProps> = ({
   };
 
   const handleRemove = async () => {
-    if (!activeMember || !activeMember.membershipId) {
+    if (!activeMember || !activeMember._id) {
       toast.error("Không thể xóa thành viên này.");
       return;
     }
@@ -205,7 +176,7 @@ const ProjectMembersModal: React.FC<ProjectMembersModalProps> = ({
       return;
     }
     setIsProcessing(true);
-    const result = await removeMember(activeMember.membershipId);
+    const result = await removeMember(activeMember._id);
     setIsProcessing(false);
     if (result.success) {
       toast.success(result.message);

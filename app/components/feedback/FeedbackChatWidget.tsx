@@ -1,18 +1,21 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useRef } from "react";
-import { useFeedbackChat } from "../../context/FeedbackChatContext";
+import React, { useCallback, useContext, useEffect, useMemo, useRef } from "react";
+import { usePathname } from "next/navigation";
+import { FeedbackChatContext } from "../../context/FeedbackChatContext";
 import FeedbackFloatingBubble from "./FeedbackFloatingBubble";
-import { useIncomingBanner } from "../../hooks/useIncomingBanner";
 import { useBubblePosition } from "../../hooks/useBubblePosition";
 import { useChat } from "../../hooks/useChat";
 import FeedbackConversationList from "./FeedbackConversationList";
 import FeedbackConversationDetail from "./FeedbackConversationDetail";
 import Button from "../common/Button";
-import { ConversationType } from "../../services/feedbackService";
+import type { ConversationType } from "../../types/Types";
 
 const FeedbackChatWidget: React.FC = () => {
-  const { isOpen, open, close } = useFeedbackChat();
+  const feedbackContext = useContext(FeedbackChatContext);
+
+
+  const { isOpen, open, close } = feedbackContext || { isOpen: false, open: () => { }, close: () => { } };
   const panelRef = useRef<HTMLDivElement | null>(null);
 
   const {
@@ -22,18 +25,8 @@ const FeedbackChatWidget: React.FC = () => {
     style: bubbleStyleHook,
     isDragging: isDraggingBubble,
   } = useBubblePosition();
-  const {
-    visible: incomingBannerVisible,
-    show: showIncomingBanner,
-    clear: clearIncomingBanner,
-  } = useIncomingBanner(5000);
 
-  const triggerIncomingBanner = useCallback(() => {
-    if (isOpen) return;
-    showIncomingBanner();
-  }, [isOpen, showIncomingBanner]);
-
-  const chat = useChat(isOpen, triggerIncomingBanner);
+  const chat = useChat(isOpen);
 
   const {
     isAdmin,
@@ -66,13 +59,11 @@ const FeedbackChatWidget: React.FC = () => {
   const suppressAutoSelectRef = useRef(false);
 
   useEffect(() => {
-    if (isOpen) {
-      clearIncomingBanner();
-    } else {
+    if (!isOpen) {
       suppressAutoSelectRef.current = false;
       clearPendingConversation();
     }
-  }, [clearIncomingBanner, clearPendingConversation, isOpen]);
+  }, [clearPendingConversation, isOpen]);
 
   useEffect(() => {
     if (selectedConversationId) {
@@ -110,7 +101,7 @@ const FeedbackChatWidget: React.FC = () => {
     if (!selectedConversationId) return null;
     return (
       conversations.find(
-        (conversation) => conversation.$id === selectedConversationId
+        (conversation) => conversation._id === selectedConversationId
       ) ?? null
     );
   }, [conversations, selectedConversationId]);
@@ -190,7 +181,7 @@ const FeedbackChatWidget: React.FC = () => {
         (conversation) => !conversation.__placeholderTargetId
       );
       if (existing) {
-        setSelectedConversationId(existing.$id);
+        setSelectedConversationId(existing._id);
         return;
       }
       const placeholder = feedbackConversations.find(
@@ -216,17 +207,18 @@ const FeedbackChatWidget: React.FC = () => {
     ]
   );
 
+  if (!feedbackContext) return null;
+
   return (
     <>
       {!isOpen && (
         <FeedbackFloatingBubble
           style={bubbleStyle}
           side={bubblePosition.side}
-          bannerVisible={incomingBannerVisible}
-              onClick={handleBubbleClick}
-              onPointerDown={handleBubblePointerDown}
+          onClick={handleBubbleClick}
+          onPointerDown={handleBubblePointerDown}
           isDragging={isDraggingBubble}
-            />
+        />
       )}
 
       {isOpen && (
@@ -238,23 +230,10 @@ const FeedbackChatWidget: React.FC = () => {
             className="absolute inset-0 cursor-default bg-transparent"
           />
           <div
-            className={`absolute bottom-28 sm:bottom-6 ${
-              bubblePosition.side === "left" ? "left-6" : "right-6"
-            }`}
+            className={`absolute bottom-28 sm:bottom-6 ${bubblePosition.side === "left" ? "left-6" : "right-6"
+              }`}
           >
             <div className="relative">
-              <div
-                className={`pointer-events-none absolute right-full top-1/2 mr-3 -translate-y-1/2 transition-opacity duration-300 ${
-                  incomingBannerVisible ? "opacity-100" : "opacity-0"
-                }`}
-              >
-                <div className="relative">
-                  <div className="rounded-lg bg-black px-4 py-2 text-xs font-medium text-white shadow-lg sm:text-sm whitespace-nowrap">
-                    Bạn có tin nhắn mới!
-                  </div>
-                  <span className="absolute right-[-8px] top-1/2 h-0 w-0 -translate-y-1/2 border-y-6 border-y-transparent border-l-8 border-l-black" />
-                </div>
-              </div>
               <div ref={panelRef}>
                 {showListView ? (
                   <FeedbackConversationList
@@ -283,7 +262,7 @@ const FeedbackChatWidget: React.FC = () => {
                         return;
                       }
                       setConversationTab(conversation.type ?? "feedback");
-                      setSelectedConversationId(conversation.$id);
+                      setSelectedConversationId(conversation._id);
                     }}
                     filter={conversationTab === "feedback" ? filter : "all"}
                     onFilterChange={
@@ -292,6 +271,9 @@ const FeedbackChatWidget: React.FC = () => {
                         : () => undefined
                     }
                     onClose={close}
+                    hasMore={chat.hasMoreConversations}
+                    isLoading={chat.isLoadingConversations || chat.isLoadingMoreConversations}
+                    onLoadMore={chat.loadMoreConversations}
                     headerTitle="Danh sách đoạn chat"
                     headerDescription={
                       !isAdmin
@@ -307,26 +289,23 @@ const FeedbackChatWidget: React.FC = () => {
                             variant="solid"
                             onClick={() => handleTabChange("member")}
                             disabled={!hasProject || !hasOtherMembers}
-                            className={`rounded-full !px-3 !py-1 !text-xs ${
-                              conversationTab === "member"
-                                ? "border bg-black text-white"
-                                : "border border-gray-300 bg-white text-[#111827]"
-                            } ${
-                              !hasProject || !hasOtherMembers
+                            className={`rounded-full !px-3 !py-1 !text-xs ${conversationTab === "member"
+                              ? "border bg-black text-white"
+                              : "border border-gray-300 bg-white text-[#111827]"
+                              } ${!hasProject || !hasOtherMembers
                                 ? "cursor-not-allowed opacity-60"
                                 : ""
-                            }`}
+                              }`}
                           >
                             Thành viên
                           </Button>
                           <Button
                             variant="solid"
                             onClick={() => handleTabChange("feedback")}
-                            className={`rounded-full !px-3 !py-1 !text-xs ${
-                              conversationTab === "feedback"
-                                ? "border bg-black text-white"
-                                : "border border-gray-300 bg-white text-[#111827]"
-                            }`}
+                            className={`rounded-full !px-3 !py-1 !text-xs ${conversationTab === "feedback"
+                              ? "border bg-black text-white"
+                              : "border border-gray-300 bg-white text-[#111827]"
+                              }`}
                           >
                             Feedback
                           </Button>
@@ -346,7 +325,7 @@ const FeedbackChatWidget: React.FC = () => {
                     onBack={allowBackNavigation ? handleBackToList : undefined}
                     presence={presence}
                     isAdminView={
-                      isAdmin && activeConversationType === "feedback"
+                      isAdmin && (activeConversationType === "feedback" || activeConversationType === "direct")
                     }
                     conversationType={activeConversationType}
                     onClose={close}
@@ -355,10 +334,13 @@ const FeedbackChatWidget: React.FC = () => {
                     pendingMessages={
                       selectedConversationId
                         ? pendingMessages.filter(
-                            (p) => p.conversationId === selectedConversationId
-                          )
+                          (p) => p.conversationId === selectedConversationId
+                        )
                         : []
                     }
+                    hasMoreMessages={chat.hasMoreMessages}
+                    isLoadingMoreMessages={chat.isLoadingMoreMessages}
+                    onLoadMoreMessages={chat.loadMoreMessages}
                   />
                 )}
               </div>
@@ -370,4 +352,14 @@ const FeedbackChatWidget: React.FC = () => {
   );
 };
 
-export default FeedbackChatWidget;
+const FeedbackChatWidgetWrapper: React.FC = () => {
+  const pathname = usePathname();
+
+  if (pathname?.startsWith("/server-error")) {
+    return null;
+  }
+
+  return <FeedbackChatWidget />;
+};
+
+export default FeedbackChatWidgetWrapper;

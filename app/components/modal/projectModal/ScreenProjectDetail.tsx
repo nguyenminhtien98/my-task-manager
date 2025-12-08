@@ -1,17 +1,18 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Project, BasicProfile, Task, ProjectStatus } from "@/app/types/Types";
-import { database } from "@/lib/appwrite";
-import { Query } from "appwrite";
+import React, { useEffect, useState } from "react";
+import type { Project, ProjectStatus, BasicProfile } from "@/app/types/Types";
 import { formatVietnameseDateTime } from "@/app/utils/date";
 import HoverPopover from "@/app/components/common/HoverPopover";
 import Button from "@/app/components/common/Button";
 import { useAuth } from "@/app/context/AuthContext";
 import { useProjectOperations } from "@/app/hooks/useProjectOperations";
 import toast from "react-hot-toast";
+import * as projectAPI from "@/app/services/projectService";
+import * as taskAPI from "@/app/services/taskService";
+import type { ProjectMember } from "@/app/types/Types";
 import { exportProjectBoardToExcel } from "@/app/utils/exportExcel";
-import { mapTaskDocument, RawTaskDocument } from "@/app/utils/taskMapping";
+import Skeleton from "@/app/components/common/Skeleton";
 
 interface ScreenProjectDetailProps {
   project: Project;
@@ -24,12 +25,11 @@ const ScreenProjectDetail: React.FC<ScreenProjectDetailProps> = ({
 }) => {
   const { user } = useAuth();
   const { deleteProject, closeProject, reopenProject } = useProjectOperations();
-  const [members, setMembers] = useState<BasicProfile[]>([]);
+  const [members, setMembers] = useState<ProjectMember[]>([]);
   const [loading, setLoading] = useState(false);
-  const [myTaskCounts, setMyTaskCounts] = useState<Record<string, number>>({});
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
   const [selectedUserForLeader, setSelectedUserForLeader] =
-    useState<BasicProfile | null>(null);
+    useState<ProjectMember | null>(null);
   const [selectedUserCounts, setSelectedUserCounts] = useState<
     Record<string, number>
   >({});
@@ -38,16 +38,16 @@ const ScreenProjectDetail: React.FC<ScreenProjectDetailProps> = ({
   );
   const [isDeleting, setIsDeleting] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
-  const [projectData, setProjectData] = useState<Project>(project);
   const [isExporting, setIsExporting] = useState(false);
+  const [projectData, setProjectData] = useState<Project>(project);
 
   useEffect(() => {
     setProjectData(project);
   }, [project]);
 
-  const projectId = projectData.$id;
+  const projectId = projectData._id;
   const projectStatus: ProjectStatus = projectData.status ?? "active";
-  const isLeader = user && projectData.leader?.$id === user.id;
+  const isLeader = user && projectData.leader?._id === user.id;
   const isClosed = projectStatus === "closed";
   const statusLabel = isClosed ? "Dự án đã đóng" : "Đang hoạt động";
   const statusBadgeClasses = isClosed
@@ -65,51 +65,22 @@ const ScreenProjectDetail: React.FC<ScreenProjectDetailProps> = ({
       : "Đóng dự án";
 
   useEffect(() => {
-    const fetchMembers = async () => {
+    const fetchProjectData = async () => {
       try {
         setLoading(true);
-        const res = await database.listDocuments(
-          String(process.env.NEXT_PUBLIC_DATABASE_ID),
-          String(process.env.NEXT_PUBLIC_COLLECTION_ID_PROJECT_MEMBERSHIPS),
-          [Query.equal("project", projectId), Query.limit(200)]
-        );
-        const profiles: BasicProfile[] = res.documents.map(
-          (d) => d.user as BasicProfile
-        );
-        setMembers(profiles);
+        const detail = await projectAPI.getProjectDetail(projectId);
+        setMembers(detail.members || []);
+        setOverallCounts(detail.tasksByStatus || {});
+        setProjectData((prev) => ({ ...prev, ...detail }));
+      } catch (error) {
+        console.error("Failed to fetch project detail:", error);
+        toast.error("Không thể tải thông tin dự án");
       } finally {
         setLoading(false);
       }
     };
-    fetchMembers();
+    fetchProjectData();
   }, [projectId]);
-
-  useEffect(() => {
-    const fetchMyTasks = async () => {
-      if (!user) return;
-      try {
-        const res = await database.listDocuments(
-          String(process.env.NEXT_PUBLIC_DATABASE_ID),
-          String(process.env.NEXT_PUBLIC_COLLECTION_ID_TASKS),
-          [
-            Query.equal("projectId", projectId),
-            Query.equal("assignee", user.id),
-            Query.limit(200),
-          ]
-        );
-        const docs = res.documents as unknown as Task[];
-        const counts: Record<string, number> = {};
-        for (const t of docs) {
-          const s = (t.status as string) ?? "unknown";
-          counts[s] = (counts[s] ?? 0) + 1;
-        }
-        setMyTaskCounts(counts);
-      } catch {
-        setMyTaskCounts({});
-      }
-    };
-    fetchMyTasks();
-  }, [projectId, user]);
 
   const statusOrder: Array<{ key: string; label: string }> = [
     { key: "list", label: "Task List" },
@@ -121,52 +92,23 @@ const ScreenProjectDetail: React.FC<ScreenProjectDetailProps> = ({
 
   useEffect(() => {
     const fetchSelectedUserTasks = async () => {
-      if (!selectedUserForLeader) return;
+      if (!selectedUserForLeader) {
+        setSelectedUserCounts({});
+        return;
+      }
       try {
-        const res = await database.listDocuments(
-          String(process.env.NEXT_PUBLIC_DATABASE_ID),
-          String(process.env.NEXT_PUBLIC_COLLECTION_ID_TASKS),
-          [
-            Query.equal("projectId", projectId),
-            Query.equal("assignee", selectedUserForLeader.$id),
-            Query.limit(200),
-          ]
+        const stats = await projectAPI.getMemberStatistics(
+          projectId,
+          selectedUserForLeader._id
         );
-        const docs = res.documents as unknown as Task[];
-        const counts: Record<string, number> = {};
-        for (const t of docs) {
-          const s = (t.status as string) ?? "unknown";
-          counts[s] = (counts[s] ?? 0) + 1;
-        }
-        setSelectedUserCounts(counts);
-      } catch {
+        setSelectedUserCounts(stats.tasksByStatus || {});
+      } catch (error) {
+        console.error("Failed to fetch user statistics:", error);
         setSelectedUserCounts({});
       }
     };
     fetchSelectedUserTasks();
   }, [projectId, selectedUserForLeader]);
-
-  useEffect(() => {
-    const fetchOverallCounts = async () => {
-      try {
-        const res = await database.listDocuments(
-          String(process.env.NEXT_PUBLIC_DATABASE_ID),
-          String(process.env.NEXT_PUBLIC_COLLECTION_ID_TASKS),
-          [Query.equal("projectId", projectId), Query.limit(200)]
-        );
-        const docs = res.documents as unknown as Task[];
-        const counts: Record<string, number> = {};
-        docs.forEach((task) => {
-          const status = (task.status as string) ?? "unknown";
-          counts[status] = (counts[status] ?? 0) + 1;
-        });
-        setOverallCounts(counts);
-      } catch {
-        setOverallCounts({});
-      }
-    };
-    fetchOverallCounts();
-  }, [projectId]);
 
   const handleDeleteProject = async () => {
     if (!isLeader || isDeleting) return;
@@ -201,55 +143,28 @@ const ScreenProjectDetail: React.FC<ScreenProjectDetailProps> = ({
     try {
       const action = isClosed ? reopenProject : closeProject;
       const result = await action(projectId);
-      if (result.success) {
-        setProjectData((prev) =>
-          prev ? { ...prev, status: isClosed ? "active" : "closed" } : prev
-        );
+      if (result.success && result.data) {
+        setProjectData((prev) => ({ ...prev, ...result.data }));
       }
     } finally {
       setIsUpdatingStatus(false);
     }
   };
 
-  const exportMembers = useMemo(() => {
-    const map = new Map<string, BasicProfile>();
-    const leader = projectData.leader;
-    if (leader?.$id) {
-      map.set(leader.$id, {
-        $id: leader.$id,
-        name: leader.name,
-        email: leader.email,
-        avatarUrl: leader.avatarUrl ?? undefined,
-      });
-    }
-    members.forEach((member) => {
-      if (member?.$id) {
-        map.set(member.$id, member);
-      }
-    });
-    return Array.from(map.values());
-  }, [members, projectData.leader]);
-
-  const handleExportExcel = useCallback(async () => {
+  const handleExportExcel = async () => {
     if (isExporting) return;
+
     setIsExporting(true);
     try {
-      const databaseId = String(process.env.NEXT_PUBLIC_DATABASE_ID);
-      const tasksCollectionId = String(
-        process.env.NEXT_PUBLIC_COLLECTION_ID_TASKS
-      );
-      const response = await database.listDocuments(
-        databaseId,
-        tasksCollectionId,
-        [Query.equal("projectId", projectId), Query.limit(200)]
-      );
-      const mappedTasks = (response.documents as RawTaskDocument[]).map((doc) =>
-        mapTaskDocument(doc)
-      );
+      const response = await taskAPI.getTasks(projectId);
+      const tasksWithSeq = response.tasks.map((t, idx) => ({
+        ...t,
+        seq: idx + 1,
+      }));
       await exportProjectBoardToExcel({
         project: projectData,
-        members: exportMembers,
-        tasks: mappedTasks,
+        members: members as unknown as BasicProfile[],
+        tasks: tasksWithSeq,
       });
       toast.success("Đã xuất bảng Excel.");
     } catch (error) {
@@ -258,7 +173,7 @@ const ScreenProjectDetail: React.FC<ScreenProjectDetailProps> = ({
     } finally {
       setIsExporting(false);
     }
-  }, [exportMembers, isExporting, projectData, projectId]);
+  };
 
   return (
     <div className="space-y-6">
@@ -277,7 +192,7 @@ const ScreenProjectDetail: React.FC<ScreenProjectDetailProps> = ({
           <div>
             <div className="text-sm text-sub">Ngày tạo</div>
             <div className="font-medium text-gray-900">
-              {formatVietnameseDateTime(projectData.$createdAt, {
+              {formatVietnameseDateTime(projectData.createdAt, {
                 hideTime: true,
               })}
             </div>
@@ -307,8 +222,9 @@ const ScreenProjectDetail: React.FC<ScreenProjectDetailProps> = ({
                 >
                   <div className="max-h-56 overflow-auto">
                     {loading ? (
-                      <div className="px-2 py-1 text-xs text-sub">
-                        Đang tải...
+                      <div className="space-y-2 px-2 py-2">
+                        <Skeleton className="h-4 w-32 bg-gray-200" />
+                        <Skeleton className="h-4 w-24 bg-gray-200" />
                       </div>
                     ) : members.length === 0 ? (
                       <div className="px-2 py-1 text-xs text-sub">
@@ -317,11 +233,11 @@ const ScreenProjectDetail: React.FC<ScreenProjectDetailProps> = ({
                     ) : (
                       <ul className="divide-y divide-black/5">
                         {members.map((m) => (
-                          <li key={m.$id}>
+                          <li key={m._id}>
                             <button
                               type="button"
                               className={`${isLeader && "cursor-pointer"
-                                } w-full px-2 py-2 text-left text-sm whitespace-nowrap overflow-hidden text-ellipsis ${selectedUserForLeader?.$id === m.$id
+                                } w-full px-2 py-2 text-left text-sm whitespace-nowrap overflow-hidden text-ellipsis ${selectedUserForLeader?._id === m._id
                                   ? "bg-gray-200 text-[#111827]"
                                   : "hover:underline"
                                 }`}
@@ -373,58 +289,33 @@ const ScreenProjectDetail: React.FC<ScreenProjectDetailProps> = ({
         </div>
       </div>
 
-      {/* Member view: các task của bạn */}
-      {isLeader ? (
-        <div className="rounded-lg border border-black/10 p-4">
-          <div className="mb-3 text-sm font-semibold text-gray-800">
-            {selectedUserForLeader
-              ? `Các task của ${selectedUserForLeader.name} - ${Object.values(
-                selectedUserCounts
-              ).reduce((a, b) => a + b, 0)} task`
-              : `Tổng số task của dự án - ${Object.values(overallCounts).reduce(
-                (a, b) => a + b,
-                0
-              )} task`}
-          </div>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {(selectedUserForLeader ? selectedUserCounts : overallCounts)
-              ? statusOrder.map((s) => (
-                <div
-                  key={s.key}
-                  className="flex items-center justify-between rounded-md bg-black/5 px-3 py-2 text-sm text-gray-800"
-                >
-                  <span>{s.label}</span>
-                  <span className="font-semibold">
-                    {(selectedUserForLeader
-                      ? selectedUserCounts
-                      : overallCounts)[s.key] ?? 0}
-                  </span>
-                </div>
-              ))
-              : null}
-          </div>
+      <div className="rounded-lg border border-black/10 p-4">
+        <div className="mb-3 text-sm font-semibold text-gray-800">
+          {selectedUserForLeader
+            ? `Các task của ${selectedUserForLeader.name} - ${Object.values(
+              selectedUserCounts
+            ).reduce((a, b) => a + b, 0)} task`
+            : `Tổng số task của dự án - ${Object.values(overallCounts).reduce(
+              (a, b) => a + b,
+              0
+            )} task`}
         </div>
-      ) : (
-        <div className="rounded-lg border border-black/10 p-4">
-          <div className="mb-3 text-sm font-semibold text-gray-800">
-            Các task của bạn -{" "}
-            {Object.values(myTaskCounts).reduce((a, b) => a + b, 0)} task
-          </div>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {statusOrder.map((s) => (
-              <div
-                key={s.key}
-                className="flex items-center justify-between rounded-md bg-black/5 px-3 py-2 text-sm text-gray-800"
-              >
-                <span>{s.label}</span>
-                <span className="font-semibold">
-                  {myTaskCounts[s.key] ?? 0}
-                </span>
-              </div>
-            ))}
-          </div>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {statusOrder.map((s) => (
+            <div
+              key={s.key}
+              className="flex items-center justify-between rounded-md bg-black/5 px-3 py-2 text-sm text-gray-800"
+            >
+              <span>{s.label}</span>
+              <span className="font-semibold">
+                {(selectedUserForLeader
+                  ? selectedUserCounts
+                  : overallCounts)[s.key] ?? 0}
+              </span>
+            </div>
+          ))}
         </div>
-      )}
+      </div>
     </div>
   );
 };

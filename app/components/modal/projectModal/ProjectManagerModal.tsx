@@ -22,6 +22,8 @@ const ProjectManagerModal: React.FC<ProjectManagerModalProps> = ({
   const [selected, setSelected] = useState<Project | null>(null);
   const { projects } = useProject();
 
+  const { loadAllProjects } = useProject();
+
   const onClose = () => {
     setScreen("list");
     setSelected(null);
@@ -37,6 +39,12 @@ const ProjectManagerModal: React.FC<ProjectManagerModalProps> = ({
     }
   };
 
+  const handleDeleted = () => {
+    setSelected(null);
+    setScreen("list");
+    void loadAllProjects();
+  };
+
   const title = useMemo(
     () => (screen === "detail" ? "Thông tin dự án" : "Quản lý dự án"),
     [screen]
@@ -44,7 +52,7 @@ const ProjectManagerModal: React.FC<ProjectManagerModalProps> = ({
 
   useEffect(() => {
     if (!selected) return;
-    const latest = projects.find((proj) => proj.$id === selected.$id);
+    const latest = projects.find((proj) => proj._id === selected._id);
     if (!latest || latest === selected) return;
     setSelected(latest);
   }, [projects, selected]);
@@ -70,10 +78,7 @@ const ProjectManagerModal: React.FC<ProjectManagerModalProps> = ({
       {screen === "detail" && selected && (
         <ScreenProjectDetail
           project={selected}
-          onDeleted={() => {
-            setSelected(null);
-            setScreen("list");
-          }}
+          onDeleted={handleDeleted}
         />
       )}
     </ModalComponent>

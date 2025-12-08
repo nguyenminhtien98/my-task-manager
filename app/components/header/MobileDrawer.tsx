@@ -12,6 +12,7 @@ interface MobileDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   currentProject: Project | null;
+  currentProjectRole: "leader" | "user" | null;
   onOpenProfile: () => void;
   onOpenProjectManager: () => void;
   onOpenTheme: () => void;
@@ -26,6 +27,7 @@ const MobileDrawer: React.FC<MobileDrawerProps> = ({
   isOpen,
   onClose,
   currentProject,
+  currentProjectRole,
   onOpenProfile,
   onOpenProjectManager,
   onOpenTheme,
@@ -70,7 +72,7 @@ const MobileDrawer: React.FC<MobileDrawerProps> = ({
             <div>
               <p className="text-lg font-semibold">{user.name}</p>
               <p className="text-sm text-white/60">
-                {currentProject?.leader.$id === user.id
+                {currentProject?.leader._id === user.id
                   ? "Leader dự án"
                   : "Thành viên"}
               </p>
@@ -141,7 +143,7 @@ const MobileDrawer: React.FC<MobileDrawerProps> = ({
                       Quản lý dự án
                     </button>
                   )}
-                  {hasProjects && currentProject && (
+                  {hasProjects && currentProject && currentProjectRole === "leader" && (
                     <button
                       type="button"
                       className="w-full px-4 py-3 text-left text-sm font-semibold text-white transition hover:bg-white/5"

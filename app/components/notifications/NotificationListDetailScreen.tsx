@@ -8,14 +8,13 @@ import { cn } from "../../utils/cn";
 interface NotificationListDetailScreenProps {
   notification: NotificationRecord | null;
   onBack: () => void;
-  onAction?: (actionKey: string, notification: NotificationRecord) => void;
   className?: string;
   hideHeader?: boolean;
 }
 
 const NotificationListDetailScreen: React.FC<
   NotificationListDetailScreenProps
-> = ({ notification, onBack, onAction, className, hideHeader = false }) => {
+> = ({ notification, onBack, className, hideHeader = false }) => {
   if (!notification) {
     return (
       <div
@@ -58,7 +57,6 @@ const NotificationListDetailScreen: React.FC<
         <NotificationCard
           notification={notification}
           isExpanded
-          onAction={onAction}
         />
       </div>
 

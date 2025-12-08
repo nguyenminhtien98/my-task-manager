@@ -1,6 +1,6 @@
 # Trình quản lý tác vụ của tôi
 
-Đây là một ứng dụng quản lý tác vụ toàn diện được xây dựng bằng Next.js, Appwrite và các công nghệ hiện đại khác. Nó cung cấp một nền tảng cộng tác, thời gian thực để quản lý các dự án và nhiệm vụ.
+Đây là một ứng dụng quản lý tác vụ toàn diện được xây dựng bằng Next.js và các công nghệ hiện đại khác. Nó cung cấp một nền tảng cộng tác, thời gian thực để quản lý các dự án và nhiệm vụ.
 
 ## Tính năng
 
@@ -41,7 +41,7 @@
 ## Ngăn xếp công nghệ
 
 - **Giao diện người dùng:** [Next.js](https://nextjs.org/) (khung React)
-- **Phụ trợ:** [Appwrite](https://appwrite.io/)
+- **Phụ trợ:** RESTful API + Socket.IO
 - **Lưu trữ tệp:** [Cloudinary](https://cloudinary.com/)
 - **Tạo kiểu:** [Tailwind CSS](https://tailwindcss.com/)
 - **Kéo và thả:** [dnd-kit](https://dndkit.com/)

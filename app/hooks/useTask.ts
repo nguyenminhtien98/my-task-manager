@@ -1,22 +1,20 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import { database, subscribeToRealtime } from "../../lib/appwrite";
 import { useAuth } from "../context/AuthContext";
 import { useProject } from "../context/ProjectContext";
+import { useSocket } from "../context/SocketContext";
 import {
   Task,
   CreateTaskFormValues,
   TaskDetailFormValues,
   TaskAttachment,
-  BasicProfile,
   TaskStatus,
+  TaskFromBE,
 } from "../types/Types";
-import { Permission, Role } from "appwrite";
 import toast from "react-hot-toast";
 import { uploadFilesToCloudinary } from "../utils/upload";
-import { createNotification } from "../services/notificationService";
-import { checkUserSuspended } from "../utils/moderation";
+import * as taskAPI from "../services/taskService";
 
 interface CreateTaskParams {
   data: CreateTaskFormValues;
@@ -24,7 +22,7 @@ interface CreateTaskParams {
   selectedFiles: File[];
   isLeader: boolean;
   members: Array<{
-    $id: string;
+    _id: string;
     name: string;
     email?: string;
     avatarUrl?: string | null;
@@ -44,88 +42,64 @@ interface MoveTaskParams {
   task: Task;
   status: TaskStatus;
   order: number;
-  completedBy?: string;
 }
 
 export const useTask = () => {
   const { user } = useAuth();
   const { currentProject, isProjectClosed } = useProject();
+  const { socket, isConnected } = useSocket();
   const closedMessage = "Dự án đã bị đóng, thao tác không khả dụng.";
   const locallyModifiedTaskIdsRef = useRef<Set<string>>(new Set());
 
   const projectMeta = useMemo(
     () => ({
-      id: currentProject?.$id ?? null,
+      id: currentProject?._id ?? null,
       name: currentProject?.name ?? null,
-      leaderId: currentProject?.leader?.$id ?? null,
+      leaderId: currentProject?.leader?._id ?? null,
       leaderName: currentProject?.leader?.name ?? null,
     }),
     [
-      currentProject?.$id,
+      currentProject?._id,
       currentProject?.name,
-      currentProject?.leader?.$id,
+      currentProject?.leader?._id,
       currentProject?.leader?.name,
     ]
   );
 
-  const ensureUserNotSuspended = useCallback(async () => {
-    if (!user?.id) {
-      throw new Error("Chưa đăng nhập");
-    }
-    await checkUserSuspended(user.id);
-  }, [user?.id]);
   useEffect(() => {
-    if (!user || !currentProject) return;
+    if (!socket || !isConnected || !user || !currentProject) return;
 
-    const databaseId = String(process.env.NEXT_PUBLIC_DATABASE_ID);
-    const tasksCollectionId = String(
-      process.env.NEXT_PUBLIC_COLLECTION_ID_TASKS
-    );
-    const channel = `databases.${databaseId}.collections.${tasksCollectionId}.documents`;
+    const handleTaskEvent = (data: TaskFromBE) => {
+      const projectId =
+        typeof data.project === "string" ? data.project : data.project._id;
+      if (projectId !== currentProject._id) return;
 
-    const unsubscribe = subscribeToRealtime([channel], (res: unknown) => {
-      const payload = res as {
-        payload: { data?: unknown; $id?: string };
-        events: string[];
-      };
-
-      if (!payload?.events?.length) return;
-
-      const documentId = payload.payload?.$id;
-      const rawUnknown = payload.payload.data ?? (payload as unknown);
-      const raw = rawUnknown as Record<string, unknown> & { $id?: string };
-
-      if (documentId && locallyModifiedTaskIdsRef.current.has(documentId)) {
-        locallyModifiedTaskIdsRef.current.delete(documentId);
+      if (locallyModifiedTaskIdsRef.current.has(data._id)) {
+        locallyModifiedTaskIdsRef.current.delete(data._id);
         return;
       }
 
-      const resolveProfileId = (value: unknown): string | undefined => {
-        if (!value) return undefined;
-        if (typeof value === "string") return value;
-        if (typeof value === "object") {
-          const maybe = value as { $id?: string };
-          if (maybe.$id && typeof maybe.$id === "string") {
-            return maybe.$id;
-          }
-        }
-        return undefined;
-      };
+      window.dispatchEvent(
+        new CustomEvent("task-realtime-update", { detail: data })
+      );
+    };
 
-      const doc: Task = {
-        ...(raw as unknown as Task),
-        id: raw.$id || (raw as unknown as Task).id,
-        assignee: raw.assignee as string | BasicProfile,
-        completedBy: resolveProfileId(raw.completedBy),
-      };
+    socket.on("task:created", handleTaskEvent);
+    socket.on("task:updated", handleTaskEvent);
+    socket.on("task:deleted", (data: { taskId: string; projectId: string }) => {
+      if (data.projectId !== currentProject._id) return;
 
-      if (doc.projectId !== currentProject.$id) return;
+      window.dispatchEvent(
+        new CustomEvent("task-realtime-delete", { detail: data.taskId })
+      );
     });
 
     return () => {
-      unsubscribe();
+      socket.off("task:created", handleTaskEvent);
+      socket.off("task:updated", handleTaskEvent);
+      socket.off("task:deleted");
     };
-  }, [user, currentProject]);
+  }, [socket, isConnected, user, currentProject]);
 
   const uploadSelectedFiles = async (
     selectedFiles: File[]
@@ -154,7 +128,10 @@ export const useTask = () => {
 
       const { data, nextSeq, selectedFiles, isLeader, members } = params;
       const projectId = projectMeta.id;
-      const projectName = projectMeta.name;
+
+      if (!projectId) {
+        return { success: false, message: "Không tìm thấy project" };
+      }
 
       let attachments: TaskAttachment[] = [];
       try {
@@ -166,104 +143,48 @@ export const useTask = () => {
         return { success: false, message };
       }
 
-      const attributeId =
-        (
-          globalThis as unknown as { crypto?: { randomUUID?: () => string } }
-        ).crypto?.randomUUID?.() ||
-        `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-
-      let assigneeProfile = undefined;
+      let assigneeId: string | undefined = undefined;
       if (isLeader) {
         if (typeof data.assignee === "object" && data.assignee.name) {
-          assigneeProfile = data.assignee;
+          assigneeId = data.assignee._id;
         } else if (
           typeof data.assignee === "string" &&
           data.assignee.trim() !== ""
         ) {
           const found = members.find((m) => m.name === data.assignee);
-          if (found)
-            assigneeProfile = {
-              $id: found.$id,
-              name: found.name,
-              email: found.email,
-              avatarUrl: found.avatarUrl,
-            };
+          if (found) assigneeId = found._id;
         }
       } else {
-        assigneeProfile = user ? { $id: user.id, name: user.name } : undefined;
+        assigneeId = user.id;
       }
 
-      const baseTaskFields = {
-        seq: nextSeq,
+      const createData = {
         title: data.title,
         description: data.description,
         status: "list" as const,
-        order: 0,
-        startDate: data.startDate.trim() === "" ? null : data.startDate,
-        endDate: data.endDate.trim() === "" ? null : data.endDate,
+        startDate: data.startDate.trim() === "" ? undefined : data.startDate,
+        endDate: data.endDate.trim() === "" ? undefined : data.endDate,
         predictedHours: data.predictedHours,
         issueType: data.issueType!,
         priority: data.priority!,
-        projectId: projectId ?? "",
-        projectName: projectName ?? "",
-        completedBy: user.id,
-        attachedFile: attachments,
+        assignee: assigneeId,
+        attachments: attachments.map((a) => ({
+          url: a.url,
+          name: a.name,
+          type: a.type,
+          createdAt: a.createdAt,
+        })),
       };
 
-      const payloadForAppwrite = {
-        ...baseTaskFields,
-        id: attributeId,
-        attachedFile: attachments.map((m) => m.url),
-        media: undefined,
-        ...(assigneeProfile ? { assignee: assigneeProfile.$id } : {}),
-        completedBy: user.id,
-      } as Record<string, unknown>;
-
       try {
-        await ensureUserNotSuspended();
-        const created = await database.createDocument(
-          process.env.NEXT_PUBLIC_DATABASE_ID!,
-          process.env.NEXT_PUBLIC_COLLECTION_ID_TASKS!,
-          "unique()",
-          payloadForAppwrite,
-          [
-            Permission.read(Role.any()),
-            Permission.update(Role.user(user.id)),
-            Permission.delete(Role.user(user.id)),
-          ]
-        );
-
-        const createdId = (created as unknown as { $id: string }).$id;
+        const beTask = await taskAPI.createTask(projectId, createData);
         const newTask: Task = {
-          id: createdId,
-          ...baseTaskFields,
-          assignee: assigneeProfile,
+          ...beTask,
+          seq: nextSeq,
+          completedBy: beTask.status === "completed" ? beTask.assignee : null,
         };
 
-        locallyModifiedTaskIdsRef.current.add(createdId);
-
-        if (
-          isLeader &&
-          assigneeProfile?.$id &&
-          assigneeProfile.$id !== user.id
-        ) {
-          await Promise.allSettled([
-            createNotification({
-              recipientId: assigneeProfile.$id,
-              actorId: user.id,
-              type: "task.assigned",
-              scope: "task",
-              projectId: projectId ?? undefined,
-              taskId: createdId,
-              metadata: {
-                taskTitle: data.title,
-                actorName: user.name,
-                audience: "assignee" as const,
-                targetMemberName: assigneeProfile.name ?? "",
-              },
-            }),
-          ]);
-        }
+        locallyModifiedTaskIdsRef.current.add(newTask._id);
 
         toast.success("Tạo Task thành công");
         return { success: true, task: newTask };
@@ -276,7 +197,7 @@ export const useTask = () => {
         return { success: false, message: errorMessage };
       }
     },
-    [ensureUserNotSuspended, isProjectClosed, projectMeta, user]
+    [isProjectClosed, projectMeta, user]
   );
 
   const updateTask = useCallback(
@@ -292,12 +213,9 @@ export const useTask = () => {
       }
 
       const { task, data } = params;
-      const isTaskTaken =
-        typeof task.assignee === "string"
-          ? task.assignee.trim() !== ""
-          : Boolean(task.assignee);
+      const isTaskTaken = Boolean(task.assignee);
 
-      const updatedFields: Partial<Task> = {};
+      const updateData: Record<string, unknown> = {};
       const canEditTiming = isTaskTaken && task.status !== "completed";
       if (canEditTiming) {
         if (
@@ -305,40 +223,36 @@ export const useTask = () => {
           data.startDate.trim() !== "" &&
           data.startDate !== task.startDate
         ) {
-          updatedFields.startDate = data.startDate;
+          updateData.startDate = data.startDate;
         }
         if (
           typeof data.endDate === "string" &&
           data.endDate.trim() !== "" &&
           data.endDate !== task.endDate
         ) {
-          updatedFields.endDate = data.endDate;
+          updateData.endDate = data.endDate;
         }
         if (
           typeof data.predictedHours === "number" &&
           data.predictedHours !== task.predictedHours
         ) {
-          updatedFields.predictedHours = data.predictedHours;
+          updateData.predictedHours = data.predictedHours;
         }
       }
 
-      if (Object.keys(updatedFields).length === 0) {
+      if (Object.keys(updateData).length === 0) {
         return { success: true, task };
       }
 
       try {
-        await ensureUserNotSuspended();
+        const beTask = await taskAPI.updateTask(task._id, updateData);
+        const updatedTask: Task = {
+          ...beTask,
+          seq: task.seq,
+          completedBy: beTask.status === "completed" ? beTask.assignee : null,
+        };
 
-        await database.updateDocument(
-          process.env.NEXT_PUBLIC_DATABASE_ID!,
-          process.env.NEXT_PUBLIC_COLLECTION_ID_TASKS!,
-          task.id,
-          updatedFields
-        );
-
-        locallyModifiedTaskIdsRef.current.add(task.id);
-
-        const updatedTask = { ...task, ...updatedFields };
+        locallyModifiedTaskIdsRef.current.add(task._id);
 
         toast.success("Cập nhật Task thành công");
         return { success: true, task: updatedTask };
@@ -352,7 +266,7 @@ export const useTask = () => {
         return { success: false, message: errorMessage };
       }
     },
-    [ensureUserNotSuspended, isProjectClosed, user]
+    [isProjectClosed, user]
   );
 
   const receiveTask = useCallback(
@@ -368,63 +282,16 @@ export const useTask = () => {
       }
 
       const { task } = params;
-      const { id: projectId, leaderId, leaderName } = projectMeta;
 
       try {
-        await ensureUserNotSuspended();
-
-        await database.updateDocument(
-          String(process.env.NEXT_PUBLIC_DATABASE_ID),
-          String(process.env.NEXT_PUBLIC_COLLECTION_ID_TASKS),
-          task.id,
-          { assignee: user.id }
-        );
-
-        locallyModifiedTaskIdsRef.current.add(task.id);
-
+        const beTask = await taskAPI.claimTask(task._id);
         const updatedTask: Task = {
-          ...task,
-          assignee: { $id: user.id, name: user.name },
+          ...beTask,
+          seq: task.seq,
+          completedBy: beTask.status === "completed" ? beTask.assignee : null,
         };
 
-        const notifications = [
-          createNotification({
-            recipientId: user.id,
-            actorId: user.id,
-            type: "task.assigned",
-            scope: "task",
-            projectId: projectId ?? undefined,
-            taskId: task.id,
-            metadata: {
-              taskTitle: task.title,
-              memberName: user.name,
-              audience: "assignee" as const,
-              event: "accepted",
-            },
-          }),
-        ];
-
-        if (leaderId && leaderId !== user.id) {
-          notifications.push(
-            createNotification({
-              recipientId: leaderId,
-              actorId: user.id,
-              type: "task.assigned",
-              scope: "task",
-              projectId: projectId ?? undefined,
-              taskId: task.id,
-              metadata: {
-                taskTitle: task.title,
-                memberName: user.name,
-                leaderName: leaderName ?? undefined,
-                audience: "leader" as const,
-                event: "accepted",
-              },
-            })
-          );
-        }
-
-        await Promise.allSettled(notifications);
+        locallyModifiedTaskIdsRef.current.add(task._id);
 
         toast.success("Nhận task thành công");
         return { success: true, task: updatedTask };
@@ -442,27 +309,12 @@ export const useTask = () => {
         return { success: false, message };
       }
     },
-    [ensureUserNotSuspended, isProjectClosed, projectMeta, user]
+    [isProjectClosed, user]
   );
-
-  const resolveProfileId = useCallback((value: unknown): string | undefined => {
-    if (!value) return undefined;
-    if (typeof value === "string") return value;
-    if (typeof value === "object") {
-      const maybe = value as { $id?: string; user_id?: string };
-      if (maybe.$id && typeof maybe.$id === "string") {
-        return maybe.$id;
-      }
-      if (maybe.user_id && typeof maybe.user_id === "string") {
-        return maybe.user_id;
-      }
-    }
-    return undefined;
-  }, []);
 
   const deleteTask = useCallback(
     async (task: Task): Promise<{ success: boolean; message?: string }> => {
-      const taskId = task.id;
+      const taskId = task._id;
       if (!user) {
         return { success: false, message: "Chưa đăng nhập" };
       }
@@ -472,35 +324,9 @@ export const useTask = () => {
       }
 
       try {
-        await ensureUserNotSuspended();
-
-        await database.deleteDocument(
-          String(process.env.NEXT_PUBLIC_DATABASE_ID),
-          String(process.env.NEXT_PUBLIC_COLLECTION_ID_TASKS),
-          taskId
-        );
+        await taskAPI.deleteTask(taskId);
 
         locallyModifiedTaskIdsRef.current.add(taskId);
-
-        const creatorId = resolveProfileId(task.completedBy);
-        if (creatorId && creatorId !== user.id) {
-          try {
-            await createNotification({
-              recipientId: creatorId,
-              actorId: user.id,
-              type: "task.deleted",
-              scope: "task",
-              projectId: projectMeta.id ?? undefined,
-              metadata: {
-                taskTitle: task.title,
-                actorName: user.name,
-                audience: "creator" as const,
-              },
-            });
-          } catch (err) {
-            console.error("Failed to send delete task notification:", err);
-          }
-        }
 
         toast.success("Xóa Task thành công");
         return { success: true };
@@ -518,13 +344,7 @@ export const useTask = () => {
         return { success: false, message };
       }
     },
-    [
-      ensureUserNotSuspended,
-      isProjectClosed,
-      projectMeta.id,
-      resolveProfileId,
-      user,
-    ]
+    [isProjectClosed, user]
   );
 
   const moveTask = useCallback(
@@ -539,123 +359,22 @@ export const useTask = () => {
         return { success: false, message: closedMessage };
       }
 
-      const { task, status, order, completedBy } = params;
-      const { id: projectId, leaderId } = projectMeta;
+      const { task, status, order } = params;
 
       const updatePayload: Record<string, unknown> = {
         status,
         order,
       };
 
-      if (completedBy !== undefined) {
-        updatePayload.completedBy = completedBy;
-      } else if (task.completedBy) {
-        updatePayload.completedBy = null;
-      }
-
       try {
-        await ensureUserNotSuspended();
-
-        await database.updateDocument(
-          String(process.env.NEXT_PUBLIC_DATABASE_ID),
-          String(process.env.NEXT_PUBLIC_COLLECTION_ID_TASKS),
-          task.id,
-          updatePayload
-        );
-
-        locallyModifiedTaskIdsRef.current.add(task.id);
-
+        const beTask = await taskAPI.updateTask(task._id, updatePayload);
         const updatedTask: Task = {
-          ...task,
-          status,
-          order,
-          completedBy:
-            completedBy !== undefined
-              ? completedBy
-              : updatePayload.completedBy === null
-              ? undefined
-              : task.completedBy,
+          ...beTask,
+          seq: task.seq,
+          completedBy: beTask.status === "completed" ? beTask.assignee : null,
         };
 
-        const assigneeInfo =
-          typeof task.assignee === "object" && task.assignee
-            ? (task.assignee as BasicProfile)
-            : typeof task.assignee === "string" && task.assignee
-            ? ({ $id: task.assignee } as BasicProfile)
-            : null;
-        const assigneeId = assigneeInfo?.$id;
-        const assigneeName =
-          assigneeInfo?.name ||
-          (typeof task.assignee === "object"
-            ? (task.assignee as BasicProfile)?.name
-            : undefined);
-        const actorIsLeader = leaderId === user.id;
-        const notifications: Promise<unknown>[] = [];
-
-        if (
-          !actorIsLeader &&
-          assigneeId === user.id &&
-          (status === "done" || status === "completed")
-        ) {
-          if (leaderId && leaderId !== user.id) {
-            notifications.push(
-              createNotification({
-                recipientId: leaderId,
-                actorId: user.id,
-                type: "task.completed",
-                scope: "task",
-                projectId: projectId ?? undefined,
-                taskId: task.id,
-                metadata: {
-                  taskTitle: task.title,
-                  memberName: user.name,
-                  audience: "leader" as const,
-                },
-              })
-            );
-          }
-        }
-
-        if (actorIsLeader && assigneeId && assigneeId !== user.id) {
-          if (status === "bug") {
-            notifications.push(
-              createNotification({
-                recipientId: assigneeId,
-                actorId: user.id,
-                type: "task.movedToBug",
-                scope: "task",
-                projectId: projectId ?? undefined,
-                taskId: task.id,
-                metadata: {
-                  taskTitle: task.title,
-                  actorName: user.name,
-                  audience: "assignee" as const,
-                },
-              })
-            );
-          } else if (status === "completed") {
-            notifications.push(
-              createNotification({
-                recipientId: assigneeId,
-                actorId: user.id,
-                type: "task.movedToCompleted",
-                scope: "task",
-                projectId: projectId ?? undefined,
-                taskId: task.id,
-                metadata: {
-                  taskTitle: task.title,
-                  memberName: assigneeName ?? "",
-                  actorName: user.name,
-                  audience: "assignee" as const,
-                },
-              })
-            );
-          }
-        }
-
-        if (notifications.length > 0) {
-          await Promise.allSettled(notifications);
-        }
+        locallyModifiedTaskIdsRef.current.add(task._id);
 
         return { success: true, task: updatedTask };
       } catch (err: unknown) {
@@ -669,7 +388,7 @@ export const useTask = () => {
         return { success: false, message };
       }
     },
-    [ensureUserNotSuspended, isProjectClosed, projectMeta, user]
+    [isProjectClosed, user]
   );
 
   return {

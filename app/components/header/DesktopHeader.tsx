@@ -13,11 +13,13 @@ import { Project, EnrichedProjectMember } from "../../types/Types";
 import { User } from "../../context/AuthContext";
 import TaskFilterDropdown from "./TaskFilterDropdown";
 import { LuClipboardList } from "react-icons/lu";
-import LoadingSpinner from "../loading/LoadingSpinner";
+import ProjectMembersSkeleton from "../loading/ProjectMembersSkeleton";
+import { useNotifications } from "../../hooks/useNotifications";
 
 interface DesktopHeaderProps {
   user: User | null;
   currentProject: Project | null;
+  currentProjectRole: "leader" | "user" | null;
   projects: Project[];
   isMembersLoading: boolean;
   visibleMembers: EnrichedProjectMember[];
@@ -27,6 +29,9 @@ interface DesktopHeaderProps {
   onOpenMembersModal: () => void;
   onProjectSelect: (project: Project) => void;
   onCreateProject?: () => void;
+  hasMoreProjects?: boolean;
+  isLoadingMoreProjects?: boolean;
+  onLoadMoreProjects?: () => void;
   onCreateTask: () => void;
   isProjectClosed: boolean;
   onLoginClick: () => void;
@@ -40,18 +45,24 @@ interface DesktopHeaderProps {
   currentTheme: string;
   onOpenReportRoom: () => void;
   canOpenReportRoom: boolean;
+  notificationsHook: ReturnType<typeof useNotifications>;
 }
 
 const DesktopHeader: React.FC<DesktopHeaderProps> = ({
   user,
   currentProject,
+  currentProjectRole,
   projects,
   isMembersLoading,
   visibleMembers,
+  notificationsHook,
   remainingMembers,
   projectMembers,
   onMemberClick,
   onOpenMembersModal,
+  hasMoreProjects,
+  isLoadingMoreProjects,
+  onLoadMoreProjects,
   onProjectSelect,
   onCreateProject,
   onCreateTask,
@@ -88,14 +99,12 @@ const DesktopHeader: React.FC<DesktopHeaderProps> = ({
         {user && currentProject && (
           <div className="flex items-center">
             {isMembersLoading ? (
-              <div className="flex h-[34px] w-[34px] items-center justify-center">
-                <LoadingSpinner size={16} thickness={2} label="Đang tải thành viên" />
-              </div>
+              <ProjectMembersSkeleton />
             ) : (
               <div className="flex items-center">
                 {visibleMembers.map((member, index) => (
                   <button
-                    key={member.$id || `${member.name}-${index}`}
+                    key={String(member._id) || `${member.name}-${index}`}
                     type="button"
                     onClick={() => onMemberClick(member)}
                     className={`inline-flex focus:outline-none ${index > 0 ? "-ml-1" : ""
@@ -165,6 +174,9 @@ const DesktopHeader: React.FC<DesktopHeaderProps> = ({
             onSelect={onProjectSelect}
             buttonClassName="p-3 py-1 text-white"
             buttonStyle={{ background: currentTheme }}
+            hasMore={hasMoreProjects}
+            isLoadingMore={isLoadingMoreProjects}
+            onLoadMore={onLoadMoreProjects}
           />
         )}
 
@@ -195,6 +207,7 @@ const DesktopHeader: React.FC<DesktopHeaderProps> = ({
         {user ? (
           <div ref={menuRef} className="flex items-center gap-3">
             <NotificationBell
+              hook={notificationsHook}
               buttonClassName="rounded-full p-2 text-white transition hover:border-white hover:bg-white/10"
             />
             <div className="relative flex items-center justify-center">
@@ -204,7 +217,7 @@ const DesktopHeader: React.FC<DesktopHeaderProps> = ({
                 size={36}
                 showTooltip={false}
                 onClick={onToggleMenu}
-                title={`${currentProject?.leader.$id === user.id ? "Leader" : "User"
+                title={`${currentProject?.leader._id === user.id ? "Leader" : "User"
                   }: ${user.name}`}
               />
               {showMenu && (
@@ -225,7 +238,7 @@ const DesktopHeader: React.FC<DesktopHeaderProps> = ({
                       Quản lý dự án
                     </Button>
                   )}
-                  {projects.length > 0 && currentProject && (
+                  {projects.length > 0 && currentProject && currentProjectRole === "leader" && (
                     <Button
                       variant="ghost"
                       onClick={onOpenTheme}

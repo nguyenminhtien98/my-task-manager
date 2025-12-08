@@ -6,11 +6,15 @@ import { v4 as uuidv4 } from "uuid";
 import toast from "react-hot-toast";
 import AvatarUser from "../common/AvatarUser";
 import { formatVietnameseDateTime } from "../../utils/date";
-import { CommentAttachment, PendingAttachment, TaskComment, TaskAttachment } from "./types";
+import type {
+  Comment,
+  CommentAttachment,
+  TaskAttachment,
+  PendingAttachment,
+} from "@/app/types/Types";
 import PendingAttachmentPreview from "./PendingAttachmentPreview";
 import { FiImage, FiPaperclip, FiPlay, FiX } from "react-icons/fi";
 import { useAuth } from "../../context/AuthContext";
-import type { UpdateCommentParams } from "@/app/hooks/useComment";
 import {
   MAX_UPLOAD_SIZE_BYTES,
   MAX_UPLOAD_SIZE_LABEL,
@@ -20,9 +24,14 @@ import {
 const EDIT_EVENT_NAME = "comment-edit-start";
 
 interface CommentItemProps {
-  comment: TaskComment;
+  comment: Comment;
   onPreview: (media: TaskAttachment) => void;
-  onUpdateComment: (params: UpdateCommentParams) => Promise<TaskComment | null>;
+  onUpdateComment: (
+    commentId: string,
+    content: string,
+    retainedAttachments: CommentAttachment[],
+    newAttachments: PendingAttachment[]
+  ) => Promise<Comment | null>;
   onDeleteComment: (commentId: string) => Promise<boolean>;
   isLocked?: boolean;
 }
@@ -33,7 +42,7 @@ const renderAttachment = (attachment: CommentAttachment, onPreview: (media: Task
       url: attachment.url,
       name: attachment.name,
       type: attachment.type,
-      createdAt: new Date().toISOString(),
+      createdAt: attachment.createdAt || new Date().toISOString(),
     };
     return (
       <button
@@ -84,7 +93,7 @@ const CommentItem: React.FC<CommentItemProps> = ({
   isLocked = false,
 }) => {
   const { user } = useAuth();
-  const isOwner = user?.id === comment.user.id;
+  const isOwner = user?.id === comment.author._id;
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(comment.content ?? "");
   const [editAttachments, setEditAttachments] = useState<CommentAttachment[]>(comment.attachments ?? []);
@@ -160,7 +169,7 @@ const CommentItem: React.FC<CommentItemProps> = ({
       const customEvent = event as CustomEvent<string>;
       if (typeof customEvent.detail !== "string") return;
       const targetId = customEvent.detail;
-      if (targetId !== comment.id && isEditing) {
+      if (targetId !== comment._id && isEditing) {
         resetEditingState();
       }
     };
@@ -169,12 +178,12 @@ const CommentItem: React.FC<CommentItemProps> = ({
     return () => {
       window.removeEventListener(EDIT_EVENT_NAME, handleOtherEditStart as EventListener);
     };
-  }, [comment.id, isEditing, resetEditingState]);
+  }, [comment._id, isEditing, resetEditingState]);
 
   const handleStartEdit = () => {
     if (!canEdit) return;
     if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent(EDIT_EVENT_NAME, { detail: comment.id }));
+      window.dispatchEvent(new CustomEvent(EDIT_EVENT_NAME, { detail: comment._id }));
     }
     clearPendingAttachments();
     setEditContent(comment.content ?? "");
@@ -206,12 +215,12 @@ const CommentItem: React.FC<CommentItemProps> = ({
   const handleSubmitEdit = async () => {
     if (!canEdit || !canSubmitEdit || isUpdating) return;
     setIsUpdating(true);
-    const result = await onUpdateComment({
-      comment,
-      content: editContent,
-      retainedAttachments: editAttachments,
-      newAttachments: pendingAttachments,
-    });
+    const result = await onUpdateComment(
+      comment._id,
+      editContent,
+      editAttachments,
+      pendingAttachments
+    );
     setIsUpdating(false);
 
     if (!result) {
@@ -236,7 +245,7 @@ const CommentItem: React.FC<CommentItemProps> = ({
     const confirmed = window.confirm("Bạn có chắc muốn xóa bình luận này?");
     if (!confirmed) return;
     setIsDeleting(true);
-    const success = await onDeleteComment(comment.id);
+    const success = await onDeleteComment(comment._id);
     setIsDeleting(false);
     if (success) {
       clearPendingAttachments();
@@ -387,13 +396,13 @@ const CommentItem: React.FC<CommentItemProps> = ({
   return (
     <div className="flex gap-1">
       <AvatarUser
-        name={comment.user.name ?? "Người dùng"}
-        avatarUrl={comment?.user?.avatarUrl}
+        name={comment?.author?.name}
+        avatarUrl={comment?.author?.avatarUrl}
         size={36}
       />
       <div className="flex-1 space-y-1">
         <div className="flex items-center gap-3">
-          <span className="font-semibold text-sm text-white">{comment.user.name}</span>
+          <span className="font-semibold text-sm text-white">{comment.author.name}</span>
           <span className="text-xs text-blue-400 underline">
             {formatVietnameseDateTime(comment.createdAt)}
           </span>

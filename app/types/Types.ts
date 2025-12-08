@@ -2,8 +2,8 @@ import type { ReactNode } from "react";
 import { DragEndEvent } from "@dnd-kit/core";
 
 export type TaskStatus = "list" | "doing" | "done" | "completed" | "bug";
-export type IssueType = "Bug" | "Improvement" | "Feature";
-export type Priority = "High" | "Medium" | "Low";
+export type IssueType = "task" | "bug" | "feature" | "improvement";
+export type Priority = "low" | "medium" | "high" | "urgent";
 
 export type NotificationType =
   | "system.welcome"
@@ -36,17 +36,6 @@ export type NotificationScope = "system" | "profile" | "project" | "task";
 
 export type NotificationStatus = "unread" | "read" | "archived";
 
-export interface NotificationMessageSegment {
-  type: "text" | "action";
-  content: string;
-  actionKey?: string;
-}
-
-export interface NotificationMessage {
-  segments: NotificationMessageSegment[];
-  plainText: string;
-}
-
 export interface NotificationMetadata {
   audience?: "actor" | "target" | "member" | "leader" | "assignee" | "creator";
   actorName?: string;
@@ -75,7 +64,7 @@ export interface NotificationRecord {
   scope: NotificationScope;
   status: NotificationStatus;
   title?: string | null;
-  message: NotificationMessage;
+  message: string;
   metadata?: NotificationMetadata;
   createdAt: string;
   updatedAt?: string;
@@ -84,49 +73,139 @@ export interface NotificationRecord {
   actor?: BasicProfile | null;
   recipient?: BasicProfile | null;
   project?: {
-    $id: string;
+    _id: string;
     name?: string | null;
   } | null;
   task?: {
-    $id: string;
+    _id: string;
     title?: string | null;
   } | null;
 }
 
 export interface BasicProfile {
-  $id: string;
+  _id: string;
   name: string;
   email?: string;
   avatarUrl?: string | null;
   [key: string]: unknown;
 }
 
-export interface EnrichedProjectMember extends BasicProfile {
+export interface EnrichedProjectMember {
+  _id: string;
+  name: string;
+  email: string;
+  avatarUrl?: string | null;
   isLeader: boolean;
-  membershipId?: string;
+  [key: string]: unknown;
 }
 
-export interface ProjectMemberProfile extends EnrichedProjectMember {
+export interface ProjectMemberProfile {
+  _id: string;
+  name: string;
+  email: string;
+  avatarUrl?: string | null;
+  role: string;
+  createdAt: string;
+  updatedAt: string;
+  isLeader: boolean;
   joinedAt?: string;
+  [key: string]: unknown;
 }
 
-export interface Task {
-  seq: number;
-  id: string;
+export interface TaskProfile extends BasicProfile {
+  role: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TaskProject {
+  _id: string;
+  name: string;
+  themeColor?: string;
+}
+
+export interface TaskFromBE {
+  _id: string;
+  taskId: string;
+  project: string | TaskProject;
   title: string;
-  description: string;
-  assignee?: string | BasicProfile | null;
+  description?: string;
   status: TaskStatus;
-  order: number;
+  priority: Priority;
+  issueType: IssueType;
+  assignee?: TaskProfile | null;
+  reporter: TaskProfile;
   startDate?: string | null;
   endDate?: string | null;
   predictedHours?: number;
-  completedBy?: string | BasicProfile | null;
-  issueType: IssueType;
-  priority: Priority;
-  projectId?: string;
-  projectName?: string;
-  attachedFile?: (TaskAttachment | string)[];
+  order: number;
+  attachments?: Array<{
+    url: string;
+    name: string;
+    type: string;
+    createdAt: string;
+  }>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateTaskData {
+  title: string;
+  description?: string;
+  priority?: Priority;
+  issueType?: IssueType;
+  assignee?: string;
+  startDate?: string;
+  endDate?: string;
+  predictedHours?: number;
+  attachments?: Array<{
+    url: string;
+    name: string;
+    type: string;
+    createdAt: string;
+  }>;
+}
+
+export interface UpdateTaskData {
+  title?: string;
+  description?: string;
+  status?: TaskStatus;
+  priority?: Priority;
+  issueType?: IssueType;
+  assignee?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
+  predictedHours?: number;
+  order?: number;
+}
+
+export interface TaskFilterParams {
+  page?: number;
+  limit?: number;
+  status?: TaskStatus;
+  noAssignee?: boolean;
+  myTasks?: boolean;
+  selectedMembers?: string[];
+  noDueDate?: boolean;
+  overdue?: boolean;
+  priorities?: Priority[];
+  issueTypes?: IssueType[];
+  search?: string;
+}
+
+export interface TaskListResponse {
+  tasks: TaskFromBE[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+export interface Task extends TaskFromBE {
+  seq: number;
+  completedBy?: TaskProfile | null;
   assigneeDisplayName?: string | null;
   completedByDisplayName?: string | null;
   assigneeRemoved?: boolean;
@@ -162,6 +241,7 @@ export interface TaskModalProps {
   nextSeq?: number;
   task?: Task | null;
   onUpdate?: (task: Task) => void;
+  onDelete?: (task: Task) => void;
 }
 
 export interface CreateTaskModalProps {
@@ -238,6 +318,9 @@ export interface ColumnProps {
   isLeader: boolean;
   isProjectClosed: boolean;
   onTaskClick: (task: Task) => void;
+  onLoadMore?: () => void;
+  hasMore?: boolean;
+  loading?: boolean;
 }
 
 export interface HeaderProps {
@@ -253,23 +336,36 @@ export interface HeaderProps {
 export type FooterAction = "add" | "members" | "chat";
 
 export interface Profile {
-  $id: string;
-  user_id: string;
+  _id: string;
+  userId: string;
   name: string;
   email: string;
-  role: "user" | "leader";
-  avatarUrl?: string | null;
+  avatarUrl?: string;
+  role?: "user" | "admin" | "moderator";
+  createdAt?: string;
 }
 
 export type ProjectStatus = "active" | "closed";
 
-export interface Project {
-  $id: string;
+export interface ProjectLeader {
+  _id: string;
   name: string;
-  leader: Profile;
-  $createdAt?: string;
+  email: string;
+  avatarUrl?: string | null;
+  role: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Project {
+  _id: string;
+  projectId: string;
+  name: string;
   themeColor?: string;
-  status?: ProjectStatus;
+  status: ProjectStatus;
+  leader: ProjectLeader;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface ProjectContextType {
@@ -286,6 +382,13 @@ export interface ProjectContextType {
   members: ProjectMemberProfile[];
   isMembersLoading: boolean;
   refreshMembers: () => Promise<void>;
+  markProjectAsLocallyCreated: (projectId: string) => void;
+  hasMoreProjects: boolean;
+  isLoadingMoreProjects: boolean;
+  loadMoreProjects: () => Promise<void>;
+  allProjects: Project[];
+  isLoadingAllProjects: boolean;
+  loadAllProjects: () => Promise<void>;
 }
 
 export interface AssigneeDropdownProps {
@@ -302,6 +405,11 @@ export interface BoardProps {
   onMove: (e: DragEndEvent, fallbackStatus?: TaskStatus | null) => void;
   onTaskClick: (t: Task) => void;
   isProjectClosed: boolean;
+  columnPagination?: Record<
+    TaskStatus,
+    { page: number; hasMore: boolean; loading: boolean }
+  >;
+  onLoadMore?: (status: TaskStatus) => void;
 }
 
 export interface ProjectFormValues {
@@ -314,4 +422,315 @@ export interface TaskAttachment {
   name: string;
   type: "image" | "video" | "file";
   createdAt: string;
+}
+
+export interface CommentAttachment {
+  url: string;
+  name: string;
+  type: "image" | "video" | "file";
+  createdAt?: string;
+  size?: number;
+  mimeType?: string;
+}
+
+export interface CommentAuthor {
+  _id: string;
+  name: string;
+  email: string;
+  avatarUrl?: string;
+}
+
+export interface Comment {
+  _id: string;
+  commentId: string;
+  task: string;
+  author: CommentAuthor;
+  content: string;
+  attachments: CommentAttachment[];
+  isVisible: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateCommentPayload {
+  content: string;
+  attachments?: CommentAttachment[];
+}
+
+export interface UpdateCommentPayload {
+  content?: string;
+  isVisible?: boolean;
+  attachments?: CommentAttachment[];
+}
+
+export interface CommentPagination {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface GetCommentsResponse {
+  comments: Comment[];
+  pagination: CommentPagination;
+}
+
+export interface TaskComment {
+  id: string;
+  content: string;
+  createdAt: string;
+  isVisible: boolean;
+  user: {
+    id: string;
+    name: string;
+  };
+  attachments: CommentAttachment[];
+}
+
+export interface PendingAttachment {
+  id: string;
+  file: File;
+  mediaType: "image" | "video" | "file";
+  previewUrl?: string;
+}
+
+export interface CommentSectionProps {
+  taskId?: string;
+  canComment?: boolean;
+  isLocked?: boolean;
+  taskTitle?: string;
+  assigneeId?: string;
+  assigneeName?: string;
+}
+
+export interface AuthResponse {
+  token: string;
+  refreshToken: string;
+  profile: Profile;
+}
+
+export interface RegisterData {
+  email: string;
+  password: string;
+  name: string;
+  phoneNumber?: string;
+}
+
+export interface LoginData {
+  email: string;
+  password: string;
+}
+
+export interface UpdateProfileData {
+  name?: string;
+  avatarUrl?: string;
+}
+
+export interface ProjectMember {
+  _id: string;
+  name: string;
+  email: string;
+  avatarUrl?: string | null;
+  role: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProjectResponse {
+  _id: string;
+  projectId: string;
+  name: string;
+  themeColor?: string;
+  status: "active" | "closed";
+  leader: ProjectLeader;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProjectDetailResponse extends ProjectResponse {
+  memberCount: number;
+  members: ProjectMember[];
+  totalTasks: number;
+  tasksByStatus: {
+    list: number;
+    doing: number;
+    done: number;
+    completed: number;
+    bug: number;
+  };
+}
+
+export interface MemberStatistics {
+  profile: ProjectMember;
+  totalTasks: number;
+  tasksByStatus: {
+    list: number;
+    doing: number;
+    done: number;
+    completed: number;
+    bug: number;
+  };
+}
+
+export interface NotificationActor {
+  _id: string;
+  name: string;
+  email: string;
+  avatarUrl?: string;
+}
+
+export interface BackendNotification {
+  _id: string;
+  notificationId: string;
+  type: string;
+  title: string;
+  message: string;
+  recipient: string;
+  actor?: NotificationActor;
+  project?: string;
+  task?: string;
+  isRead: boolean;
+  readAt?: string;
+  createdAt: string;
+}
+
+export interface GetNotificationsResponse {
+  notifications: NotificationRecord[];
+  total: number;
+  page: number;
+  pages: number;
+}
+
+export interface DailyReportAuthor {
+  _id: string;
+  name: string;
+  email: string;
+  avatarUrl?: string;
+}
+
+export interface DailyReport {
+  _id: string;
+  reportId: string;
+  room: string;
+  project: string;
+  author: DailyReportAuthor;
+  content: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DailyReportRoom {
+  _id: string;
+  roomId: string;
+  project: string;
+  isEnabled: boolean;
+  remindTimeMinutes: number;
+  remindWeekdays: number[];
+  timezone: string;
+  lastRemindedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GetReportsParams {
+  projectId: string;
+  page?: number;
+  limit?: number;
+  author?: string;
+  date?: string;
+}
+
+export interface GetReportsResponse {
+  success: boolean;
+  data: DailyReport[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+export type ConversationType = "feedback" | "member" | "direct" | "group";
+
+export interface ConversationDocument {
+  _id: string;
+  type: ConversationType;
+  participants: string[];
+  projectId?: string | null;
+  lastMessage?: string | null;
+  lastMessageAt?: string | null;
+  unreadBy: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ConversationListEntry extends ConversationDocument {
+  __placeholderTargetId?: string;
+  __placeholderProjectId?: string | null;
+}
+
+export interface ConversationMessageDocument {
+  _id: string;
+  conversation: string;
+  sender: {
+    _id: string;
+    name: string;
+    email: string;
+    avatarUrl?: string;
+    role?: string;
+  };
+  senderId: string;
+  content: string;
+  attachments: Array<{
+    url: string;
+    name: string;
+    type: "image" | "video" | "file";
+    size?: number;
+    mimeType?: string;
+  }>;
+  seenBy: string[];
+  createdAt: string;
+  replyTo?: {
+    messageId: string;
+    content: string;
+    displayName: string;
+    isOwn: boolean;
+    attachments?: Array<{
+      url: string;
+      name: string;
+      type: "image" | "video" | "file";
+      size?: number;
+      mimeType?: string;
+    }>;
+  };
+  reactions?: Array<{
+    type: "like" | "heart" | "haha" | "laugh" | "love" | "wow" | "angry";
+    userId: string;
+    createdAt: string;
+  }>;
+}
+
+export interface PresenceDocument {
+  _id: string;
+  isOnline?: boolean;
+  lastSeenAt?: string | null;
+  lastFeedbackActionAt?: string | null;
+  feedbackStrikeCount?: number;
+  feedbackCooldownUntil?: string | null;
+  feedbackWindowStart?: string | null;
+  feedbackWindowCount?: number;
+  feedbackLastViolationAt?: string | null;
+}
+
+export interface ProfileDocument {
+  _id: string;
+  name: string;
+  email: string;
+  avatarUrl?: string | null;
+  role?: string;
+  suspendedUntil?: string | null;
+  suspensionReason?: string | null;
+  createdAt?: string;
 }

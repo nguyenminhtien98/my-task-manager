@@ -63,19 +63,20 @@ const Tooltip: React.FC<TooltipProps> = ({
       onBlur={hide}
     >
       {children}
-      <div
-        className={`pointer-events-none absolute z-50 whitespace-nowrap rounded bg-black px-2 py-1 text-xs text-white transition-opacity ${
-          isVisible ? "opacity-100" : "opacity-0"
-        }`}
-        style={{
-          top: `calc(100% + ${offsetY}px)`,
-          left: 0,
-          marginLeft: 0,
-          paddingLeft: offsetX > 0 ? offsetX : undefined,
-        }}
-      >
-        {content}
-      </div>
+      {content && (
+        <div
+          className={`pointer-events-none absolute z-50 whitespace-nowrap rounded bg-black px-2 py-1 text-xs text-white transition-opacity ${isVisible ? "opacity-100" : "opacity-0"
+            }`}
+          style={{
+            top: `calc(100% + ${offsetY}px)`,
+            left: 0,
+            marginLeft: 0,
+            paddingLeft: offsetX > 0 ? offsetX : undefined,
+          }}
+        >
+          {content}
+        </div>
+      )}
     </div>
   );
 };

@@ -1,18 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Query } from "appwrite";
 import toast from "react-hot-toast";
-import { database, subscribeToRealtime } from "../../lib/appwrite";
+import { useSocket } from "../context/SocketContext";
 import type { User } from "../context/AuthContext";
 import type { Project, ProjectMemberProfile } from "../types/Types";
 import { sanitizeReportHtml } from "../utils/richText";
-import {
-  DEFAULT_DAILY_REPORT_REMIND_MINUTES,
-  DEFAULT_DAILY_REPORT_SETTINGS,
-  DEFAULT_DAILY_REPORT_TIMEZONE,
-  DEFAULT_DAILY_REPORT_WEEKDAYS,
-} from "../utils/dailyReportDefaults";
+import * as dailyReportAPI from "../services/dailyReportService";
+import type {
+  DailyReport,
+  DailyReportRoom,
+  GetReportsParams,
+} from "../types/Types";
 
 export interface DailyReportFilters {
   myReports: boolean;
@@ -20,12 +19,17 @@ export interface DailyReportFilters {
 }
 
 export interface DailyReportEntry {
-  id: string;
-  userId: string;
-  userName: string;
-  avatarUrl?: string | null;
+  _id: string;
+  reportId: string;
+  author: {
+    _id: string;
+    name: string;
+    email: string;
+    avatarUrl?: string;
+  };
   content: string;
   createdAt: string;
+  updatedAt: string;
 }
 
 export interface DailyReportGroup {
@@ -61,76 +65,31 @@ interface UseDailyReportRoomOptions {
   projectMembers?: ProjectMemberProfile[];
 }
 
-interface RawDailyReportDocument {
-  $id: string;
-  $createdAt: string;
-  $updatedAt: string;
-  content?: string | null;
-  is_pinned?: boolean;
-  status?: string | null;
-  user_id?:
-    | string
-    | {
-        $id: string;
-        name?: string | null;
-        avatarUrl?: string | null;
-      }
-    | null;
-  project_id?: string | { $id: string } | null;
-  room_id?: string | { $id: string } | null;
-}
-
-interface RawDailyReportRoomDocument {
-  $id: string;
-  remind_enabled?: boolean;
-  remind_time_minutes?: number | null;
-  remind_weekdays?: string[] | null;
-  timezone?: string | null;
-  last_reminded_at?: string | null;
-  project_id?: string | { $id: string } | null;
-}
+const DEFAULT_DAILY_REPORT_SETTINGS: DailyReportSettings = {
+  remindEnabled: true,
+  remindTime: "09:00",
+  remindWeekdays: ["1", "2", "3", "4", "5"],
+};
 
 const FALLBACK_MEMBERS: MentionOption[] = [
   { id: "fallback-1", name: "Nguyễn Văn An", avatarUrl: null },
   { id: "fallback-2", name: "Trần Thị Bình", avatarUrl: null },
   { id: "fallback-3", name: "Phạm Hoài Nam", avatarUrl: null },
 ];
-const REPORT_FETCH_LIMIT = 200;
 
-const formatDateKey = (iso: string) => iso.slice(0, 10);
-
-const normalizeWeekdays = (value: unknown): string[] => {
-  if (Array.isArray(value)) {
-    return value
-      .map((item) => (typeof item === "string" ? item.trim() : ""))
-      .filter((item): item is string => Boolean(item));
-  }
-  if (typeof value === "string" && value.trim().length) {
-    return value
-      .split(",")
-      .map((item) => item.trim())
-      .filter((item) => item.length);
-  }
-  return [];
+const formatDateKey = (iso: string) => {
+  const date = new Date(iso);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 };
 
-const resolveRelationId = (
-  value: string | { $id?: string } | null | undefined
-) => {
-  if (!value) return null;
-  if (typeof value === "string") return value;
-  return value.$id ?? null;
-};
-
-const minutesToTimeString = (minutes?: number | null) => {
-  const value =
-    typeof minutes === "number" && !Number.isNaN(minutes)
-      ? minutes
-      : DEFAULT_DAILY_REPORT_REMIND_MINUTES;
-  const hrs = Math.floor(value / 60)
+const minutesToTimeString = (minutes: number) => {
+  const hrs = Math.floor(minutes / 60)
     .toString()
     .padStart(2, "0");
-  const mins = (value % 60).toString().padStart(2, "0");
+  const mins = (minutes % 60).toString().padStart(2, "0");
   return `${hrs}:${mins}`;
 };
 
@@ -143,53 +102,20 @@ const timeStringToMinutes = (time: string) => {
     mins < 0 ||
     mins >= 60
   ) {
-    return DEFAULT_DAILY_REPORT_REMIND_MINUTES;
+    return 540;
   }
   return hrs * 60 + mins;
 };
 
-const mapRoomSettings = (
-  doc: RawDailyReportRoomDocument | null
+const mapRoomToSettings = (
+  room: DailyReportRoom | null
 ): DailyReportSettings => {
-  if (!doc) return DEFAULT_DAILY_REPORT_SETTINGS;
-  const parsedWeekdays = normalizeWeekdays(doc.remind_weekdays);
+  if (!room) return DEFAULT_DAILY_REPORT_SETTINGS;
   return {
-    remindEnabled: doc.remind_enabled ?? true,
-    remindTime: minutesToTimeString(doc.remind_time_minutes),
-    remindWeekdays:
-      parsedWeekdays.length > 0
-        ? parsedWeekdays
-        : DEFAULT_DAILY_REPORT_WEEKDAYS,
+    remindEnabled: room.isEnabled,
+    remindTime: minutesToTimeString(room.remindTimeMinutes),
+    remindWeekdays: room.remindWeekdays.map(String),
   };
-};
-
-const mapReportDocument = (doc: RawDailyReportDocument): DailyReportEntry => {
-  const userRelation = doc.user_id ?? null;
-  const relationObject =
-    userRelation && typeof userRelation === "object" ? userRelation : null;
-  const userId = resolveRelationId(userRelation) ?? "unknown-user";
-  const userName = relationObject?.name ?? "Ẩn danh";
-  const avatarUrl = relationObject?.avatarUrl ?? null;
-  return {
-    id: doc.$id,
-    userId,
-    userName,
-    avatarUrl,
-    content: doc.content ?? "",
-    createdAt: doc.$createdAt,
-  };
-};
-
-const getDailyReportCollections = () => {
-  const databaseId = process.env.NEXT_PUBLIC_DATABASE_ID;
-  const roomsCollectionId =
-    process.env.NEXT_PUBLIC_COLLECTION_ID_DAILY_REPORT_ROOMS;
-  const reportsCollectionId =
-    process.env.NEXT_PUBLIC_COLLECTION_ID_DAILY_REPORTS;
-  if (!databaseId || !roomsCollectionId || !reportsCollectionId) {
-    throw new Error("Thiếu cấu hình Appwrite cho Daily Report");
-  }
-  return { databaseId, roomsCollectionId, reportsCollectionId };
 };
 
 export const useDailyReportRoom = ({
@@ -197,6 +123,7 @@ export const useDailyReportRoom = ({
   currentProject,
   projectMembers = [],
 }: UseDailyReportRoomOptions) => {
+  const { socket, isConnected } = useSocket();
   const [reports, setReports] = useState<DailyReportEntry[]>([]);
   const [filters, setFilters] = useState<DailyReportFilters>({
     myReports: false,
@@ -217,17 +144,21 @@ export const useDailyReportRoom = ({
   const [reportSettings, setReportSettings] = useState<DailyReportSettings>(
     DEFAULT_DAILY_REPORT_SETTINGS
   );
-  const [roomDoc, setRoomDoc] = useState<RawDailyReportRoomDocument | null>(
-    null
-  );
+  const [roomData, setRoomData] = useState<DailyReportRoom | null>(null);
   const [isReportsLoading, setIsReportsLoading] = useState(false);
   const [isRoomLoading, setIsRoomLoading] = useState(false);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 10,
+    hasMore: true,
+  });
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const projectIdRef = useRef<string | null>(null);
 
   const mentionableMembers = useMemo<MentionOption[]>(() => {
     if (projectMembers.length) {
       return projectMembers.map((member) => ({
-        id: member.$id,
+        id: member._id,
         name: member.name,
         avatarUrl: member.avatarUrl,
       }));
@@ -235,30 +166,15 @@ export const useDailyReportRoom = ({
     return FALLBACK_MEMBERS;
   }, [projectMembers]);
 
-  const projectMemberIds = useMemo(() => {
-    const set = new Set<string>();
-    projectMembers.forEach((member) => {
-      if (member.$id) set.add(member.$id);
-    });
-    return set;
-  }, [projectMembers]);
-
-  const myMembershipId = useMemo(() => {
-    if (!currentUser) return null;
-    const match = projectMembers.find(
-      (member) => member.$id === currentUser.id
-    );
-    return match?.membershipId ?? null;
-  }, [currentUser, projectMembers]);
-
   const filteredReports = useMemo(() => {
     if (!reports.length) return [];
     return reports.filter((report) => {
-      if (filters.myReports && report.userId !== currentUser?.id) {
+      if (filters.myReports && report.author._id !== currentUser?.id) {
         return false;
       }
       if (filters.date) {
-        return formatDateKey(report.createdAt) === filters.date;
+        const reportDate = formatDateKey(report.createdAt);
+        return reportDate === filters.date;
       }
       return true;
     });
@@ -266,18 +182,17 @@ export const useDailyReportRoom = ({
 
   const groupedReports = useMemo<DailyReportGroup[]>(() => {
     if (!filteredReports.length) return [];
+
+    const sorted = filteredReports.sort((a, b) => {
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+
     const map = new Map<string, DailyReportEntry[]>();
-    filteredReports
-      .slice()
-      .sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      )
-      .forEach((entry) => {
-        const key = formatDateKey(entry.createdAt);
-        const existing = map.get(key) ?? [];
-        map.set(key, [...existing, entry]);
-      });
+    sorted.forEach((entry) => {
+      const key = formatDateKey(entry.createdAt);
+      const existing = map.get(key) ?? [];
+      map.set(key, [...existing, entry]);
+    });
 
     return Array.from(map.entries()).map(([dateKey, entries]) => ({
       dateKey,
@@ -287,7 +202,7 @@ export const useDailyReportRoom = ({
   }, [filteredReports]);
 
   const editingEntry = useMemo(
-    () => reports.find((item) => item.id === editingId) ?? null,
+    () => reports.find((item) => item._id === editingId) ?? null,
     [editingId, reports]
   );
 
@@ -326,371 +241,271 @@ export const useDailyReportRoom = ({
   const fetchRoom = useCallback(async (project: Project) => {
     setIsRoomLoading(true);
     try {
-      const { databaseId, roomsCollectionId } = getDailyReportCollections();
-      const queries = [
-        Query.equal("project_id.$id", project.$id),
-        Query.limit(1),
-      ];
-      const { documents } = await database.listDocuments(
-        databaseId,
-        roomsCollectionId,
-        queries
-      );
-      let doc = documents[0] as RawDailyReportRoomDocument | undefined;
-      if (!doc) {
-        const basePayload = {
-          project_id: project.$id,
-          leader_id: project.leader.$id,
-          remind_enabled: true,
-          remind_time_minutes: DEFAULT_DAILY_REPORT_REMIND_MINUTES,
-          remind_weekdays: DEFAULT_DAILY_REPORT_WEEKDAYS,
-          timezone: DEFAULT_DAILY_REPORT_TIMEZONE,
-        };
-        try {
-          doc = (await database.createDocument(
-            databaseId,
-            roomsCollectionId,
-            "unique()",
-            basePayload
-          )) as RawDailyReportRoomDocument;
-        } catch (error) {
-          const message = error instanceof Error ? error.message : "";
-          if (!message.includes("remind_weekdays")) {
-            throw error;
-          }
-          doc = (await database.createDocument(
-            databaseId,
-            roomsCollectionId,
-            "unique()",
-            {
-              ...basePayload,
-              remind_weekdays: DEFAULT_DAILY_REPORT_WEEKDAYS.join(","),
-            }
-          )) as RawDailyReportRoomDocument;
-        }
-      }
-      if (projectIdRef.current !== project.$id) return;
-      setRoomDoc(doc);
+      const room = await dailyReportAPI.getDailyReportRoom(project._id);
+      if (projectIdRef.current !== project._id) return;
+      setRoomData(room);
+      setReportSettings(mapRoomToSettings(room));
     } catch (error) {
       console.error("Tải phòng báo cáo thất bại:", error);
       toast.error("Không thể tải cài đặt phòng báo cáo.");
-      if (projectIdRef.current === project.$id) {
-        setRoomDoc(null);
+      if (projectIdRef.current === project._id) {
+        setRoomData(null);
       }
     } finally {
-      if (projectIdRef.current === project.$id) {
+      if (projectIdRef.current === project._id) {
         setIsRoomLoading(false);
       }
     }
   }, []);
 
-  const fetchReports = useCallback(async (projectId: string) => {
-    setIsReportsLoading(true);
-    try {
-      const { databaseId, reportsCollectionId } = getDailyReportCollections();
-      const queries = [
-        Query.equal("project_id.$id", projectId),
-        Query.orderDesc("$createdAt"),
-        Query.limit(REPORT_FETCH_LIMIT),
-      ];
-      const { documents } = await database.listDocuments(
-        databaseId,
-        reportsCollectionId,
-        queries
-      );
-      if (projectIdRef.current !== projectId) return;
-      const mapped = (documents as RawDailyReportDocument[])
-        .filter((doc) => (doc.status ?? "active") !== "deleted")
-        .map((doc) => mapReportDocument(doc));
-      setReports(mapped);
-    } catch (error) {
-      console.error("Tải danh sách báo cáo thất bại:", error);
-      toast.error("Không thể tải báo cáo.");
-      if (projectIdRef.current === projectId) {
-        setReports([]);
+  const fetchReports = useCallback(
+    async (projectId: string, page = 1, isLoadMore = false) => {
+      if (isLoadMore) {
+        setIsLoadingMore(true);
+      } else {
+        setIsReportsLoading(true);
       }
-    } finally {
-      if (projectIdRef.current === projectId) {
-        setIsReportsLoading(false);
-      }
-    }
-  }, []);
 
-  useEffect(() => {
-    if (!currentProject) {
-      projectIdRef.current = null;
-      setReports([]);
-      setRoomDoc(null);
-      return;
-    }
-    projectIdRef.current = currentProject.$id;
-    setReports([]);
-    setRoomDoc(null);
-    void fetchRoom(currentProject);
-    void fetchReports(currentProject.$id);
-  }, [currentProject, fetchReports, fetchRoom]);
-
-  useEffect(() => {
-    setReportSettings(mapRoomSettings(roomDoc));
-  }, [roomDoc]);
-
-  useEffect(() => {
-    if (projectMemberIds.size === 0) return;
-    setReports((prev) =>
-      prev.filter((entry) => projectMemberIds.has(entry.userId))
-    );
-  }, [projectMemberIds]);
-
-  useEffect(() => {
-    if (!roomDoc?.$id) return;
-    let unsubscribe: (() => void) | undefined;
-    try {
-      const { databaseId, roomsCollectionId } = getDailyReportCollections();
-      const channel = `databases.${databaseId}.collections.${roomsCollectionId}.documents.${roomDoc.$id}`;
-      unsubscribe = subscribeToRealtime([channel], (res: unknown) => {
-        const payload = res as {
-          events?: string[];
-          payload?: { data?: RawDailyReportRoomDocument; $id?: string };
-        };
-        if (!payload?.events || payload.events.length === 0) return;
-        const data =
-          payload.payload?.data ??
-          (payload.payload as unknown as RawDailyReportRoomDocument);
-        if (!data?.$id || data.$id !== roomDoc.$id) return;
-        setRoomDoc(data);
-      });
-    } catch (error) {
-      console.error("Theo dõi phòng báo cáo thất bại:", error);
-    }
-    return () => {
-      unsubscribe?.();
-    };
-  }, [roomDoc?.$id]);
-
-  useEffect(() => {
-    if (!currentProject?.$id) return;
-    let unsubscribe: (() => void) | undefined;
-    try {
-      const { databaseId, reportsCollectionId } = getDailyReportCollections();
-      const channel = `databases.${databaseId}.collections.${reportsCollectionId}.documents`;
-      unsubscribe = subscribeToRealtime([channel], (res: unknown) => {
-        const payload = res as {
-          events?: string[];
-          payload?: { data?: RawDailyReportDocument; $id?: string };
-        };
-        const events = payload?.events ?? [];
-        if (!events.length) return;
-        const raw =
-          payload.payload?.data ??
-          (payload.payload as unknown as RawDailyReportDocument);
-        if (!raw?.$id) return;
-        const docProjectId = resolveRelationId(raw.project_id);
-        if (docProjectId !== currentProject.$id) return;
-
-        if (
-          events.some((event) => event.endsWith(".delete")) ||
-          (raw.status && raw.status === "deleted")
-        ) {
-          setReports((prev) => prev.filter((item) => item.id !== raw.$id));
-          return;
-        }
-
-        const entry = mapReportDocument(raw);
-        if (events.some((event) => event.endsWith(".create"))) {
-          setReports((prev) => {
-            const exists = prev.some((item) => item.id === entry.id);
-            if (exists) return prev;
-            return [entry, ...prev];
-          });
-        } else if (events.some((event) => event.endsWith(".update"))) {
-          setReports((prev) =>
-            prev.map((item) => (item.id === entry.id ? entry : item))
-          );
-        }
-      });
-    } catch (error) {
-      console.error("Theo dõi báo cáo thất bại:", error);
-    }
-    return () => {
-      unsubscribe?.();
-    };
-  }, [currentProject?.$id]);
-
-  const persistRoomSettings = useCallback(
-    async (partial: Partial<DailyReportSettings>) => {
-      if (!roomDoc) return;
-      const payload: Record<string, unknown> = {};
-      if (partial.remindEnabled !== undefined) {
-        payload.remind_enabled = partial.remindEnabled;
-      }
-      if (partial.remindTime !== undefined) {
-        payload.remind_time_minutes = timeStringToMinutes(partial.remindTime);
-      }
-      if (partial.remindWeekdays !== undefined) {
-        const cleaned = partial.remindWeekdays
-          .map((item) => item.trim())
-          .filter((item) => item.length);
-        if (Array.isArray(roomDoc.remind_weekdays)) {
-          payload.remind_weekdays = cleaned;
-        } else if (typeof roomDoc.remind_weekdays === "string") {
-          payload.remind_weekdays = cleaned.join(",");
-        } else {
-          payload.remind_weekdays = cleaned;
-        }
-      }
-      if (!Object.keys(payload).length) return;
       try {
-        const { databaseId, roomsCollectionId } = getDailyReportCollections();
-        await database.updateDocument(
-          databaseId,
-          roomsCollectionId,
-          roomDoc.$id,
-          payload
-        );
-        setRoomDoc((prev) => (prev ? { ...prev, ...payload } : prev));
+        const params: GetReportsParams = {
+          projectId,
+          limit: 10,
+          page,
+        };
+
+        if (filters.myReports && currentUser?.id) {
+          params.author = currentUser.id;
+        }
+        if (filters.date) {
+          params.date = filters.date;
+        }
+
+        const response = await dailyReportAPI.getDailyReports(params);
+
+        if (projectIdRef.current !== projectId) return;
+
+        if (isLoadMore) {
+          setReports((prev) => [...prev, ...response.data]);
+        } else {
+          setReports(response.data);
+        }
+
+        setPagination((prev) => ({
+          ...prev,
+          page,
+          hasMore: response.pagination.page < response.pagination.totalPages,
+        }));
       } catch (error) {
-        console.error("Cập nhật cài đặt báo cáo thất bại:", error);
-        toast.error("Không thể lưu cài đặt.");
+        console.error("Tải báo cáo thất bại:", error);
+        toast.error("Không thể tải báo cáo.");
+        if (!isLoadMore && projectIdRef.current === projectId) {
+          setReports([]);
+        }
+      } finally {
+        if (projectIdRef.current === projectId) {
+          setIsReportsLoading(false);
+          setIsLoadingMore(false);
+        }
       }
     },
-    [roomDoc]
+    [filters, currentUser?.id]
   );
 
-  const updateReportSettings = useCallback(
-    (partial: Partial<DailyReportSettings>) => {
-      setReportSettings((prev) => ({
-        ...prev,
-        ...partial,
-      }));
-      void persistRoomSettings(partial);
-    },
-    [persistRoomSettings]
-  );
+  const loadMoreReports = useCallback(() => {
+    if (
+      !pagination.hasMore ||
+      isLoadingMore ||
+      isReportsLoading ||
+      !currentProject
+    )
+      return;
+    fetchReports(currentProject._id, pagination.page + 1, true);
+  }, [
+    pagination.hasMore,
+    pagination.page,
+    isLoadingMore,
+    isReportsLoading,
+    currentProject,
+    fetchReports,
+  ]);
 
   const handleSubmit = useCallback(async () => {
-    if (!currentUser) {
-      toast.error("Vui lòng đăng nhập để gửi báo cáo.");
-      return;
-    }
-    if (!currentProject) {
-      toast.error("Vui lòng chọn dự án.");
-      return;
-    }
-    if (!roomDoc) {
-      toast.error("Chưa khởi tạo phòng báo cáo.");
-      return;
-    }
-    if (!content.trim()) return;
-    const sanitized = sanitizeReportHtml(content);
-    if (!sanitized.trim()) {
+    if (!currentProject || !content.trim()) return;
+
+    const cleanContent = sanitizeReportHtml(content.trim());
+    if (!cleanContent) {
       toast.error("Nội dung báo cáo không hợp lệ.");
       return;
     }
+
     setIsSubmitting(true);
     try {
-      const { databaseId, reportsCollectionId } = getDailyReportCollections();
       if (editingId) {
-        const updated = (await database.updateDocument(
-          databaseId,
-          reportsCollectionId,
+        const updatedReport = await dailyReportAPI.updateDailyReport(
           editingId,
-          { content: sanitized }
-        )) as RawDailyReportDocument;
+          cleanContent
+        );
         setReports((prev) =>
           prev.map((item) =>
-            item.id === updated.$id ? mapReportDocument(updated) : item
+            item._id === updatedReport._id ? updatedReport : item
           )
         );
         toast.success("Đã cập nhật báo cáo.");
       } else {
-        const payload: Record<string, unknown> = {
-          project_id: currentProject.$id,
-          room_id: roomDoc.$id,
-          user_id: currentUser.id,
-          content: sanitized,
-          status: "active",
-          is_pinned: false,
-        };
-        if (myMembershipId) {
-          payload.membership_id = myMembershipId;
-        }
-        const created = (await database.createDocument(
-          databaseId,
-          reportsCollectionId,
-          "unique()",
-          payload
-        )) as RawDailyReportDocument;
-        const entry = mapReportDocument(created);
-        setReports((prev) => [
-          {
-            ...entry,
-            userName: currentUser.name,
-            avatarUrl: currentUser.avatarUrl ?? entry.avatarUrl,
-          },
-          ...prev,
-        ]);
+        const newReport = await dailyReportAPI.createDailyReport(
+          currentProject._id,
+          cleanContent
+        );
+        setReports((prev) => {
+          const exists = prev.some((item) => item._id === newReport._id);
+          if (exists) return prev;
+          return [newReport, ...prev];
+        });
         toast.success("Đã gửi báo cáo.");
       }
+
       resetForm();
     } catch (error) {
       console.error("Gửi báo cáo thất bại:", error);
-      toast.error("Không thể gửi báo cáo.");
+      toast.error(
+        editingId ? "Cập nhật báo cáo thất bại." : "Gửi báo cáo thất bại."
+      );
     } finally {
       setIsSubmitting(false);
     }
-  }, [
-    content,
-    currentProject,
-    currentUser,
-    editingId,
-    myMembershipId,
-    resetForm,
-    roomDoc,
-  ]);
-
-  const handleEdit = useCallback((entry: DailyReportEntry) => {
-    setEditingId(entry.id);
-    setContent(entry.content);
-  }, []);
+  }, [content, currentProject, editingId, resetForm]);
 
   const handleDelete = useCallback(
     async (entry: DailyReportEntry) => {
+      if (!currentProject) return;
+
       try {
-        const { databaseId, reportsCollectionId } = getDailyReportCollections();
-        await database.deleteDocument(
-          databaseId,
-          reportsCollectionId,
-          entry.id
-        );
-        setReports((prev) => prev.filter((item) => item.id !== entry.id));
-        if (editingId === entry.id) {
-          resetForm();
-        }
+        await dailyReportAPI.deleteDailyReport(entry._id);
         toast.success("Đã xóa báo cáo.");
       } catch (error) {
         console.error("Xóa báo cáo thất bại:", error);
-        toast.error("Không thể xóa báo cáo.");
+        toast.error("Xóa báo cáo thất bại.");
       }
     },
-    [editingId, resetForm]
+    [currentProject]
   );
 
+  const handleEdit = useCallback(
+    (entry: DailyReportEntry) => {
+      if (!entry || entry.author._id !== currentUser?.id) return;
+
+      setEditingId(entry._id);
+      setContent(entry.content);
+    },
+    [currentUser?.id]
+  );
   const handleCancelEdit = useCallback(() => {
     resetForm();
   }, [resetForm]);
 
-  const setMyReportFilter = useCallback((value: boolean) => {
-    setFilters((prev) => ({ ...prev, myReports: value }));
+  const updateReportSettings = useCallback(
+    async (partial: Partial<DailyReportSettings>) => {
+      if (!currentProject) return;
+
+      const newSettings = { ...reportSettings, ...partial };
+
+      try {
+        const payload = {
+          isEnabled: newSettings.remindEnabled,
+          remindTimeMinutes: timeStringToMinutes(newSettings.remindTime),
+          remindWeekdays: newSettings.remindWeekdays.map(Number),
+          timezone: "Asia/Ho_Chi_Minh",
+        };
+
+        await dailyReportAPI.updateDailyReportRoom(currentProject._id, payload);
+        setReportSettings(newSettings);
+        toast.success("Đã cập nhật cài đặt.");
+      } catch (error) {
+        console.error("Cập nhật cài đặt thất bại:", error);
+        toast.error("Cập nhật cài đặt thất bại.");
+      }
+    },
+    [currentProject, reportSettings]
+  );
+
+  const setMyReportFilter = useCallback((enabled: boolean) => {
+    setFilters((prev) => ({ ...prev, myReports: enabled }));
   }, []);
 
   const setDateFilter = useCallback((date: string | null) => {
     setFilters((prev) => ({ ...prev, date }));
   }, []);
 
-  const isRoomReady = Boolean(roomDoc?.$id) && !isRoomLoading;
+  useEffect(() => {
+    if (!currentProject) {
+      projectIdRef.current = null;
+      setReports([]);
+      setRoomData(null);
+      setReportSettings(DEFAULT_DAILY_REPORT_SETTINGS);
+      setIsReportsLoading(false);
+      setIsRoomLoading(false);
+      return;
+    }
+
+    const projectId = currentProject._id;
+    projectIdRef.current = projectId;
+
+    void fetchRoom(currentProject);
+    void fetchReports(projectId);
+  }, [currentProject, fetchReports, fetchRoom, filters]);
+
+  useEffect(() => {
+    if (!socket || !isConnected || !currentProject) return;
+
+    const projectId = currentProject._id;
+
+    socket.emit("project:join", projectId);
+
+    const handleReportCreated = (report: DailyReport) => {
+      if (report.project !== projectId) return;
+      setReports((prev) => {
+        const exists = prev.some((item) => item._id === report._id);
+        if (exists) return prev;
+        return [report, ...prev];
+      });
+    };
+
+    const handleReportUpdated = (report: DailyReport) => {
+      if (report.project !== projectId) return;
+      setReports((prev) =>
+        prev.map((item) => (item._id === report._id ? report : item))
+      );
+    };
+
+    const handleReportDeleted = (data: {
+      reportId: string;
+      projectId: string;
+    }) => {
+      if (data.projectId !== projectId) return;
+      setReports((prev) => prev.filter((item) => item._id !== data.reportId));
+    };
+
+    const handleRoomUpdated = (room: DailyReportRoom) => {
+      if (room.project !== projectId) return;
+      setRoomData(room);
+      setReportSettings(mapRoomToSettings(room));
+    };
+
+    socket.on("dailyReport:created", handleReportCreated);
+    socket.on("dailyReport:updated", handleReportUpdated);
+    socket.on("dailyReport:deleted", handleReportDeleted);
+    socket.on("dailyReportRoom:updated", handleRoomUpdated);
+
+    return () => {
+      socket.off("dailyReport:created", handleReportCreated);
+      socket.off("dailyReport:updated", handleReportUpdated);
+      socket.off("dailyReport:deleted", handleReportDeleted);
+      socket.off("dailyReportRoom:updated", handleRoomUpdated);
+      socket.emit("project:leave", projectId);
+    };
+  }, [socket, isConnected, currentProject]);
 
   return {
-    reports,
     groupedReports,
     filters,
     setMyReportFilter,
@@ -713,6 +528,9 @@ export const useDailyReportRoom = ({
     reportSettings,
     updateReportSettings,
     isReportsLoading,
-    isRoomReady,
+    isRoomReady: !isRoomLoading && Boolean(roomData),
+    loadMoreReports,
+    hasMoreReports: pagination.hasMore,
+    isLoadingMoreReports: isLoadingMore,
   };
 };

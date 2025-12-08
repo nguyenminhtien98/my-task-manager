@@ -3,10 +3,14 @@
 import React, { useState } from "react";
 import CommentForm from "./CommentForm";
 import CommentList from "./CommentList";
-import { CommentSectionProps, TaskAttachment } from "./types";
+import type {
+  CommentSectionProps,
+  TaskAttachment,
+} from "@/app/types/Types";
 import MediaPreviewModal from "../common/MediaPreviewModal";
 import { useComment } from "@/app/hooks/useComment";
 import { useProject } from "@/app/context/ProjectContext";
+import { useModeration } from "@/app/hooks/useModeration";
 
 const CommentSection: React.FC<CommentSectionProps> = ({
   taskId,
@@ -17,14 +21,17 @@ const CommentSection: React.FC<CommentSectionProps> = ({
   assigneeName,
 }) => {
   const { currentProject } = useProject();
-  const projectId = currentProject?.$id;
+  const projectId = currentProject?._id;
   const projectName = currentProject?.name;
-  const leaderId = currentProject?.leader?.$id;
+  const leaderId = currentProject?.leader?._id;
   const leaderName = currentProject?.leader?.name;
   const {
     comments,
     isLoading,
     isCreating,
+    isLoadingMore,
+    hasMore,
+    loadMoreComments,
     createComment,
     updateComment,
     deleteComment,
@@ -40,6 +47,8 @@ const CommentSection: React.FC<CommentSectionProps> = ({
   });
   const [previewMedia, setPreviewMedia] = useState<TaskAttachment | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const { isCommentDisabled } = useModeration();
+  const isFormDisabled = isLocked || isCommentDisabled;
 
   const handlePreview = (media: TaskAttachment) => {
     setPreviewMedia(media);
@@ -57,12 +66,12 @@ const CommentSection: React.FC<CommentSectionProps> = ({
 
   return (
     <div className="px-4 pb-6">
-      {canComment && !isLocked && (
+      {canComment && !isFormDisabled && (
         <CommentForm
           taskId={taskId}
           isSubmitting={isCreating}
           onSubmit={createComment}
-          disabled={isLocked}
+          disabled={isFormDisabled}
         />
       )}
       {isLocked && (
@@ -74,6 +83,9 @@ const CommentSection: React.FC<CommentSectionProps> = ({
         <CommentList
           comments={comments}
           isLoading={isLoading}
+          isLoadingMore={isLoadingMore}
+          hasMore={hasMore}
+          onLoadMore={loadMoreComments}
           onPreview={handlePreview}
           onUpdateComment={updateComment}
           onDeleteComment={deleteComment}

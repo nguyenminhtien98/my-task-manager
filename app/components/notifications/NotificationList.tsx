@@ -9,26 +9,23 @@ import NotificationListDetailScreen from "./NotificationListDetailScreen";
 interface NotificationListProps {
   hook: ReturnType<typeof useNotifications>;
   isOpen: boolean;
-  onAction?: (actionKey: string, notification: NotificationRecord) => void;
   panelClassName?: string;
 }
 
 const NotificationList: React.FC<NotificationListProps> = ({
   hook,
   isOpen,
-  onAction,
   panelClassName,
 }) => {
   const {
-    filteredNotifications,
-    filter,
-    setFilter,
+    notifications,
     fetchNextPage,
     isLoading,
     isFetchingMore,
     hasMore,
     markAllAsRead,
-    markAllAsSeen,
+    reload,
+    unreadCount,
   } = hook;
   const [activeView, setActiveView] = useState<"main" | "detail">("main");
   const [selectedNotification, setSelectedNotification] =
@@ -36,20 +33,19 @@ const NotificationList: React.FC<NotificationListProps> = ({
   const wasOpenRef = useRef(false);
 
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !wasOpenRef.current) {
       setActiveView("main");
-      void markAllAsSeen();
+      void reload();
+      if (unreadCount > 0) {
+        void markAllAsRead();
+      }
     }
-  }, [isOpen, markAllAsSeen]);
-
-  useEffect(() => {
     if (!isOpen && wasOpenRef.current) {
-      void markAllAsRead();
       setSelectedNotification(null);
       setActiveView("main");
     }
     wasOpenRef.current = isOpen;
-  }, [isOpen, markAllAsRead]);
+  }, [isOpen, reload, markAllAsRead, unreadCount]);
 
   const handleCardClick = (notification: NotificationRecord) => {
     setSelectedNotification(notification);
@@ -62,9 +58,8 @@ const NotificationList: React.FC<NotificationListProps> = ({
   };
 
   const handleLoadMore = React.useCallback(() => {
-    if (filter !== "all") return;
     void fetchNextPage();
-  }, [fetchNextPage, filter]);
+  }, [fetchNextPage]);
 
   if (!isOpen) {
     return null;
@@ -74,11 +69,8 @@ const NotificationList: React.FC<NotificationListProps> = ({
     <div className="relative w-full p-3">
       {activeView === "main" ? (
         <NotificationListMainScreen
-          notifications={filteredNotifications}
-          filter={filter}
-          onFilterChange={setFilter}
+          notifications={notifications}
           onNotificationClick={handleCardClick}
-          onAction={onAction}
           onLoadMore={handleLoadMore}
           isLoading={isLoading}
           isFetchingMore={isFetchingMore}
@@ -89,7 +81,6 @@ const NotificationList: React.FC<NotificationListProps> = ({
         <NotificationListDetailScreen
           notification={selectedNotification}
           onBack={handleBack}
-          onAction={onAction}
           className={panelClassName}
         />
       )}

@@ -188,7 +188,7 @@ const TaskFilterDropdown: React.FC<TaskFilterDropdownProps> = ({
     if (filters.selectedMembers.length === 1) {
       const member = members.find(
         (m) =>
-          m.$id === filters.selectedMembers[0] ||
+          m._id === filters.selectedMembers[0] ||
           m.userId === filters.selectedMembers[0]
       );
       return member?.name ?? "1 thành viên";
@@ -274,7 +274,7 @@ const TaskFilterDropdown: React.FC<TaskFilterDropdownProps> = ({
                         </p>
                       )}
                       {members.map((member) => {
-                        const memberId = member.$id ?? member.userId ?? "";
+                        const memberId = member._id ?? member.userId ?? "";
                         if (!memberId) return null;
                         const checked = filters.selectedMembers.includes(memberId);
                         return (

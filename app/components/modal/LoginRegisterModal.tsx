@@ -3,29 +3,25 @@ import ModalComponent from "../common/ModalComponent";
 import { RegisterOptions, useForm } from "react-hook-form";
 import { FormUserValues } from "../../types/Types";
 import { useAuth } from "../../context/AuthContext";
-import { account, database } from "../../../lib/appwrite";
-import { OAuthProvider } from "appwrite";
 import toast from "react-hot-toast";
-import { useUserValidation } from "../../hooks/useUserValidation";
 import Button from "../common/Button";
-import { FcGoogle } from "react-icons/fc";
-import { localizeAuthError } from "../../utils/authErrors";
 import { validateNoEmoji } from "../../utils/inputValidation";
 import BrandOrbHeaderIcon from "../common/LogoComponent";
 import AnimatedGradientLogo from "../common/AnimatedGradientLogo";
+import * as authService from "../../services/authService";
 
 const LoginRegisterModal: React.FC<{
   isOpen: boolean;
   setIsOpen: (v: boolean) => void;
   onLoginSuccess: () => void;
 }> = ({ isOpen, setIsOpen, onLoginSuccess }) => {
-  const { login, logout, user } = useAuth();
-  const { checkEmailExists, checkNameExists } = useUserValidation();
+  const { login, loginWithGoogle, logout, user } = useAuth();
 
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
-  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const emailInputRef = React.useRef<HTMLInputElement>(null);
+  const nameInputRef = React.useRef<HTMLInputElement>(null);
 
   const {
     register,
@@ -86,77 +82,140 @@ const LoginRegisterModal: React.FC<{
   }, [isOpen, reset, resetErrorVisibility]);
 
   useEffect(() => {
+    if (isOpen) {
+      setTimeout(() => {
+        if (isLogin) {
+          emailInputRef.current?.focus();
+        } else {
+          nameInputRef.current?.focus();
+        }
+      }, 300);
+    }
+  }, [isOpen, isLogin]);
+
+  useEffect(() => {
     if (!user || !isOpen) return;
     onLoginSuccess();
     setIsOpen(false);
   }, [user, isOpen, onLoginSuccess, setIsOpen]);
 
-  const handleGoogleLogin = async () => {
+  const isGoogleProcessingRef = React.useRef(false);
+
+  const handleGoogleCallback = useCallback(
+    async (response: { credential: string }) => {
+      if (isGoogleProcessingRef.current) {
+        return;
+      }
+
+      isGoogleProcessingRef.current = true;
+
+      try {
+        await loginWithGoogle(response.credential);
+        toast.success("Đăng nhập Google thành công!");
+        onLoginSuccess();
+        setIsOpen(false);
+        reset();
+        resetErrorVisibility();
+      } catch (error) {
+        console.error("Google login error:", error);
+        const message =
+          error instanceof Error ? error.message : "Đăng nhập Google thất bại";
+        toast.error(message);
+      } finally {
+        setTimeout(() => {
+          isGoogleProcessingRef.current = false;
+        }, 2000);
+      }
+    },
+    [loginWithGoogle, onLoginSuccess, setIsOpen, reset, resetErrorVisibility]
+  );
+
+  useEffect(() => {
+    if (!isOpen || !isLogin) return;
+
     if (typeof window === "undefined") return;
-    setIsGoogleLoading(true);
-    const origin = window.location.origin;
-    const redirectPath = window.location.pathname + window.location.search;
-    const successUrl = `${origin}/auth/callback?redirect=${encodeURIComponent(
-      redirectPath
-    )}`;
-    const failureUrl = `${origin}/auth/failed?redirect=${encodeURIComponent(
-      redirectPath
-    )}`;
-    try {
-      await account.createOAuth2Session(
-        OAuthProvider.Google,
-        successUrl,
-        failureUrl
-      );
-    } catch (error) {
-      console.error("Google login error:", error);
-      toast.error("Không mở được cửa sổ Google, thử lại sau.");
-      setIsGoogleLoading(false);
+    if (!window.google) return;
+
+    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+    if (!clientId) {
+      console.error("Google Client ID not configured");
+      return;
     }
-  };
+
+    try {
+      window.google.accounts.id.initialize({
+        client_id: clientId,
+        callback: handleGoogleCallback,
+      });
+    } catch (error) {
+      console.error("Failed to initialize Google Sign-In:", error);
+    }
+  }, [isOpen, isLogin, handleGoogleCallback]);
+
+  useEffect(() => {
+    if (!isOpen || !isLogin) return;
+    if (typeof window === "undefined") return;
+
+    const renderButton = () => {
+      if (!window.google) {
+        return false;
+      }
+
+      const buttonDiv = document.getElementById("google-signin-button-inner");
+      if (!buttonDiv) return false;
+
+      const parentWidth = buttonDiv.parentElement?.offsetWidth || buttonDiv.offsetWidth;
+      if (!parentWidth || parentWidth < 100) return false;
+
+      buttonDiv.innerHTML = "";
+
+      try {
+        window.google.accounts.id.renderButton(buttonDiv, {
+          theme: "filled_black",
+          size: "large",
+          width: parentWidth,
+          text: "signin_with",
+          shape: "rectangular",
+        });
+        return true;
+      } catch (error) {
+        console.error("Failed to render Google button:", error);
+        return false;
+      }
+    };
+
+    const timer = setTimeout(renderButton, 200);
+    return () => clearTimeout(timer);
+  }, [isOpen, isLogin]);
 
   const onSubmit = async (data: FormUserValues) => {
     if (isLogin) {
       try {
-        await account.deleteSession("current").catch(() => { });
-        await account.createEmailPasswordSession(data.email, data.password);
-        const userInfo = await account.get();
-        await login(userInfo.$id, userInfo.name);
+        await login(data.email, data.password);
         toast.success("Đăng nhập thành công!");
         onLoginSuccess();
         setIsOpen(false);
         reset();
         resetErrorVisibility();
       } catch (error) {
-        toast.error(localizeAuthError(error, "Đăng nhập thất bại"));
+        const message = error instanceof Error ? error.message : "Đăng nhập thất bại";
+        toast.error(message);
       }
     } else {
       try {
-        const user = await account.create(
-          "unique()",
-          data.email,
-          data.password,
-          data.name!
-        );
-
-        await database.createDocument(
-          String(process.env.NEXT_PUBLIC_DATABASE_ID),
-          String(process.env.NEXT_PUBLIC_COLLECTION_ID_PROFILE),
-          user.$id,
-          {
-            user_id: user.$id,
-            name: data.name,
-            email: data.email,
-            role: "user",
-          }
-        );
+        await authService.register({
+          email: data.email,
+          password: data.password,
+          name: data.name!,
+        });
 
         toast.success("Đăng ký thành công! Vui lòng đăng nhập.");
         setIsLogin(true);
         reset();
         resetErrorVisibility();
       } catch (error) {
-        toast.error(localizeAuthError(error, "Đăng ký thất bại"));
+        const message = error instanceof Error ? error.message : "Đăng ký thất bại";
+        toast.error(message);
       }
     }
   };
@@ -202,21 +261,11 @@ const LoginRegisterModal: React.FC<{
 
         {isLogin && (
           <>
-            <button
-              type="button"
-              onClick={handleGoogleLogin}
-              disabled={isGoogleLoading}
-              className={`flex w-full items-center justify-center gap-3 rounded-lg border border-black/10 bg-black/80 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-black focus:outline-none focus-visible:ring-2 focus-visible:ring-black/40 ${isGoogleLoading ? "cursor-not-allowed opacity-70" : "cursor-pointer"}`}
-            >
-              {isGoogleLoading ? (
-                "Đang mở Google..."
-              ) : (
-                <>
-                  <FcGoogle className="text-lg" />
-                  <span>Đăng nhập với Google</span>
-                </>
-              )}
-            </button>
+            <div
+              id="google-signin-button-inner"
+              className="w-full min-h-[44px] flex items-center justify-center"
+              style={{ width: '100%' }}
+            />
 
             <div className="flex items-center gap-2">
               <span className="h-px flex-1 bg-gray-300" />
@@ -249,19 +298,13 @@ const LoginRegisterModal: React.FC<{
                   const emojiCheck = validateNoEmoji(value);
                   if (emojiCheck !== true) return emojiCheck;
 
-                  const result = await checkNameExists(value);
-
-                  if (result.exists) {
-                    return "Tên đã tồn tại trong hệ thống";
-                  }
-
-                  if (result.message) {
-                    return result.message;
-                  }
-
                   return true;
                 },
               })}
+              ref={(e) => {
+                registerField("name").ref(e);
+                nameInputRef.current = e;
+              }}
               className="mt-1 w-full p-2 border border-black rounded text-black"
             />
             {getFieldError("name") && (
@@ -290,23 +333,16 @@ const LoginRegisterModal: React.FC<{
                   return "Chỉ chấp nhận email Gmail (@gmail.com)";
                 }
 
-                if (!isLogin) {
-                  const result = await checkEmailExists(trimmedValue);
-
-                  if (result.exists) {
-                    return "Email đã tồn tại trong hệ thống";
-                  }
-
-                  if (result.message) {
-                    return result.message;
-                  }
-                }
                 const emojiCheck = validateNoEmoji(trimmedValue);
                 if (emojiCheck !== true) return emojiCheck;
 
                 return true;
               },
             })}
+            ref={(e) => {
+              registerField("email").ref(e);
+              emailInputRef.current = e;
+            }}
             className="mt-1 w-full p-2 border border-black rounded text-black"
           />
           {getFieldError("email") && (

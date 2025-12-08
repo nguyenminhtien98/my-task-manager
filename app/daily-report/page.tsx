@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect } from "react";
-import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 import DailyReportRoom from "../components/dailyReport/DailyReportRoom";
 import { useProject } from "../context/ProjectContext";
@@ -9,35 +8,74 @@ import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import LoadingSpinner from "../components/loading/LoadingSpinner";
 import MainLayout from "../components/MainLayout";
+import { tokenManager } from "@/lib/axios";
 
 const DailyReportPage = () => {
-  const { user } = useAuth();
+  const { user, isAuthHydrated } = useAuth();
   const { theme } = useTheme();
   const { projects, isProjectsHydrated } = useProject();
   const router = useRouter();
 
+  const hasTokenInMemory = tokenManager.getAccessToken() !== null;
+
   useEffect(() => {
-    if (!isProjectsHydrated) return;
+    if (!isAuthHydrated) return;
+
     if (!user) {
-      router.replace("/?login=1");
+      tokenManager.clearAccessToken();
+      router.replace("/?login=1&redirect=/daily-report");
       return;
     }
+
+    if (!isProjectsHydrated) return;
+
     if (projects.length === 0) {
-      toast.error("Bạn cần tạo dự án trước khi vào phòng báo cáo.");
       router.replace("/");
     }
-  }, [isProjectsHydrated, projects.length, router, user]);
+  }, [isAuthHydrated, user, isProjectsHydrated, projects.length, router]);
 
-  if (!isProjectsHydrated) {
+  if (hasTokenInMemory && !isAuthHydrated) {
+    return null;
+  }
+
+  if (!isAuthHydrated) {
     return (
-      <div className="flex h-screen items-center justify-center bg-black text-white">
-        <LoadingSpinner size={24} thickness={3} label="Đang tải dữ liệu" />
+      <div className="flex h-screen items-center justify-center bg-black">
+        <LoadingSpinner size={24} thickness={3} />
       </div>
     );
   }
 
-  if (!user || projects.length === 0) {
-    return null;
+  if (!user) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-black">
+        <LoadingSpinner size={24} thickness={3} />
+      </div>
+    );
+  }
+
+  if (!isProjectsHydrated) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-black">
+        <LoadingSpinner size={24} thickness={3} />
+      </div>
+    );
+  }
+
+  if (projects.length === 0) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-black">
+        <LoadingSpinner size={24} thickness={3} />
+      </div>
+    );
+  }
+
+  if (projects.length === 0) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-black text-white">
+        <LoadingSpinner size={24} thickness={3} label="Đang chuyển hướng" />
+      </div>
+    );
   }
 
   return (

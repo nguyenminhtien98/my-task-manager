@@ -6,8 +6,6 @@ import { useAuth } from "../../context/AuthContext";
 import Tooltip from "../common/Tooltip";
 import NotificationList from "./NotificationList";
 import { useNotifications } from "../../hooks/useNotifications";
-import { NotificationRecord } from "../../types/Types";
-import { useFeedbackChat } from "../../context/FeedbackChatContext";
 import { cn } from "../../utils/cn";
 import FloatingDropdown from "../common/FloatingDropdown";
 
@@ -18,17 +16,19 @@ const formatUnreadCount = (count: number) => {
 
 interface NotificationBellProps {
   buttonClassName?: string;
+  hook?: ReturnType<typeof useNotifications>;
 }
 
 const NotificationBell: React.FC<NotificationBellProps> = ({
   buttonClassName,
+  hook: externalHook,
 }) => {
   const { user } = useAuth();
-  const hook = useNotifications({ recipientId: user?.id });
-  const { unreadCount, markAllAsRead, markAllAsSeen } = hook;
+  const internalHook = useNotifications({ recipientId: externalHook ? null : user?.id });
+  const hook = externalHook || internalHook;
+  const { unreadCount } = hook;
   const [isOpen, setIsOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
-  const feedbackChat = useFeedbackChat();
 
   const hasUser = Boolean(user);
   const badgeLabel = useMemo(
@@ -42,25 +42,15 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
     }
   }, [hasUser]);
 
-  const handleAction = (actionKey: string, _notification: NotificationRecord) => {
-    void _notification;
-    if (actionKey === "open-feedback") {
-      feedbackChat.open();
-      setIsOpen(false);
-    }
-  };
-
   const openDropdown = useCallback(() => {
     if (isOpen) return;
     setIsOpen(true);
-    void markAllAsSeen();
-  }, [isOpen, markAllAsSeen]);
+  }, [isOpen]);
 
   const closeDropdown = useCallback(() => {
     if (!isOpen) return;
     setIsOpen(false);
-    void markAllAsRead();
-  }, [isOpen, markAllAsRead]);
+  }, [isOpen]);
 
   const toggleDropdown = () => {
     if (isOpen) {
@@ -115,7 +105,6 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
         <NotificationList
           hook={hook}
           isOpen={isOpen}
-          onAction={handleAction}
           panelClassName="w-full"
         />
       </FloatingDropdown>

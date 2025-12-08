@@ -1,25 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Query } from "appwrite";
+import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
-import { database, subscribeToRealtime } from "../../lib/appwrite";
-import { NotificationRecord, NotificationStatus } from "../types/Types";
-import {
-  mapNotificationDocument,
-  RawNotificationDocument,
-} from "../utils/notification";
+import * as notificationService from "../services/notificationService";
+import type { NotificationRecord, BackendNotification } from "../types/Types";
+import { useSocket } from "../context/SocketContext";
 
 const NOTIFICATION_LIMIT = 20;
-
-const getCollectionInfo = () => {
-  const databaseId = process.env.NEXT_PUBLIC_DATABASE_ID;
-  const collectionId = process.env.NEXT_PUBLIC_COLLECTION_ID_NOTIFICATIONS;
-  if (!databaseId || !collectionId) {
-    throw new Error("Thiếu cấu hình collection thông báo");
-  }
-  return { databaseId, collectionId };
-};
 
 export type NotificationFilter = "all" | "unread";
 
@@ -28,318 +15,200 @@ interface UseNotificationsOptions {
 }
 
 export const useNotifications = ({ recipientId }: UseNotificationsOptions) => {
+  const { socket, isConnected } = useSocket();
   const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [isFetchingMore, setIsFetchingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
-  const [filter, setFilter] = useState<NotificationFilter>("all");
-  const cursorRef = useRef<string | null>(null);
-  const isMountedRef = useRef(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
 
-  const resetState = useCallback(() => {
-    setNotifications([]);
-    setIsLoading(false);
-    setIsFetchingMore(false);
-    setHasMore(true);
-    cursorRef.current = null;
-  }, []);
-
-  const fetchNotifications = useCallback(
-    async (mode: "initial" | "next") => {
-      if (!recipientId) return;
-      try {
-        if (mode === "initial") {
-          setIsLoading(true);
-          cursorRef.current = null;
-        } else {
-          if (isFetchingMore || !hasMore) return;
-          setIsFetchingMore(true);
-        }
-        const { databaseId, collectionId } = getCollectionInfo();
-        const queries = [
-          Query.equal("recipient.$id", recipientId),
-          Query.orderDesc("$createdAt"),
-          Query.limit(NOTIFICATION_LIMIT),
-        ];
-        if (mode === "next" && cursorRef.current) {
-          queries.push(Query.cursorAfter(cursorRef.current));
-        }
-        const result = await database.listDocuments(
-          databaseId,
-          collectionId,
-          queries
-        );
-        const docs = result.documents as unknown as RawNotificationDocument[];
-        const mapped = docs.map((doc) => mapNotificationDocument(doc));
-
-        let appendedCount = 0;
-
-        if (mode === "initial") {
-          setNotifications(mapped);
-          appendedCount = mapped.length;
-        } else if (mapped.length > 0) {
-          setNotifications((prev) => {
-            const existingIds = new Set(prev.map((item) => item.id));
-            const newItems = mapped.filter((item) => !existingIds.has(item.id));
-            appendedCount = newItems.length;
-            if (newItems.length === 0) {
-              return prev;
-            }
-            return [...prev, ...newItems];
-          });
-        }
-
-        if (mapped.length > 0) {
-          const last = mapped[mapped.length - 1];
-          cursorRef.current = last.id;
-        }
-
-        if (mode === "initial") {
-          setHasMore(mapped.length === NOTIFICATION_LIMIT);
-        } else {
-          const receivedFullPage = mapped.length === NOTIFICATION_LIMIT;
-          if (!receivedFullPage || appendedCount === 0) {
-            setHasMore(false);
-          } else {
-            setHasMore(true);
-          }
-        }
-      } catch (error) {
-        console.error("Fetch notifications failed:", error);
-        if (mode === "initial") {
-          toast.error("Không thể tải thông báo");
-          setNotifications([]);
-        }
-      } finally {
-        if (mode === "initial") {
-          setIsLoading(false);
-        } else {
-          setIsFetchingMore(false);
-        }
-      }
-    },
-    [hasMore, isFetchingMore, recipientId]
-  );
-
-  useEffect(() => {
-    if (!recipientId) {
-      resetState();
-      return;
-    }
-    let cancelled = false;
-    const load = async () => {
-      try {
-        await fetchNotifications("initial");
-      } catch (error) {
-        if (!cancelled) {
-          console.error(error);
-        }
-      }
-    };
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [fetchNotifications, recipientId, resetState]);
-
-  useEffect(() => {
+  const fetchNotifications = useCallback(async () => {
     if (!recipientId) return;
-    const { databaseId, collectionId } = getCollectionInfo();
-    const channel = `databases.${databaseId}.collections.${collectionId}.documents`;
-    const unsubscribe = subscribeToRealtime([channel], (res: unknown) => {
-      const payload = res as {
-        events?: string[];
-        payload?: {
-          $id?: string;
-          data?: RawNotificationDocument;
-        };
-      };
-      if (!payload?.events || payload.events.length === 0) return;
-      const events = payload.events;
-      let raw =
-        payload.payload?.data ??
-        (payload.payload as unknown as RawNotificationDocument);
-      if (!raw || !raw.$id) {
-        raw = payload.payload as unknown as RawNotificationDocument;
+
+    try {
+      setIsLoading(true);
+      const data = await notificationService.getNotifications(
+        currentPage,
+        NOTIFICATION_LIMIT
+      );
+
+      if (currentPage === 1) {
+        setNotifications(data.notifications);
+      } else {
+        setNotifications((prev) => [...prev, ...data.notifications]);
       }
-      if (!raw || !raw.$id) return;
+      setTotalPages(data.pages);
+    } catch (error) {
+      console.error("Fetch notifications failed:", error);
+      toast.error("Không thể tải thông báo");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [recipientId, currentPage]);
 
-      const docRecipient =
-        typeof raw.recipient === "string" ? raw.recipient : raw.recipient?.$id;
-      if (docRecipient !== recipientId) return;
+  const fetchUnreadCount = useCallback(async () => {
+    if (!recipientId) return;
 
-      if (events.some((event) => event.endsWith(".delete"))) {
-        setNotifications((prev) =>
-          prev.filter((notification) => notification.id !== raw.$id)
-        );
-        return;
-      }
-
-      const mapped = mapNotificationDocument(raw);
-      if (events.some((event) => event.endsWith(".create"))) {
-        setNotifications((prev) => {
-          const exists = prev.some((item) => item.id === mapped.id);
-          if (exists) return prev;
-          return [mapped, ...prev];
-        });
-      } else if (events.some((event) => event.endsWith(".update"))) {
-        setNotifications((prev) =>
-          prev.map((item) => (item.id === mapped.id ? mapped : item))
-        );
-      }
-    });
-
-    return () => {
-      unsubscribe();
-    };
+    try {
+      const count = await notificationService.getUnreadCount();
+      setUnreadCount(count);
+    } catch (error) {
+      console.error("Fetch unread count failed:", error);
+    }
   }, [recipientId]);
 
   useEffect(() => {
-    isMountedRef.current = true;
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, []);
-
-  const unreadCount = useMemo(
-    () => notifications.filter((item) => item.status === "unread").length,
-    [notifications]
-  );
-
-  const filteredNotifications = useMemo(() => {
-    if (filter === "unread") {
-      return notifications.filter((item) => item.status === "unread");
+    if (!recipientId) {
+      setNotifications([]);
+      setUnreadCount(0);
+      return;
     }
-    return notifications;
-  }, [filter, notifications]);
 
-  const markNotificationStatus = useCallback(
-    async (notificationId: string, status: NotificationStatus) => {
-      try {
-        const { databaseId, collectionId } = getCollectionInfo();
-        const payload =
-          status === "read"
-            ? {
-                status,
-                readAt: new Date().toISOString(),
-              }
-            : {
-                status,
-              };
-        await database.updateDocument(
-          databaseId,
-          collectionId,
-          notificationId,
-          payload
-        );
-        setNotifications((prev) =>
-          prev.map((item) =>
-            item.id === notificationId
-              ? {
-                  ...item,
-                  status,
-                  readAt:
-                    status === "read" ? new Date().toISOString() : item.readAt,
-                }
-              : item
-          )
-        );
-      } catch (error) {
-        console.error("Không thể cập nhật trạng thái thông báo:", error);
-        toast.error("Không thể cập nhật trạng thái thông báo");
-      }
-    },
-    []
-  );
+    fetchUnreadCount();
+  }, [recipientId, fetchUnreadCount]);
 
-  const markNotificationsAsSeen = useCallback(
-    async (notificationIds: string[]) => {
-      if (notificationIds.length === 0) return;
+  useEffect(() => {
+    if (!socket || !isConnected || !recipientId) return;
+
+    const handleNewNotification = (data: BackendNotification) => {
       try {
-        const { databaseId, collectionId } = getCollectionInfo();
-        const seenAt = new Date().toISOString();
-        await Promise.all(
-          notificationIds.map((id) =>
-            database.updateDocument(databaseId, collectionId, id, {
-              seenAt,
-            })
-          )
-        );
-        setNotifications((prev) =>
-          prev.map((item) =>
-            notificationIds.includes(item.id)
-              ? {
-                  ...item,
-                  seenAt,
-                }
-              : item
-          )
-        );
+        const mapped = notificationService.mapNotificationToRecord(data);
+
+        setNotifications((prev) => {
+          if (prev.some((n) => n.id === mapped.id)) return prev;
+          return [mapped, ...prev];
+        });
+
+        if (!mapped.readAt) {
+          setUnreadCount((prev) => prev + 1);
+        }
       } catch (error) {
-        console.error("Không thể cập nhật seenAt thông báo:", error);
+        console.error("Failed to process new notification:", error);
+        void fetchNotifications();
+        void fetchUnreadCount();
       }
-    },
-    []
-  );
+    };
+
+    const handleRelatedEvent = () => {
+      setTimeout(() => {
+        void fetchUnreadCount();
+      }, 1000);
+    };
+
+    socket.on("notification:new", handleNewNotification);
+    socket.on("notifications:new", handleNewNotification);
+    socket.on("notification:created", handleNewNotification);
+
+    const handleProjectUpdated = () => handleRelatedEvent();
+    const handleProjectCreated = () => handleRelatedEvent();
+    const handleProjectDeleted = () => handleRelatedEvent();
+    const handleProjectReopened = () => handleRelatedEvent();
+    const handleProjectClosed = () => handleRelatedEvent();
+    const handleTaskCreated = () => handleRelatedEvent();
+    const handleTaskUpdated = () => handleRelatedEvent();
+    const handleTaskDeleted = () => handleRelatedEvent();
+
+    socket.on("project:updated", handleProjectUpdated);
+    socket.on("project:created", handleProjectCreated);
+    socket.on("project:deleted", handleProjectDeleted);
+    socket.on("project:reopened", handleProjectReopened);
+    socket.on("project:closed", handleProjectClosed);
+    socket.on("task:created", handleTaskCreated);
+    socket.on("task:updated", handleTaskUpdated);
+    socket.on("task:deleted", handleTaskDeleted);
+
+    return () => {
+      socket.off("notification:new", handleNewNotification);
+      socket.off("notifications:new", handleNewNotification);
+      socket.off("notification:created", handleNewNotification);
+      socket.off("project:updated", handleProjectUpdated);
+      socket.off("project:created", handleProjectCreated);
+      socket.off("project:deleted", handleProjectDeleted);
+      socket.off("project:reopened", handleProjectReopened);
+      socket.off("project:closed", handleProjectClosed);
+      socket.off("task:created", handleTaskCreated);
+      socket.off("task:updated", handleTaskUpdated);
+      socket.off("task:deleted", handleTaskDeleted);
+    };
+  }, [
+    socket,
+    isConnected,
+    recipientId,
+    fetchNotifications,
+    fetchUnreadCount,
+    unreadCount,
+  ]);
+
+  useEffect(() => {
+    if (currentPage > 1) {
+      void fetchNotifications();
+    }
+  }, [currentPage, fetchNotifications]);
 
   const markAllAsRead = useCallback(async () => {
-    const unreadIds = notifications
-      .filter((item) => item.status === "unread")
-      .map((item) => item.id);
-    if (unreadIds.length === 0) return;
     try {
-      const { databaseId, collectionId } = getCollectionInfo();
-      const readAt = new Date().toISOString();
-      await Promise.all(
-        unreadIds.map((id) =>
-          database.updateDocument(databaseId, collectionId, id, {
-            status: "read",
-            readAt,
-          })
-        )
+      await notificationService.markAllAsRead();
+      setNotifications((prev) =>
+        prev.map((item) => ({
+          ...item,
+          status: "read" as const,
+          readAt: new Date().toISOString(),
+        }))
       );
+      setUnreadCount(0);
+    } catch (error) {
+      console.error("Mark all as read failed:", error);
+      toast.error("Không thể đánh dấu đã đọc");
+    }
+  }, []);
+
+  const deleteNotification = useCallback(async (id: string) => {
+    try {
+      await notificationService.deleteNotification(id);
+      setNotifications((prev) => prev.filter((item) => item.id !== id));
+      toast.success("Đã xóa thông báo");
+    } catch (error) {
+      console.error("Delete notification failed:", error);
+      toast.error("Không thể xóa thông báo");
+    }
+  }, []);
+
+  const hasMore = currentPage < totalPages;
+
+  const fetchNextPage = useCallback(() => {
+    if (hasMore && !isLoading) {
+      setCurrentPage((prev) => prev + 1);
+    }
+  }, [hasMore, isLoading]);
+
+  const markNotificationStatus = useCallback(
+    async (notificationId: string, status: "read" | "unread") => {
       setNotifications((prev) =>
         prev.map((item) =>
-          unreadIds.includes(item.id)
+          item.id === notificationId
             ? {
                 ...item,
-                status: "read",
-                readAt,
+                status,
+                readAt:
+                  status === "read" ? new Date().toISOString() : item.readAt,
               }
             : item
         )
       );
-    } catch (error) {
-      console.error("Không thể đánh dấu đã đọc:", error);
-      toast.error("Không thể đánh dấu đã đọc");
-    }
-  }, [notifications]);
-
-  const markAllAsSeen = useCallback(async () => {
-    const unseenIds = notifications
-      .filter((item) => !item.seenAt)
-      .map((item) => item.id);
-    await markNotificationsAsSeen(unseenIds);
-  }, [markNotificationsAsSeen, notifications]);
-
-  const fetchNextPage = useCallback(async () => {
-    await fetchNotifications("next");
-  }, [fetchNotifications]);
+    },
+    []
+  );
 
   return {
     notifications,
-    filteredNotifications,
     isLoading,
-    isFetchingMore,
-    hasMore,
+    isFetchingMore: isLoading && currentPage > 1,
     unreadCount,
-    filter,
-    setFilter,
+    hasMore,
     fetchNextPage,
-    markNotificationStatus,
     markAllAsRead,
-    markAllAsSeen,
-    markNotificationsAsSeen,
-    reload: () => fetchNotifications("initial"),
+    markNotificationStatus,
+    deleteNotification,
+    reload: fetchNotifications,
   };
 };

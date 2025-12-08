@@ -1,4 +1,4 @@
-import { Task } from "../types/Types";
+import { Task, TaskFilterParams } from "../types/Types";
 
 export type PriorityKey = "low" | "medium" | "high";
 export type IssueTypeKey = "feature" | "bug" | "improvement";
@@ -43,15 +43,59 @@ export const countActiveTaskFilters = (filters: TaskFiltersState): number => {
   return count;
 };
 
-const getAssigneeId = (
-  assignee: Task["assignee"]
-): string | null => {
+export const convertFiltersToAPIParams = (
+  filters: TaskFiltersState,
+  options?: { currentUserId?: string | null }
+): TaskFilterParams => {
+  const params: TaskFilterParams = {};
+
+  if (filters.noAssignee) {
+    params.noAssignee = true;
+  }
+  if (filters.myTasks && options?.currentUserId) {
+    params.myTasks = true;
+  }
+  if (filters.selectedMembers.length > 0) {
+    params.selectedMembers = filters.selectedMembers;
+  }
+
+  if (filters.noDueDate) {
+    params.noDueDate = true;
+  }
+  if (filters.overdue) {
+    params.overdue = true;
+  }
+
+  const activePriorities = (
+    Object.keys(filters.priorities) as PriorityKey[]
+  ).filter((key) => filters.priorities[key]);
+  if (activePriorities.length > 0) {
+    params.priorities = activePriorities.map(priorityKeyToValue) as (
+      | "low"
+      | "medium"
+      | "high"
+    )[];
+  }
+
+  const activeIssueTypes = (
+    Object.keys(filters.issueTypes) as IssueTypeKey[]
+  ).filter((key) => filters.issueTypes[key]);
+  if (activeIssueTypes.length > 0) {
+    params.issueTypes = activeIssueTypes.map(issueTypeKeyToValue) as (
+      | "task"
+      | "bug"
+      | "feature"
+      | "improvement"
+    )[];
+  }
+
+  return params;
+};
+
+const getAssigneeId = (assignee: Task["assignee"]): string | null => {
   if (!assignee) return null;
-  if (typeof assignee === "string") return assignee.trim() || null;
   if (typeof assignee === "object") {
-    const maybe = assignee as Record<string, unknown>;
-    if (typeof maybe.$id === "string") return maybe.$id;
-    if (typeof maybe.user_id === "string") return maybe.user_id;
+    return assignee._id || null;
   }
   return null;
 };

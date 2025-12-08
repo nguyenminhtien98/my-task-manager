@@ -1,56 +1,20 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React from "react";
 import AvatarUser from "../common/AvatarUser";
 import BrandOrbHeaderIcon from "../common/LogoComponent";
-import {
-  NotificationMessageSegment,
-  NotificationRecord,
-} from "../../types/Types";
+import { NotificationRecord } from "../../types/Types";
 import { formatRelativeTimeFromNow } from "../../utils/date";
-import { buildNotificationMessageFromRecord } from "../../utils/notificationMessages";
 
 interface NotificationCardProps {
   notification: NotificationRecord;
   onClick?: (notification: NotificationRecord) => void;
-  onAction?: (actionKey: string, notification: NotificationRecord) => void;
   isExpanded?: boolean;
 }
-
-const renderSegment = (
-  segment: NotificationMessageSegment,
-  notification: NotificationRecord,
-  index: number,
-  onAction?: (actionKey: string, notification: NotificationRecord) => void
-) => {
-  if (segment.type === "action") {
-    return (
-      <button
-        key={`${segment.content}-${segment.actionKey ?? index}`}
-        type="button"
-        className="text-emerald-600 underline underline-offset-2 hover:text-emerald-500"
-        onClick={(event) => {
-          event.stopPropagation();
-          if (segment.actionKey && onAction) {
-            onAction(segment.actionKey, notification);
-          }
-        }}
-      >
-        {segment.content}
-      </button>
-    );
-  }
-  return (
-    <span key={`segment-${index}`} className="whitespace-pre-wrap">
-      {segment.content}
-    </span>
-  );
-};
 
 const NotificationCard: React.FC<NotificationCardProps> = ({
   notification,
   onClick,
-  onAction,
   isExpanded = false,
 }) => {
   const actor = notification.actor;
@@ -61,15 +25,7 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
 
   const isSystemNotification = notification.type.startsWith("system.");
 
-  const displayMessage = useMemo(() => {
-    if (isExpanded) {
-      return buildNotificationMessageFromRecord(notification);
-    }
-    return buildNotificationMessageFromRecord(notification, {
-      truncateTaskTitleLength: 15,
-      truncateNameLength: 10,
-    });
-  }, [notification, isExpanded]);
+  const displayMessage = notification.message || "Bạn có một thông báo mới.";
 
   return (
     <div
@@ -82,9 +38,8 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
           onClick?.(notification);
         }
       }}
-      className={`flex w-full cursor-pointer items-start gap-3 rounded-lg px-3 py-2 transition hover:bg-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-black/40 ${
-        isExpanded ? "bg-black/5" : ""
-      }`}
+      className={`flex w-full cursor-pointer items-start gap-3 rounded-lg px-3 py-2 transition hover:bg-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-black/40 ${isExpanded ? "bg-black/5" : ""
+        }`}
     >
       <div className="flex-shrink-0">
         {isSystemNotification ? (
@@ -104,13 +59,10 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
 
       <div className={`min-w-0 ${showUnreadDot ? "flex-1" : "flex-1"}`}>
         <div
-          className={`text-sm text-[#111827] ${
-            isExpanded ? "" : "line-clamp-2"
-          }`}
+          className={`text-sm text-[#111827] ${isExpanded ? "" : "line-clamp-2"
+            }`}
         >
-          {displayMessage.segments.map((segment, index) =>
-            renderSegment(segment, notification, index, onAction)
-          )}
+          {displayMessage}
         </div>
         <div className="mt-1 text-xs text-gray-500">{createdAtLabel}</div>
       </div>

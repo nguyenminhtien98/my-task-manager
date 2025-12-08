@@ -20,6 +20,7 @@ import MobileHeader from "./header/MobileHeader";
 import MobileDrawer from "./header/MobileDrawer";
 import MobileFooterBar from "./header/MobileFooterBar";
 import { useRouter } from "next/navigation";
+import { useNotifications } from "../hooks/useNotifications";
 
 const Header: React.FC<HeaderProps> = ({
   onCreateTask,
@@ -30,8 +31,18 @@ const Header: React.FC<HeaderProps> = ({
   isProjectModalOpen = false,
 }) => {
   const { user, logout } = useAuth();
-  const { projects, currentProject, setCurrentProject, setCurrentProjectRole } =
-    useProject();
+  const notificationsHook = useNotifications({ recipientId: user?.id });
+  const {
+    projects,
+    currentProject,
+    setCurrentProject,
+    setCurrentProjectRole,
+    currentProjectRole,
+    hasMoreProjects,
+    isLoadingMoreProjects,
+    loadMoreProjects,
+  } = useProject();
+
   const [showMenu, setShowMenu] = useState(false);
   const [themeModalOpen, setThemeModalOpen] = useState(false);
   const [isEditProfileModalOpen, setIsEditProfileModalOpen] = useState(false);
@@ -161,14 +172,14 @@ const Header: React.FC<HeaderProps> = ({
     (project: Project) => {
       setCurrentProject(project);
       setCurrentProjectRole(
-        project.leader.$id === user?.id ? "leader" : "user"
+        project.leader._id === user?.id ? "leader" : "user"
       );
       setTheme(project.themeColor || DEFAULT_THEME_GRADIENT);
     },
     [setCurrentProject, setCurrentProjectRole, setTheme, user?.id]
   );
 
-  const visibleMembers = projectMembers.slice(0, 3);
+  const visibleMembers = projectMembers.slice(0, 3) as EnrichedProjectMember[];
   const remainingMembers = Math.max(
     projectMembers.length - visibleMembers.length,
     0
@@ -267,15 +278,19 @@ const Header: React.FC<HeaderProps> = ({
       <DesktopHeader
         user={user}
         currentProject={currentProject}
+        currentProjectRole={currentProjectRole}
         projects={projects}
         isMembersLoading={isMembersLoading}
         visibleMembers={visibleMembers}
         remainingMembers={remainingMembers}
-        projectMembers={projectMembers}
+        projectMembers={projectMembers as EnrichedProjectMember[]}
         onMemberClick={handleHeaderMemberClick}
         onOpenMembersModal={openMembersModal}
         onProjectSelect={handleProjectSelect}
         onCreateProject={onCreateProject}
+        hasMoreProjects={hasMoreProjects}
+        isLoadingMoreProjects={isLoadingMoreProjects}
+        onLoadMoreProjects={loadMoreProjects}
         onCreateTask={onCreateTask}
         isProjectClosed={isProjectClosed}
         onLoginClick={onLoginClick}
@@ -289,6 +304,7 @@ const Header: React.FC<HeaderProps> = ({
         currentTheme={currentTheme}
         onOpenReportRoom={handleOpenReportRoom}
         canOpenReportRoom={canOpenReportRoom}
+        notificationsHook={notificationsHook}
       />
 
       <MobileHeader
@@ -301,6 +317,9 @@ const Header: React.FC<HeaderProps> = ({
         onAddProject={onCreateProject}
         onOpenReportRoom={handleOpenReportRoom}
         canOpenReportRoom={canOpenReportRoom}
+        hasMoreProjects={hasMoreProjects}
+        isLoadingMoreProjects={isLoadingMoreProjects}
+        onLoadMoreProjects={loadMoreProjects}
       />
 
       <MobileDrawer
@@ -308,6 +327,7 @@ const Header: React.FC<HeaderProps> = ({
         isOpen={isMobileDrawerOpen}
         onClose={closeMobileDrawer}
         currentProject={currentProject}
+        currentProjectRole={currentProjectRole}
         onOpenProfile={handleOpenProfileSection}
         onOpenProjectManager={handleOpenProjectManager}
         onOpenTheme={handleOpenThemeModal}
@@ -326,6 +346,7 @@ const Header: React.FC<HeaderProps> = ({
         onMenuClick={handleOpenDrawer}
         isMenuOpen={isMobileDrawerOpen}
         onMenuClose={closeMobileDrawer}
+        notificationsHook={notificationsHook}
       />
 
       <ProjectMembersModal

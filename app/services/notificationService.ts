@@ -1,288 +1,111 @@
-"use client";
-
-import { database } from "../../lib/appwrite";
-import { Permission, Role, Query, Models } from "appwrite";
-import {
-  NotificationMetadata,
+import axiosInstance, { ApiResponse } from "@/lib/axios";
+import type {
+  NotificationRecord,
+  NotificationType,
   NotificationScope,
   NotificationStatus,
-  NotificationType,
+  BasicProfile,
+  BackendNotification,
+  GetNotificationsResponse,
 } from "../types/Types";
-import { buildNotificationMessage } from "../utils/notificationMessages";
-import { NotificationMessageContext } from "../utils/notificationMessages";
 
-const getIds = () => {
-  const databaseId = process.env.NEXT_PUBLIC_DATABASE_ID;
-  const collectionId = process.env.NEXT_PUBLIC_COLLECTION_ID_NOTIFICATIONS;
-  if (!databaseId || !collectionId) {
-    throw new Error("Thiếu cấu hình Appwrite cho thông báo");
-  }
-  return { databaseId, collectionId };
-};
+export const mapNotificationToRecord = (
+  notification: BackendNotification
+): NotificationRecord => {
+  const actor: BasicProfile | null = notification.actor
+    ? {
+        _id: notification.actor._id,
+        name: notification.actor.name,
+        email: notification.actor.email,
+        avatarUrl: notification.actor.avatarUrl,
+      }
+    : null;
 
-const serializeMetadata = (metadata?: NotificationMetadata | null) => {
-  if (!metadata) return undefined;
-  try {
-    const serialized = JSON.stringify(metadata);
-    return serialized.length > 5000 ? serialized.slice(0, 5000) : serialized;
-  } catch (error) {
-    console.warn("Không thể serialize metadata thông báo:", error);
-    return undefined;
-  }
-};
+  let scope: NotificationScope = "system";
+  if (notification.type.startsWith("profile.")) scope = "profile";
+  else if (notification.type.startsWith("project.")) scope = "project";
+  else if (notification.type.startsWith("task.")) scope = "task";
 
-const buildNotificationPayload = (
-  params: CreateNotificationParams,
-  message: string,
-  serializedMetadata?: string
-) => {
-  const {
-    recipientId,
-    actorId,
-    type,
+  return {
+    id: notification._id,
+    type: notification.type as NotificationType,
     scope,
-    projectId,
-    taskId,
-    title,
-    status,
-  } = params;
-
-  const payload: Record<string, unknown> = {
-    type,
-    scope,
-    status,
-    recipient: recipientId,
-    message,
+    status: (notification.isRead ? "read" : "unread") as NotificationStatus,
+    title: notification.title || null,
+    message: notification.message,
+    metadata: {},
+    createdAt: notification.createdAt,
+    readAt: notification.readAt || null,
+    actor,
+    recipient: null,
+    project: notification.project
+      ? { _id: notification.project, name: null }
+      : null,
+    task: notification.task ? { _id: notification.task, title: null } : null,
   };
-
-  if (actorId) payload.actor = actorId;
-  if (projectId) payload.project = projectId;
-  if (taskId) payload.task = taskId;
-  if (title) payload.title = title;
-  if (serializedMetadata) {
-    payload.metadata = serializedMetadata;
-  }
-
-  return payload;
 };
 
-export interface CreateNotificationParams {
-  recipientId: string;
-  actorId?: string | null;
-  type: NotificationType;
-  scope: NotificationScope;
-  metadata?: NotificationMetadata | null;
-  projectId?: string | null;
-  taskId?: string | null;
-  title?: string | null;
-  status?: NotificationStatus;
-  message?: string | null;
-}
-
-const resolveNotificationMessage = (
-  params: CreateNotificationParams
-): string => {
-  if (params.message && params.message.trim().length > 0) {
-    return params.message;
-  }
-  try {
-    const context: NotificationMessageContext = {
-      type: params.type,
-      metadata: params.metadata ?? undefined,
-    };
-
-    const meta = params.metadata;
-    if (meta) {
-      if (typeof meta.actorName === "string") {
-        context.actorName = meta.actorName;
-      }
-      if (typeof meta.recipientName === "string") {
-        context.recipientName = meta.recipientName;
-      }
-      if (typeof meta.projectName === "string") {
-        context.projectName = meta.projectName;
-      }
-      if (typeof meta.taskTitle === "string") {
-        context.taskTitle = meta.taskTitle;
-      }
-    }
-
-    return buildNotificationMessage(context).plainText;
-  } catch (error) {
-    console.warn("Không thể tạo message thông báo:", error);
-    return "";
-  }
-};
-
-export const createNotification = async ({
-  recipientId,
-  actorId,
-  type,
-  scope,
-  metadata,
-  projectId,
-  taskId,
-  title,
-  status = "unread",
-  message,
-}: CreateNotificationParams) => {
-  if (!recipientId) return null;
-  getIds();
-  try {
-    const normalizedParams: CreateNotificationParams = {
-      recipientId,
-      actorId,
-      type,
-      scope,
-      metadata,
-      projectId,
-      taskId,
-      title,
-      status,
-      message,
-    };
-
-    const finalMessage = resolveNotificationMessage(normalizedParams);
-    const serializedMetadata = serializeMetadata(metadata);
-
-    const payload = buildNotificationPayload(
-      { ...normalizedParams, message: finalMessage },
-      finalMessage,
-      serializedMetadata
-    );
-
-    const permissions = [
-      Permission.read(Role.user(recipientId)),
-      Permission.update(Role.user(recipientId)),
-    ];
-
-    const response = await fetch("/api/notifications", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ payload, permissions }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(errorText || "Create notification failed");
-    }
-
-    return await response.json();
-  } catch (error) {
-    console.error("Tạo thông báo thất bại:", error);
-    return null;
-  }
-};
-
-export const createNotifications = async (
-  entries: CreateNotificationParams[]
-) => {
-  if (!entries.length) return;
-  await Promise.all(entries.map((entry) => createNotification(entry)));
-};
-
-export interface DailyReportReminderParams {
-  recipientIds: string[];
-  projectId: string;
-  projectName?: string;
-  remindTime?: string;
-  message?: string;
-}
-
-export const sendDailyReportReminders = async (
-  params: DailyReportReminderParams
-) => {
-  const { recipientIds, projectId, projectName, remindTime, message } = params;
-  if (!recipientIds.length || !projectId) return;
-  await createNotifications(
-    recipientIds.map((recipientId) => ({
-      recipientId,
-      type: "dailyReport.reminder",
-      scope: "project",
-      projectId,
-      metadata: {
-        projectName,
-        remindTime,
-      },
-      message,
-    }))
-  );
-};
-
-interface ProjectMembersOptions {
-  includeLeader?: boolean;
-}
-
-const getProjectMembershipCollection = () => {
-  const membershipsCollectionId =
-    process.env.NEXT_PUBLIC_COLLECTION_ID_PROJECT_MEMBERSHIPS;
-  if (!membershipsCollectionId) {
-    throw new Error("Thiếu collection thành viên dự án");
-  }
-  return membershipsCollectionId;
-};
-
-export const getProjectMemberIds = async (
-  projectId: string,
-  options?: ProjectMembersOptions
-) => {
-  if (!projectId) return [];
-  try {
-    const { databaseId } = getIds();
-    const membershipsCollectionId = getProjectMembershipCollection();
-    const response = await database.listDocuments(
-      databaseId,
-      membershipsCollectionId,
-      [Query.equal("project", projectId), Query.limit(200)]
-    );
-
-    const memberIds = new Set<string>();
-    response.documents.forEach((doc) => {
-      const membership = doc as Models.Document & {
-        user?: string | { $id?: string };
+export const getNotifications = async (
+  page: number = 1,
+  limit: number = 50
+): Promise<GetNotificationsResponse> => {
+  const response = await axiosInstance.get<
+    ApiResponse<BackendNotification[]> & {
+      pagination: {
+        page: number;
+        limit: number;
+        total: number;
+        totalPages: number;
       };
-      if (typeof membership.user === "string") {
-        memberIds.add(membership.user);
-      } else if (membership.user && membership.user.$id) {
-        memberIds.add(membership.user.$id);
-      }
-    });
-
-    if (options?.includeLeader === false) {
-      return Array.from(memberIds);
     }
-    return Array.from(memberIds);
-  } catch (error) {
-    console.error("Không thể lấy danh sách thành viên dự án:", error);
-    return [];
+  >("/notifications", {
+    params: { page, limit },
+  });
+
+  const backendData = response.data.data;
+  const pagination = response.data.pagination;
+
+  if (!Array.isArray(backendData)) {
+    console.error("Invalid backend response - expected array:", backendData);
+    return {
+      notifications: [],
+      total: 0,
+      page: 1,
+      pages: 1,
+    };
   }
+
+  const notifications = backendData
+    .map((item) => {
+      try {
+        return mapNotificationToRecord(item);
+      } catch (error) {
+        console.error("Failed to map notification:", item, error);
+        return null;
+      }
+    })
+    .filter((item): item is NotificationRecord => item !== null);
+
+  return {
+    notifications,
+    total: pagination?.total || 0,
+    page: pagination?.page || 1,
+    pages: pagination?.totalPages || 1,
+  };
 };
 
-export const ensureWelcomeNotification = async (
-  recipientId: string,
-  recipientName?: string
-) => {
-  if (!recipientId) return;
-  try {
-    const { databaseId, collectionId } = getIds();
-    const existing = await database.listDocuments(databaseId, collectionId, [
-      Query.equal("recipient", recipientId),
-      Query.equal("type", "system.welcome"),
-      Query.limit(1),
-    ]);
-    if (existing.total > 0) return;
-    await createNotification({
-      recipientId,
-      actorId: null,
-      type: "system.welcome",
-      scope: "system",
-      metadata: {
-        recipientName: recipientName ?? "",
-      },
-    });
-  } catch (error) {
-    console.error("Không thể tạo thông báo chào mừng:", error);
-  }
+export const getUnreadCount = async (): Promise<number> => {
+  const response = await axiosInstance.get<ApiResponse<{ count: number }>>(
+    "/notifications/unread/count"
+  );
+
+  return response.data.data.count;
+};
+
+export const markAllAsRead = async (): Promise<void> => {
+  await axiosInstance.put("/notifications/read-all");
+};
+
+export const deleteNotification = async (id: string): Promise<void> => {
+  await axiosInstance.delete(`/notifications/${id}`);
 };

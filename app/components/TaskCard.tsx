@@ -17,8 +17,6 @@ import {
 } from "react-icons/fc";
 import "../globals.css";
 
-const looksLikeAppwriteId = (value: string) => /^[a-zA-Z0-9]{15,}$/i.test(value);
-
 function formatDateDisplay(dateString: string): string {
   if (!dateString) return "";
   const date = new Date(dateString);
@@ -44,7 +42,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
     transition,
     isDragging,
   } = useSortable({
-    id: task.id,
+    id: task._id,
     data: { status: task.status },
     disabled: isDisabled,
   });
@@ -59,18 +57,18 @@ const TaskCard: React.FC<TaskCardProps> = ({
     : style;
 
   const IssueIcon =
-    task.issueType === "Bug"
+    task.issueType === "bug"
       ? () => <IoBugOutline className="text-red-500" />
-      : task.issueType === "Improvement"
-      ? () => <FaLightbulb className="text-green-500" />
-      : () => <FaStar className="text-blue-500" />;
+      : task.issueType === "improvement"
+        ? () => <FaLightbulb className="text-green-500" />
+        : () => <FaStar className="text-blue-500" />;
 
   const PriorityIcon =
-    task.priority === "Medium"
+    task.priority === "medium"
       ? () => <FcMediumPriority />
-      : task.priority === "High"
-      ? () => <FcHighPriority />
-      : () => <FcLowPriority />;
+      : task.priority === "high"
+        ? () => <FcHighPriority />
+        : () => <FcLowPriority />;
 
   const assigneeDisplay = React.useMemo(() => {
     if (
@@ -82,17 +80,15 @@ const TaskCard: React.FC<TaskCardProps> = ({
     const a = task.assignee as unknown;
     if (!a) return "Chưa set";
     if (typeof a === "string") {
-      return looksLikeAppwriteId(a) ? "Đang cập nhật" : a.trim() || "Chưa set";
+      return a.trim() || "Chưa set";
     }
     if (typeof a === "object") {
-      const profile = a as { name?: string; $id?: string };
+      const profile = a as { name?: string; _id?: string };
       if (profile.name && profile.name.trim().length > 0) {
         return profile.name;
       }
-      if (profile.$id) {
-        return looksLikeAppwriteId(profile.$id)
-          ? "Đang cập nhật"
-          : profile.$id;
+      if (profile._id) {
+        return profile._id;
       }
     }
     return "Chưa set";
@@ -108,17 +104,15 @@ const TaskCard: React.FC<TaskCardProps> = ({
     const c = task.completedBy as unknown;
     if (!c) return undefined;
     if (typeof c === "string") {
-      return looksLikeAppwriteId(c) ? "Đang cập nhật" : c.trim() || undefined;
+      return c.trim() || undefined;
     }
     if (typeof c === "object") {
-      const profile = c as { name?: string; $id?: string };
+      const profile = c as { name?: string; _id?: string };
       if (profile.name && profile.name.trim().length > 0) {
         return profile.name;
       }
-      if (profile.$id) {
-        return looksLikeAppwriteId(profile.$id)
-          ? "Đang cập nhật"
-          : profile.$id;
+      if (profile._id) {
+        return profile._id;
       }
     }
     return undefined;
@@ -129,11 +123,9 @@ const TaskCard: React.FC<TaskCardProps> = ({
     : "";
   const endDateDisplay = task.endDate ? formatDateDisplay(task.endDate) : "";
   const showDateBlock = Boolean(startDateDisplay || endDateDisplay);
-  const isRemovedFallback = assigneeDisplay === "Đang cập nhật";
-  const assigneeText =
-    task.assigneeRemoved || isRemovedFallback
-      ? "Thành viên đã bị xóa"
-      : assigneeDisplay;
+  const assigneeText = task.assigneeRemoved
+    ? `${assigneeDisplay} (Đã bị xóa khỏi dự án)`
+    : assigneeDisplay;
   return (
     <div
       ref={setNodeRef}
@@ -141,9 +133,8 @@ const TaskCard: React.FC<TaskCardProps> = ({
       {...(isDraggable ? attributes : {})}
       {...(isDraggable ? listeners : {})}
       onClick={onClick}
-      className={`${highlightClass} p-2 rounded shadow ${
-        isDraggable ? "cursor-grab" : "cursor-default select-none"
-      } ${customClass}`}
+      className={`${highlightClass} p-2 rounded shadow ${isDraggable ? "cursor-grab" : "cursor-default select-none"
+        } ${customClass}`}
     >
       <div className="flex justify-between items-center mb-1">
         <span className="text-xs text-sub">TASK-{task.seq}</span>
@@ -189,9 +180,8 @@ const TaskCard: React.FC<TaskCardProps> = ({
           <LuCircleUser className="text-[#40a8f6]" />
         </span>
         <span
-          className={`overflow-hidden whitespace-nowrap text-ellipsis ${
-            task.assigneeRemoved || isRemovedFallback ? "text-red-500" : ""
-          }`}
+          className={`overflow-hidden whitespace-nowrap text-ellipsis ${task.assigneeRemoved ? "text-red-500" : ""
+            }`}
         >
           {assigneeText}
         </span>

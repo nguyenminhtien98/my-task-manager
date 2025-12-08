@@ -1,8 +1,10 @@
 "use client";
 
-import React, { type CSSProperties, type ReactNode } from "react";
+import React, { type CSSProperties, type ReactNode, useState, useEffect } from "react";
 import Image from "next/image";
 import Tooltip from "./Tooltip";
+import Skeleton from "./Skeleton";
+import { cn } from "../../utils/cn";
 
 interface AvatarUserProps {
   name: string;
@@ -62,6 +64,12 @@ const AvatarUser: React.FC<AvatarUserProps> = ({
   children,
   status,
 }) => {
+  const [isImageLoaded, setIsImageLoaded] = useState(false);
+
+  useEffect(() => {
+    setIsImageLoaded(false);
+  }, [avatarUrl]);
+
   const initial = getInitial(name);
   const palette = getPaletteForInitial(initial);
   const fontSize = Math.max(Math.round(size * 0.4), 12);
@@ -90,13 +98,22 @@ const AvatarUser: React.FC<AvatarUserProps> = ({
   };
 
   const content = avatarUrl ? (
-    <Image
-      src={avatarUrl}
-      alt={name}
-      width={size}
-      height={size}
-      className="h-full w-full object-cover"
-    />
+    <>
+      {!isImageLoaded && (
+        <Skeleton className="absolute inset-0 h-full w-full rounded-full" />
+      )}
+      <Image
+        src={avatarUrl}
+        alt={name}
+        width={size}
+        height={size}
+        className={cn(
+          "h-full w-full object-cover transition-opacity duration-300",
+          !isImageLoaded ? "opacity-0" : "opacity-100"
+        )}
+        onLoad={() => setIsImageLoaded(true)}
+      />
+    </>
   ) : (
     initial
   );
@@ -111,7 +128,7 @@ const AvatarUser: React.FC<AvatarUserProps> = ({
       style={elementStyle}
     >
       <span
-        className="flex h-full w-full items-center justify-center overflow-hidden rounded-full"
+        className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-full"
         style={innerStyle}
       >
         {content}

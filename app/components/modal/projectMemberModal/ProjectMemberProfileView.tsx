@@ -2,7 +2,7 @@
 
 import React from "react";
 import AvatarUser from "../../common/AvatarUser";
-import { ProjectMemberProfile } from "../../../types/Types";
+import { ProjectMemberProfile, EnrichedProjectMember } from "../../../types/Types";
 import Button from "../../common/Button";
 import { formatVietnameseDateTime } from "@/app/utils/date";
 
@@ -14,7 +14,7 @@ interface TaskStats {
 }
 
 interface ProjectMemberProfileViewProps {
-  member: ProjectMemberProfile;
+  member: ProjectMemberProfile | EnrichedProjectMember;
   stats: TaskStats;
   canRemove: boolean;
   onRemove: () => void;
@@ -43,7 +43,7 @@ const ProjectMemberProfileView: React.FC<ProjectMemberProfileViewProps> = ({
           <p className="text-base font-semibold text-gray-900">{member.name}</p>
           <p className="text-sm text-gray-600">
             Tham gia dự án:{" "}
-            {formatVietnameseDateTime(member.joinedAt, { hideTime: true })}
+            {formatVietnameseDateTime(member.joinedAt as string | undefined, { hideTime: true })}
           </p>
         </div>
       </div>

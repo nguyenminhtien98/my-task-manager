@@ -3,37 +3,33 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useProject } from "../context/ProjectContext";
+import { useSocket } from "../context/SocketContext";
 import toast from "react-hot-toast";
 import type { UploadedFileInfo } from "../utils/upload";
 import {
+  deriveProjectKey,
+  ensureConversationExists,
+  fetchAdminProfileIds,
+  fetchConversationMessages,
+  fetchProfilesByIds,
+  fetchUserConversations,
+  fetchUserPresence,
+  markConversationAsRead,
+  markMessageSeen,
+  sendConversationMessage,
+} from "../services/conversationService";
+import type {
   ConversationDocument,
   ConversationListEntry,
   ConversationMessageDocument,
   ConversationType,
   PresenceDocument,
   ProfileDocument,
-  deriveProjectKey,
-  ensureConversationExists,
-  fetchAdminProfileIds,
-  fetchConversationById,
-  fetchConversationMessages,
-  fetchProfilesByIds,
-  fetchProjectMemberProfiles,
-  fetchUserConversations,
-  fetchUserPresence,
-  markConversationRead,
-  markMessageSeen,
-  sendConversationMessage,
-  subscribeAllConversationMessages,
-  subscribeConversationMessages,
-  subscribeConversations,
-  subscribeUserPresence,
-} from "../services/feedbackService";
+} from "../types/Types";
 import {
   ADMIN_ROLES,
   conversationSortValue,
 } from "../utils/feedbackChat.utils";
-import { onMembersChanged } from "../utils/membersBus";
 
 interface PendingConversationInfo {
   targetId: string;
@@ -63,6 +59,9 @@ export interface UseChatResult {
     role?: string | null;
   } | null;
   isLoadingMessages: boolean;
+  isLoadingMoreMessages: boolean;
+  hasMoreMessages: boolean;
+  loadMoreMessages: () => Promise<void>;
   pendingMessages: Array<{
     id: string;
     conversationId: string;
@@ -78,29 +77,47 @@ export interface UseChatResult {
   shouldForceFeedbackOnly: boolean;
   memberConversations: ConversationListEntry[];
   feedbackConversations: ConversationListEntry[];
+  loadMoreConversations: () => Promise<void>;
+  hasMoreConversations: boolean;
+  isLoadingMoreConversations: boolean;
+  isLoadingConversations: boolean;
   pendingConversation: PendingConversationInfo | null;
   startPendingConversation: (info: PendingConversationInfo) => void;
   clearPendingConversation: () => void;
   adminLookupDone: boolean;
 }
 
-export const useChat = (
-  isOpen: boolean,
-  onShowIncomingBanner: () => void
-): UseChatResult => {
+export const useChat = (isOpen: boolean): UseChatResult => {
   const { user } = useAuth();
-  const { currentProject } = useProject();
+  const { currentProject, members: projectMembers } = useProject();
 
   const [conversations, setConversations] = useState<ConversationDocument[]>(
     []
   );
+  const [conversationsPage, setConversationsPage] = useState(1);
+  const [hasMoreConversations, setHasMoreConversations] = useState(false);
+  const [isLoadingMoreConversations, setIsLoadingMoreConversations] =
+    useState(false);
+  const [isLoadingConversations, setIsLoadingConversations] = useState(true); // Start with true to show loading initially
+
   const [messages, setMessages] = useState<ConversationMessageDocument[]>([]);
-  const [, setMessagesCursor] = useState<string | null>(null);
+  const [messagesCursor, setMessagesCursor] = useState<string | null>(null);
+  const [hasMoreMessages, setHasMoreMessages] = useState(false);
+  const [isLoadingMoreMessages, setIsLoadingMoreMessages] = useState(false);
   const [isSending, setIsSending] = useState(false);
-  const [selectedConversationId, setSelectedConversationId] = useState<
+  const [selectedConversationId, _setSelectedConversationId] = useState<
     string | null
   >(null);
   const [filter, setFilter] = useState<"all" | "unread">("all");
+
+  const setSelectedConversationId = useCallback((id: string | null) => {
+    _setSelectedConversationId(id);
+    if (id) {
+      setMessages([]);
+      setIsLoadingMessages(true);
+    }
+  }, []);
+  const { socket, isConnected } = useSocket();
   const [conversationTab, setConversationTab] =
     useState<ConversationType>("feedback");
   const [profileMap, setProfileMap] = useState<
@@ -131,14 +148,15 @@ export const useChat = (
   const [pendingConversation, setPendingConversation] =
     useState<PendingConversationInfo | null>(null);
   const newlyCreatedConversationIdRef = useRef<string | null>(null);
+  const loadConversationsInProgressRef = useRef(false);
 
   const isAdmin = Boolean(user?.role && ADMIN_ROLES.has(user.role));
   const currentUserId = user?.id ?? "";
-  const hasProject = Boolean(currentProject?.$id);
+  const hasProject = Boolean(currentProject?._id);
   const hasOtherMembers = useMemo(
     () =>
       memberProfiles.some(
-        (profile) => profile?.$id && profile.$id !== currentUserId
+        (profile) => profile?._id && profile._id !== currentUserId
       ),
     [memberProfiles, currentUserId]
   );
@@ -161,13 +179,20 @@ export const useChat = (
       setConversationTab("member");
       initialTabSetRef.current = true;
     }
-  }, [conversationTab, hasProject, isAdmin, isOpen, shouldForceFeedbackOnly]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasProject, isAdmin, isOpen, shouldForceFeedbackOnly]);
 
   useEffect(() => {
     if (!isOpen) {
       initialTabSetRef.current = false;
       suppressAutoSelectRef.current = false;
       setPendingConversation(null);
+      profilesFetchedRef.current.clear();
+      pendingProfileIdsRef.current.clear();
+      if (enrichProfilesTimerRef.current) {
+        clearTimeout(enrichProfilesTimerRef.current);
+        enrichProfilesTimerRef.current = null;
+      }
     }
   }, [isOpen]);
 
@@ -184,13 +209,8 @@ export const useChat = (
 
   const upsertConversation = useCallback(
     (conversation: ConversationDocument) => {
-      let shouldShowBanner = false;
-      const hasUnread =
-        currentUserId && (conversation.unreadBy ?? []).includes(currentUserId);
-      if (hasUnread && conversation.$id !== selectedConversationId)
-        shouldShowBanner = true;
       setConversations((prev) => {
-        const index = prev.findIndex((item) => item.$id === conversation.$id);
+        const index = prev.findIndex((item) => item._id === conversation._id);
         const next =
           index >= 0
             ? prev.map((item, idx) => (idx === index ? conversation : item))
@@ -199,41 +219,67 @@ export const useChat = (
           (a, b) => conversationSortValue(b) - conversationSortValue(a)
         );
       });
-      if (shouldShowBanner) onShowIncomingBanner();
     },
-    [currentUserId, onShowIncomingBanner, selectedConversationId]
+    []
   );
+
+  const pendingProfileIdsRef = useRef<Set<string>>(new Set());
+  const enrichProfilesTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const profilesFetchedRef = useRef<Set<string>>(new Set());
 
   const enrichProfiles = useCallback(async (ids: string[]) => {
     if (!ids.length) return;
-    try {
-      const profiles = await fetchProfilesByIds(ids);
-      setProfileMap((prev) => ({ ...prev, ...profiles }));
 
-      const fetchableIds = ids.filter((id) => {
-        if (!id) return false;
-        return !presenceFetchedRef.current.has(id);
-      });
+    const newIds = ids.filter(
+      (id) => id && !profilesFetchedRef.current.has(id)
+    );
+    if (!newIds.length) return;
 
-      if (fetchableIds.length) {
-        fetchableIds.forEach((id) => presenceFetchedRef.current.add(id));
-        const presenceEntries = await Promise.all(
-          fetchableIds.map(async (id) => ({
-            id,
-            doc: await fetchUserPresence(id),
-          }))
-        );
-        setPresenceMap((prev) => {
-          const next = { ...prev };
-          presenceEntries.forEach(({ id, doc }) => {
-            next[id] = doc;
-          });
-          return next;
-        });
-      }
-    } catch (error) {
-      console.error("Không thể tải thông tin người dùng:", error);
+    newIds.forEach((id) => pendingProfileIdsRef.current.add(id));
+
+    if (enrichProfilesTimerRef.current) {
+      clearTimeout(enrichProfilesTimerRef.current);
     }
+
+    enrichProfilesTimerRef.current = setTimeout(async () => {
+      const batchIds = Array.from(pendingProfileIdsRef.current);
+      pendingProfileIdsRef.current.clear();
+
+      if (!batchIds.length) return;
+
+      try {
+        const profiles = await fetchProfilesByIds(batchIds);
+        batchIds.forEach((id) => profilesFetchedRef.current.add(id));
+        setProfileMap((prev) => ({ ...prev, ...profiles }));
+
+        const fetchableIds = batchIds.filter((id) => {
+          if (!id) return false;
+          return !presenceFetchedRef.current.has(id);
+        });
+
+        if (fetchableIds.length) {
+          fetchableIds.forEach((id) => presenceFetchedRef.current.add(id));
+          const presenceEntries = await Promise.all(
+            fetchableIds.map(async (id) => ({
+              id,
+              doc: await fetchUserPresence(id),
+            }))
+          );
+          setPresenceMap((prev) => {
+            const next = { ...prev };
+            presenceEntries.forEach(({ id, doc }) => {
+              // IMPORTANT: Don't overwrite if socket already provided real-time data
+              if (!next[id]) {
+                next[id] = doc;
+              }
+            });
+            return next;
+          });
+        }
+      } catch (error) {
+        console.error("Không thể tải thông tin người dùng:", error);
+      }
+    }, 100);
   }, []);
 
   const startPendingConversation = useCallback(
@@ -247,7 +293,8 @@ export const useChat = (
       setSelectedConversationId(null);
       void enrichProfiles([info.targetId]);
     },
-    [currentUserId, enrichProfiles]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [currentUserId]
   );
 
   const clearPendingConversation = useCallback(() => {
@@ -268,19 +315,15 @@ export const useChat = (
         : null;
       const baseId = projectId ? `${projectId}:${targetId}` : targetId;
       return {
-        $collectionId: "",
-        $databaseId: "",
-        $id: `placeholder:${type}:${baseId}`,
-        $permissions: [],
-        $createdAt: new Date(0).toISOString(),
-        $updatedAt: new Date(0).toISOString(),
-        participants,
-        unreadBy: [],
-        createdBy: currentUserId,
+        _id: `placeholder:${type}:${baseId}`,
         type,
+        participants,
         projectId: placeholderProjectKey,
         lastMessage: null,
         lastMessageAt: null,
+        unreadBy: [],
+        createdAt: new Date(0).toISOString(),
+        updatedAt: new Date(0).toISOString(),
         __placeholderTargetId: targetId,
         __placeholderProjectId: projectId ?? null,
       };
@@ -289,70 +332,49 @@ export const useChat = (
   );
 
   useEffect(() => {
-    if (!currentProject?.$id) {
+    if (!projectMembers) {
       setMemberProfiles([]);
       return;
     }
-    let cancelled = false;
-    const loadMembers = async () => {
-      try {
-        const profiles = await fetchProjectMemberProfiles(currentProject.$id);
-        if (cancelled) return;
-        setMemberProfiles(profiles);
-        void enrichProfiles(profiles.map((profile) => profile.$id));
-      } catch (error) {
-        console.error("Không thể tải danh sách thành viên dự án:", error);
-        if (!cancelled) setMemberProfiles([]);
-      }
-    };
-    void loadMembers();
-    return () => {
-      cancelled = true;
-    };
-  }, [currentProject?.$id, enrichProfiles]);
+
+    const profiles: ProfileDocument[] = projectMembers.map((m) => ({
+      _id: m._id,
+      name: m.name,
+      email: m.email,
+      avatarUrl: m.avatarUrl,
+      role: m.role,
+      createdAt: m.createdAt,
+    }));
+
+    setMemberProfiles(profiles);
+    void enrichProfiles(profiles.map((p) => p._id));
+  }, [projectMembers, enrichProfiles]);
 
   useEffect(() => {
-    if (!currentProject?.$id) return;
-    const unsubscribe = onMembersChanged((projectId) => {
-      if (projectId === currentProject.$id) {
-        const loadMembers = async () => {
-          try {
-            const profiles = await fetchProjectMemberProfiles(
-              currentProject.$id
-            );
-            setMemberProfiles(profiles);
-            void enrichProfiles(profiles.map((profile) => profile.$id));
-          } catch (error) {
-            console.error("Không thể tải danh sách thành viên dự án:", error);
-          }
-        };
-        void loadMembers();
-      }
-    });
-    return unsubscribe;
-  }, [currentProject?.$id, enrichProfiles]);
-
-  useEffect(() => {
+    if (!isOpen) return;
     if (isAdmin) {
       setAdminLookupDone(true);
       return;
     }
     if (adminLookupDone) return;
+
+    if (!shouldForceFeedbackOnly) return;
+
     let cancelled = false;
     const loadAdmins = async () => {
       let finalIds: string[] = [];
-      try {
-        const ids = await fetchAdminProfileIds();
-        finalIds = ids;
-      } catch (error) {
-        console.error("Không thể tải danh sách admin feedback:", error);
-      }
-      if (
-        finalIds.length === 0 &&
-        process.env.NEXT_PUBLIC_FEEDBACK_ADMIN_ID?.trim()
-      ) {
+
+      if (process.env.NEXT_PUBLIC_FEEDBACK_ADMIN_ID?.trim()) {
         finalIds = [process.env.NEXT_PUBLIC_FEEDBACK_ADMIN_ID.trim()];
+      } else {
+        try {
+          const ids = await fetchAdminProfileIds();
+          finalIds = ids;
+        } catch (error) {
+          console.error("Không thể tải danh sách admin feedback:", error);
+        }
       }
+
       if (!cancelled) {
         setAdminIds(finalIds);
         if (finalIds.length === 0 && !adminWarningShownRef.current) {
@@ -368,26 +390,39 @@ export const useChat = (
     return () => {
       cancelled = true;
     };
-  }, [adminLookupDone, isAdmin, isOpen]);
+  }, [isOpen, adminLookupDone, isAdmin, shouldForceFeedbackOnly]);
 
   useEffect(() => {
     if (isAdmin) return;
     if (!adminIds.length) return;
     void enrichProfiles(adminIds);
-  }, [adminIds, enrichProfiles, isAdmin]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [adminIds, isAdmin]);
 
   const loadConversations = useCallback(async () => {
     if (!currentUserId) return;
     if (!isAdmin && !adminLookupDone) return;
+    if (loadConversationsInProgressRef.current) {
+      return;
+    }
     try {
-      const data = await fetchUserConversations(currentUserId);
+      loadConversationsInProgressRef.current = true;
+      setIsLoadingConversations(true);
+      const { conversations: data, totalPages } = await fetchUserConversations(
+        currentUserId,
+        1,
+        20
+      );
       const uniqueData = Array.from(
-        new Map(data.map((item) => [item.$id, item])).values()
+        new Map(data.map((item) => [item._id, item])).values()
       );
       const sortedData = [...uniqueData].sort(
         (a, b) => conversationSortValue(b) - conversationSortValue(a)
       );
       setConversations(sortedData);
+      setConversationsPage(1);
+      setHasMoreConversations(1 < totalPages);
+
       const participantIds = sortedData
         .flatMap((conversation) => conversation.participants ?? [])
         .filter((id) => id !== currentUserId);
@@ -396,7 +431,7 @@ export const useChat = (
       if (
         selectedConversationId &&
         !data.some(
-          (conversation) => conversation.$id === selectedConversationId
+          (conversation) => conversation._id === selectedConversationId
         )
       ) {
         setSelectedConversationId(null);
@@ -404,6 +439,9 @@ export const useChat = (
     } catch (error) {
       console.error("Không thể tải đoạn chat:", error);
       toast.error("Không thể tải danh sách đoạn chat");
+    } finally {
+      loadConversationsInProgressRef.current = false;
+      setIsLoadingConversations(false);
     }
   }, [
     adminLookupDone,
@@ -411,52 +449,115 @@ export const useChat = (
     enrichProfiles,
     isAdmin,
     selectedConversationId,
+    setSelectedConversationId,
+  ]);
+
+  const loadMoreConversations = useCallback(async () => {
+    if (isLoadingMoreConversations || !hasMoreConversations || !currentUserId)
+      return;
+
+    try {
+      setIsLoadingMoreConversations(true);
+      const nextPage = conversationsPage + 1;
+      const { conversations: data, totalPages } = await fetchUserConversations(
+        currentUserId,
+        nextPage,
+        20
+      );
+
+      setConversations((prev) => {
+        const existingIds = new Set(prev.map((c) => c._id));
+        const uniqueNew = data.filter((c) => !existingIds.has(c._id));
+        const merged = [...prev, ...uniqueNew];
+        return merged.sort(
+          (a, b) => conversationSortValue(b) - conversationSortValue(a)
+        );
+      });
+      setConversationsPage(nextPage);
+      setHasMoreConversations(nextPage < totalPages);
+
+      const participantIds = data
+        .flatMap((conversation) => conversation.participants ?? [])
+        .filter((id) => id !== currentUserId);
+      void enrichProfiles(participantIds);
+    } catch (error) {
+      console.error("Failed to load more conversations:", error);
+    } finally {
+      setIsLoadingMoreConversations(false);
+    }
+  }, [
+    conversationsPage,
+    currentUserId,
+    enrichProfiles,
+    hasMoreConversations,
+    isLoadingMoreConversations,
   ]);
 
   useEffect(() => {
+    if (!isOpen) return;
     if (!currentUserId) return;
     if (!isAdmin && !adminLookupDone) return;
+
+    const isListView = !selectedConversationId && !pendingConversation;
+    const needList = isAdmin || isListView;
+
+    if (!needList) {
+      return;
+    }
+
     void loadConversations();
-  }, [adminLookupDone, isAdmin, loadConversations, currentUserId]);
+  }, [
+    isOpen,
+    adminLookupDone,
+    isAdmin,
+    loadConversations,
+    currentUserId,
+    selectedConversationId,
+    pendingConversation,
+    conversations.length,
+    adminIds.length,
+  ]);
 
   useEffect(() => {
-    if (!isAdmin) return;
-    const otherIds = conversations
-      .flatMap((conversation) => conversation.participants ?? [])
-      .filter((id) => id !== currentUserId);
-    const uniqueIds = Array.from(new Set(otherIds));
-    const unsubscribes = uniqueIds.map((id) =>
-      subscribeUserPresence(id, (doc) => {
-        setPresenceMap((prev) => ({ ...prev, [id]: doc }));
-      })
-    );
-    return () => {
-      unsubscribes.forEach((unsubscribe) => unsubscribe());
-    };
-  }, [conversations, currentUserId, isAdmin]);
+    if (!socket || !isConnected || !currentUserId) return;
 
-  useEffect(() => {
-    if (!currentUserId) return;
-    const unsubscribe = subscribeConversations(
-      currentUserId,
-      (conversation) => {
-        upsertConversation(conversation);
-        const otherIds = conversation.participants.filter(
-          (id) => id !== currentUserId
-        );
-        void enrichProfiles(otherIds);
+    const handleConversationCreated = async (data: {
+      conversation: ConversationDocument;
+    }) => {
+      const conv = data.conversation;
+      if (!conv.participants.includes(currentUserId)) {
+        return;
       }
-    );
-    return () => {
-      unsubscribe();
+      await enrichProfiles(conv.participants);
+      upsertConversation(conv);
     };
-  }, [currentUserId, enrichProfiles, upsertConversation]);
+
+    const handleConversationUpdated = async (data: {
+      conversation: ConversationDocument;
+    }) => {
+      const conv = data.conversation;
+      if (!conv.participants.includes(currentUserId)) {
+        return;
+      }
+      await enrichProfiles(conv.participants);
+      upsertConversation(conv);
+    };
+
+    socket.on("conversation:created", handleConversationCreated);
+    socket.on("conversation:updated", handleConversationUpdated);
+
+    return () => {
+      socket.off("conversation:created", handleConversationCreated);
+      socket.off("conversation:updated", handleConversationUpdated);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [socket, isConnected, currentUserId, upsertConversation]);
 
   const selectedConversation = useMemo(() => {
     if (!selectedConversationId) return null;
     return (
       conversations.find(
-        (conversation) => conversation.$id === selectedConversationId
+        (conversation) => conversation._id === selectedConversationId
       ) ?? null
     );
   }, [conversations, selectedConversationId]);
@@ -465,7 +566,7 @@ export const useChat = (
     if (!selectedConversation) return;
     const convType = selectedConversation.type ?? "feedback";
     if (conversationTab !== convType) setConversationTab(convType);
-  }, [conversationTab, selectedConversation]);
+  }, [selectedConversation, conversationTab, setConversationTab]);
 
   const otherParticipant = useMemo(() => {
     if (selectedConversation) {
@@ -492,36 +593,124 @@ export const useChat = (
       };
     }
     return null;
-  }, [
-    currentUserId,
-    pendingConversation,
-    profileMap,
-    selectedConversation,
-  ]);
+  }, [currentUserId, pendingConversation, profileMap, selectedConversation]);
+
+  // Keep refs to access latest state in socket handlers (avoid stale closures)
+  const otherParticipantRef = useRef(otherParticipant);
+  const presenceMapRef = useRef(presenceMap);
 
   useEffect(() => {
-    if (!isOpen || !otherParticipant) {
+    presenceMapRef.current = presenceMap;
+  }, [presenceMap]);
+
+  useEffect(() => {
+    otherParticipantRef.current = otherParticipant;
+  }, [otherParticipant]);
+
+  // Request presence on-demand when conversation opens (Backend Option 1)
+  useEffect(() => {
+    if (!socket || !isConnected || !otherParticipant || !isOpen) {
       setPresence(null);
       return;
     }
-    let active = true;
-    const loadPresence = async () => {
-      const doc = await fetchUserPresence(otherParticipant.id);
-      if (active) {
-        setPresence(doc);
-        setPresenceMap((prev) => ({ ...prev, [otherParticipant.id]: doc }));
+
+    const participantId = otherParticipant.id;
+
+    // Check if we already have recent presence data
+    const cachedPresence = presenceMap[participantId];
+    if (cachedPresence) {
+      console.log(
+        "[Presence] Using cached presence for:",
+        participantId,
+        cachedPresence
+      );
+      setPresence(cachedPresence);
+    }
+
+    // Request fresh presence data from server (on-demand)
+    console.log(
+      "[Presence] Requesting presence from server for:",
+      participantId
+    );
+    socket.emit("presence:get", { userIds: [participantId] });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [socket, isConnected, otherParticipant, isOpen]);
+
+  useEffect(() => {
+    if (!socket || !isConnected) return;
+
+    const handlePresenceBatch = (
+      data: Record<string, { isOnline: boolean; lastSeen: string | null }>
+    ) => {
+      Object.entries(data).forEach(([userId, presenceData]) => {
+        const presenceDoc: PresenceDocument = {
+          _id: userId,
+          isOnline: presenceData.isOnline,
+          lastSeenAt: presenceData.lastSeen,
+        };
+
+        setPresenceMap((prev) => ({ ...prev, [userId]: presenceDoc }));
+        presenceMapRef.current = {
+          ...presenceMapRef.current,
+          [userId]: presenceDoc,
+        };
+
+        const currentPartner = otherParticipantRef.current;
+        if (currentPartner && currentPartner.id === userId) {
+          console.log(
+            "[Presence] Updating active conversation partner:",
+            userId,
+            presenceDoc
+          );
+          setPresence(presenceDoc);
+        }
+      });
+    };
+
+    socket.on("presence:batch", handlePresenceBatch);
+
+    return () => {
+      socket.off("presence:batch", handlePresenceBatch);
+    };
+  }, [socket, isConnected]);
+
+  useEffect(() => {
+    if (!socket || !isConnected) return;
+
+    const handleUserStatus = (
+      data:
+        | { profileId: string; isOnline: boolean }
+        | Array<{ profileId: string; isOnline: boolean }>
+    ) => {
+      if (!data) return;
+
+      const statusData = Array.isArray(data) ? data[0] : data;
+      const { profileId, isOnline } = statusData;
+
+      const presenceDoc: PresenceDocument = {
+        _id: profileId,
+        isOnline,
+        lastSeenAt: isOnline ? null : new Date().toISOString(),
+      };
+
+      presenceMapRef.current = {
+        ...presenceMapRef.current,
+        [profileId]: presenceDoc,
+      };
+      setPresenceMap((prev) => ({ ...prev, [profileId]: presenceDoc }));
+
+      const currentPartner = otherParticipantRef.current;
+      if (currentPartner && currentPartner.id === profileId) {
+        setPresence(presenceDoc);
       }
     };
-    void loadPresence();
-    const unsubscribe = subscribeUserPresence(otherParticipant.id, (doc) => {
-      setPresence(doc);
-      setPresenceMap((prev) => ({ ...prev, [otherParticipant.id]: doc }));
-    });
+
+    socket.on("user:status", handleUserStatus);
+
     return () => {
-      active = false;
-      unsubscribe();
+      socket.off("user:status", handleUserStatus);
     };
-  }, [isOpen, otherParticipant]);
+  }, [socket, isConnected]);
 
   const summarizeMessage = useCallback(
     (content: string, attachments?: UploadedFileInfo[]) => {
@@ -538,10 +727,16 @@ export const useChat = (
 
   useEffect(() => {
     if (!isOpen || !selectedConversationId || !currentUserId) return;
+
+    if (socket && isConnected) {
+      socket.emit("conversation:join", selectedConversationId);
+    }
+
     const skipInitialLoading =
       newlyCreatedConversationIdRef.current === selectedConversationId;
     setMessages([]);
     setMessagesCursor(null);
+    setHasMoreMessages(false);
     if (!skipInitialLoading) {
       setIsLoadingMessages(true);
     } else {
@@ -553,26 +748,40 @@ export const useChat = (
       try {
         const { messages: data, cursor } = await fetchConversationMessages(
           selectedConversationId,
-          200
+          20
         );
         if (!cancelled) {
           setMessages(data);
           setMessagesCursor(cursor);
-          setTimeout(() => {
-            if (!cancelled) {
-              void markConversationRead(selectedConversationId, currentUserId);
-              setConversations((prev) =>
-                prev.map((conversation) => {
-                  if (conversation.$id !== selectedConversationId)
-                    return conversation;
-                  const unreadBy = (conversation.unreadBy ?? []).filter(
-                    (id) => id !== currentUserId
-                  );
-                  return { ...conversation, unreadBy };
-                })
-              );
-            }
-          }, 500);
+          setHasMoreMessages(!!cursor);
+
+          const hasUnreadFromOthers = data.some(
+            (msg) =>
+              msg.senderId !== currentUserId &&
+              !(msg.seenBy ?? []).includes(currentUserId)
+          );
+
+          if (hasUnreadFromOthers) {
+            setTimeout(() => {
+              if (!cancelled) {
+                void markConversationAsRead(
+                  selectedConversationId,
+                  currentUserId
+                );
+                setConversations((prev) =>
+                  prev.map((conversation) => {
+                    if (conversation._id !== selectedConversationId)
+                      return conversation;
+                    const unreadBy = (conversation.unreadBy ?? []).filter(
+                      (id) => id !== currentUserId
+                    );
+                    return { ...conversation, unreadBy };
+                  })
+                );
+              }
+            }, 500);
+          }
+
           await Promise.all(
             data
               .filter(
@@ -581,10 +790,10 @@ export const useChat = (
                   !(msg.seenBy ?? []).includes(currentUserId)
               )
               .map(async (msg) => {
-                await markMessageSeen(msg.$id, currentUserId);
+                await markMessageSeen(msg._id, currentUserId);
                 setMessages((prev) =>
                   prev.map((item) =>
-                    item.$id === msg.$id
+                    item._id === msg._id
                       ? {
                           ...item,
                           seenBy: Array.from(
@@ -608,88 +817,116 @@ export const useChat = (
       }
     };
     void loadMessages();
-    const unsubscribe = subscribeConversationMessages(
-      selectedConversationId,
-      async (message) => {
-        let added = false;
-        setMessages((prev) => {
-          if (prev.some((item) => item.$id === message.$id)) return prev;
-          added = true;
-          return [...prev, message].sort((a, b) =>
-            a.$createdAt.localeCompare(b.$createdAt)
-          );
-        });
-        if (message.senderId === currentUserId) {
-          setPendingMessages((prev) =>
-            prev.filter((p) => p.conversationId !== message.conversationId)
-          );
-        }
-        if (message.senderId !== currentUserId) {
-          if (added && !isOpen) onShowIncomingBanner();
-          setConversations((prev) =>
-            prev
-              .map((conversation) => {
-                if (conversation.$id !== selectedConversationId)
-                  return conversation;
-                const summary = summarizeMessage(
-                  message.content,
-                  message.attachments
-                );
-                return {
-                  ...conversation,
-                  lastMessage: summary,
-                  lastMessageAt: message.$createdAt,
-                };
-              })
-              .sort(
-                (a, b) => conversationSortValue(b) - conversationSortValue(a)
-              )
-          );
-          try {
-            await markMessageSeen(message.$id, currentUserId);
-            await markConversationRead(selectedConversationId, currentUserId);
-            setConversations((prev) =>
-              prev
-                .map((conversation) => {
-                  if (conversation.$id !== selectedConversationId)
-                    return conversation;
-                  const unreadBy = (conversation.unreadBy ?? []).filter(
-                    (id) => id !== currentUserId
-                  );
-                  return { ...conversation, unreadBy };
-                })
-                .sort(
-                  (a, b) => conversationSortValue(b) - conversationSortValue(a)
-                )
-            );
-            setMessages((prev) =>
-              prev.map((item) =>
-                item.$id === message.$id
-                  ? {
-                      ...item,
-                      seenBy: Array.from(
-                        new Set([...(item.seenBy ?? []), currentUserId])
-                      ),
-                    }
-                  : item
-              )
-            );
-          } catch (error) {
-            console.error("Không thể cập nhật trạng thái đọc:", error);
-          }
-        }
+
+    if (!socket || !isConnected || !selectedConversationId) {
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const handleMessageNew = (message: ConversationMessageDocument) => {
+      if (message.conversation !== selectedConversationId) {
+        return;
       }
-    );
+      if (cancelled) return;
+
+      setMessages((prev) => {
+        const exists = prev.some((m) => m._id === message._id);
+        if (exists) {
+          return prev;
+        }
+
+        const normalizedMessage = {
+          ...message,
+          senderId: message.senderId || message.sender?._id || "",
+        };
+
+        return [...prev, normalizedMessage];
+      });
+
+      const senderId = message.senderId || message.sender?._id;
+      if (senderId && senderId !== currentUserId) {
+        void markMessageSeen(message._id, currentUserId).catch(console.error);
+      }
+    };
+
+    const handleMessageSeen = (data: {
+      messageId: string;
+      userId: string;
+      seenBy: string[];
+    }) => {
+      if (cancelled) return;
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg._id === data.messageId ? { ...msg, seenBy: data.seenBy } : msg
+        )
+      );
+    };
+
+    const handleConversationRead = (data: {
+      conversationId: string;
+      userId: string;
+    }) => {
+      if (cancelled) return;
+      if (data.conversationId !== selectedConversationId) return;
+      setMessages((prev) =>
+        prev.map((msg) => ({
+          ...msg,
+          seenBy: Array.from(new Set([...(msg.seenBy ?? []), data.userId])),
+        }))
+      );
+    };
+
+    const handleMessageReacted = (data: {
+      messageId: string;
+      conversationId: string;
+      reactions: Array<{
+        type: "like" | "heart" | "haha" | "laugh" | "love" | "wow" | "angry";
+        user?: { _id: string; name: string; avatarUrl?: string };
+        userId?: string;
+        createdAt: string;
+      }>;
+    }) => {
+      if (cancelled) return;
+
+      const mappedReactions = data.reactions.map((r) => ({
+        type: r.type,
+        userId: r.user?._id || r.userId || "",
+        createdAt: r.createdAt,
+      }));
+
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg._id === data.messageId
+            ? { ...msg, reactions: mappedReactions }
+            : msg
+        )
+      );
+    };
+
+    socket.on("message:new", handleMessageNew);
+    socket.on("message:seen", handleMessageSeen);
+    socket.on("conversation:read", handleConversationRead);
+    socket.on("message:reacted", handleMessageReacted);
+
     return () => {
       cancelled = true;
-      unsubscribe();
+      if (socket && isConnected) {
+        socket.emit("conversation:leave", selectedConversationId);
+      }
+      socket.off("message:new", handleMessageNew);
+      socket.off("message:seen", handleMessageSeen);
+      socket.off("conversation:read", handleConversationRead);
+      socket.off("message:reacted", handleMessageReacted);
     };
   }, [
+    socket,
+    isConnected,
     currentUserId,
     isOpen,
     selectedConversationId,
     summarizeMessage,
-    onShowIncomingBanner,
+    profileMap,
   ]);
 
   useEffect(() => {
@@ -697,44 +934,40 @@ export const useChat = (
   }, [selectedConversationId]);
 
   useEffect(() => {
-    if (!currentUserId) return;
-    const unsubscribe = subscribeAllConversationMessages(async (message) => {
-      if (message.senderId === currentUserId) return;
-      const isCurrent =
-        selectedConversationId &&
-        message.conversationId === selectedConversationId;
-      if (!isOpen && !isCurrent) onShowIncomingBanner();
-      setConversations((prev) => {
-        const exists = prev.some((c) => c.$id === message.conversationId);
-        if (!exists) return prev;
-        const summary = summarizeMessage(message.content, message.attachments);
-        const next = prev.map((c) =>
-          c.$id === message.conversationId
-            ? { ...c, lastMessage: summary, lastMessageAt: message.$createdAt }
-            : c
-        );
-        return next.sort(
-          (a, b) => conversationSortValue(b) - conversationSortValue(a)
-        );
-      });
-      if (!conversations.some((c) => c.$id === message.conversationId)) {
-        const doc = await fetchConversationById(message.conversationId);
-        if (doc && doc.participants.includes(currentUserId)) {
-          upsertConversation(doc);
-        }
+    if (!socket || !isConnected || !currentUserId) return;
+
+    const handleMessageNewGlobal = (message: ConversationMessageDocument) => {
+      const convId = message.conversation;
+      const conv = conversations.find((c) => c._id === convId);
+      if (!conv) {
+        void loadConversations();
+        return;
       }
-    });
+
+      const updatedConv: ConversationDocument = {
+        ...conv,
+        lastMessage: message.content,
+        lastMessageAt: message.createdAt,
+        unreadBy:
+          message.senderId === currentUserId
+            ? []
+            : [...(conv.unreadBy ?? []), currentUserId],
+      };
+      upsertConversation(updatedConv);
+    };
+
+    socket.on("message:new", handleMessageNewGlobal);
+
     return () => {
-      unsubscribe();
+      socket.off("message:new", handleMessageNewGlobal);
     };
   }, [
+    socket,
+    isConnected,
     conversations,
     currentUserId,
-    isOpen,
-    onShowIncomingBanner,
-    selectedConversationId,
-    summarizeMessage,
     upsertConversation,
+    loadConversations,
   ]);
 
   const createConversationFromPending = useCallback(async () => {
@@ -750,28 +983,28 @@ export const useChat = (
         }
       );
       setPendingConversation(null);
-      newlyCreatedConversationIdRef.current = conversation.$id ?? null;
+      newlyCreatedConversationIdRef.current = conversation._id ?? null;
       upsertConversation(conversation);
-      setSelectedConversationId(conversation.$id);
+      setSelectedConversationId(conversation._id);
       const others = (conversation.participants ?? []).filter(
         (id) => id !== currentUserId
       );
       if (others.length) void enrichProfiles(others);
-      return conversation.$id ?? null;
+      return conversation._id ?? null;
     } catch (error) {
       console.error("Không thể khởi tạo cuộc hội thoại:", error);
       toast.error("Không thể khởi tạo cuộc hội thoại");
       return null;
     }
-  }, [
-    currentUserId,
-    enrichProfiles,
-    pendingConversation,
-    upsertConversation,
-  ]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUserId, pendingConversation, upsertConversation]);
 
   const handleSendMessage = useCallback(
-    async (content: string, attachments?: UploadedFileInfo[]) => {
+    async (
+      content: string,
+      attachments?: UploadedFileInfo[],
+      replyToMessageId?: string
+    ) => {
       if (!currentUserId) return;
       setIsSending(true);
       try {
@@ -795,30 +1028,35 @@ export const useChat = (
           senderId: currentUserId,
           content,
           attachments,
+          replyToMessageId,
         });
         setPendingMessages((prev) => prev.filter((p) => p.id !== pendingId));
-        setMessages((prev) => {
-          if (prev.some((item) => item.$id === message.$id)) return prev;
-          return [...prev, message].sort((a, b) =>
-            a.$createdAt.localeCompare(b.$createdAt)
-          );
-        });
-        setConversations((prev) => {
-          const summary = summarizeMessage(content, attachments);
-          const updated = prev.map((conversation) => {
-            if (conversation.$id !== conversationId) return conversation;
-            const participants = conversation.participants ?? [];
-            return {
-              ...conversation,
-              lastMessage: summary,
-              lastMessageAt: message.$createdAt,
-              unreadBy: participants.filter((id) => id !== currentUserId),
-            };
+        if (message) {
+          setMessages((prev) => {
+            if (prev.some((item) => item._id === message._id)) return prev;
+            return [...prev, message].sort((a, b) =>
+              a.createdAt.localeCompare(b.createdAt)
+            );
           });
-          return updated.sort(
-            (a, b) => conversationSortValue(b) - conversationSortValue(a)
-          );
-        });
+        }
+        if (message) {
+          setConversations((prev) => {
+            const summary = summarizeMessage(content, attachments);
+            const updated = prev.map((conversation) => {
+              if (conversation._id !== conversationId) return conversation;
+              const participants = conversation.participants ?? [];
+              return {
+                ...conversation,
+                lastMessage: summary,
+                lastMessageAt: message.createdAt,
+                unreadBy: participants.filter((id) => id !== currentUserId),
+              };
+            });
+            return updated.sort(
+              (a, b) => conversationSortValue(b) - conversationSortValue(a)
+            );
+          });
+        }
         setPendingMessages((prev) =>
           prev.filter((p) => p.conversationId !== conversationId)
         );
@@ -845,13 +1083,14 @@ export const useChat = (
 
   const existingFeedbackConversations = useMemo(
     () =>
-      conversations.filter(
-        (conversation) => (conversation.type ?? "feedback") === "feedback"
-      ),
+      conversations.filter((conversation) => {
+        const convType = conversation.type ?? "feedback";
+        return convType === "feedback" || convType === "direct";
+      }),
     [conversations]
   );
 
-  const feedbackConversations = useMemo(() => {
+  const feedbackConversations = useMemo((): ConversationListEntry[] => {
     if (!currentUserId) return existingFeedbackConversations;
     if (isAdmin) return existingFeedbackConversations;
     const existingAdminIds = new Set(
@@ -879,11 +1118,11 @@ export const useChat = (
   ]);
 
   const existingMemberConversations = useMemo(() => {
-    if (!currentProject?.$id) return [] as ConversationDocument[];
-    const projectKey = deriveProjectKey(currentProject.$id);
+    if (!currentProject?._id) return [] as ConversationDocument[];
+    const projectKey = deriveProjectKey(currentProject?._id);
     const currentMemberIds = new Set(
       memberProfiles
-        .map((profile) => profile.$id)
+        .map((profile) => profile._id)
         .filter((id) => id && id !== currentUserId)
     );
     const filtered = conversations.filter((conversation) => {
@@ -911,22 +1150,26 @@ export const useChat = (
     return Array.from(uniqueMap.values()).sort(
       (a, b) => conversationSortValue(b) - conversationSortValue(a)
     );
-  }, [conversations, currentProject?.$id, currentUserId, memberProfiles]);
+  }, [conversations, currentProject?._id, currentUserId, memberProfiles]);
 
   const memberConversations = useMemo(() => {
     if (!currentUserId) return [] as ConversationListEntry[];
     const placeholders: ConversationListEntry[] = [];
-    if (currentProject?.$id) {
+    if (currentProject?._id) {
       const memberIdsWithConversation = new Set(
         existingMemberConversations.flatMap(
           (conversation) => conversation.participants ?? []
         )
       );
       memberProfiles.forEach((profile) => {
-        if (!profile.$id || profile.$id === currentUserId) return;
-        if (memberIdsWithConversation.has(profile.$id)) return;
+        if (!profile._id || profile._id === currentUserId) return;
+        if (memberIdsWithConversation.has(profile._id)) return;
         placeholders.push(
-          buildPlaceholderConversation(profile.$id, "member", currentProject.$id)
+          buildPlaceholderConversation(
+            profile._id,
+            "member",
+            currentProject?._id
+          )
         );
       });
     }
@@ -935,7 +1178,7 @@ export const useChat = (
     );
   }, [
     buildPlaceholderConversation,
-    currentProject?.$id,
+    currentProject?._id,
     currentUserId,
     existingMemberConversations,
     memberProfiles,
@@ -946,24 +1189,18 @@ export const useChat = (
     if (!shouldForceFeedbackOnly) return;
     if (selectedConversationId) return;
     if (suppressAutoSelectRef.current) return;
-    if (conversations.length === 0 && !adminLookupDone) return;
-    if (
-      !isAdmin &&
-      hasProject &&
-      memberProfiles.length === 0 &&
-      !adminLookupDone
-    )
-      return;
+    if (!adminLookupDone) return;
+    if (!isAdmin && hasProject && memberProfiles.length === 0) return;
 
     const conversation = existingFeedbackConversations[0];
     if (conversation) {
-      setSelectedConversationId(conversation.$id);
+      setSelectedConversationId(conversation._id);
       return;
     }
 
-    if (adminLookupDone && conversations.length === 0 && !pendingConversation) {
-      const placeholder = feedbackConversations.find(
-        (item) => Boolean(item.__placeholderTargetId)
+    if (!pendingConversation) {
+      const placeholder = feedbackConversations.find((item) =>
+        Boolean(item.__placeholderTargetId)
       );
       if (placeholder?.__placeholderTargetId) {
         startPendingConversation({
@@ -985,7 +1222,45 @@ export const useChat = (
     pendingConversation,
     startPendingConversation,
     selectedConversationId,
+    setSelectedConversationId,
     shouldForceFeedbackOnly,
+  ]);
+
+  const loadMoreMessages = useCallback(async () => {
+    if (
+      !selectedConversationId ||
+      !hasMoreMessages ||
+      isLoadingMoreMessages ||
+      !messagesCursor
+    )
+      return;
+
+    try {
+      setIsLoadingMoreMessages(true);
+      const { messages: newMessages, cursor } = await fetchConversationMessages(
+        selectedConversationId,
+        20,
+        messagesCursor
+      );
+
+      setMessages((prev) => {
+        const existingIds = new Set(prev.map((m) => m._id));
+        const uniqueNew = newMessages.filter((m) => !existingIds.has(m._id));
+        return [...uniqueNew, ...prev];
+      });
+      setMessagesCursor(cursor);
+      setHasMoreMessages(!!cursor);
+    } catch (error) {
+      console.error("Failed to load more messages:", error);
+      toast.error("Không thể tải thêm tin nhắn cũ");
+    } finally {
+      setIsLoadingMoreMessages(false);
+    }
+  }, [
+    selectedConversationId,
+    hasMoreMessages,
+    isLoadingMoreMessages,
+    messagesCursor,
   ]);
 
   return {
@@ -1005,6 +1280,9 @@ export const useChat = (
     presence,
     otherParticipant,
     isLoadingMessages,
+    isLoadingMoreMessages,
+    hasMoreMessages,
+    loadMoreMessages,
     pendingMessages,
     handleSendMessage,
     hasProject,
@@ -1012,6 +1290,10 @@ export const useChat = (
     shouldForceFeedbackOnly,
     memberConversations,
     feedbackConversations,
+    loadMoreConversations,
+    hasMoreConversations,
+    isLoadingMoreConversations,
+    isLoadingConversations,
     pendingConversation,
     startPendingConversation,
     clearPendingConversation,

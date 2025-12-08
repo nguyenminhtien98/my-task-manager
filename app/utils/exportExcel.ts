@@ -1,9 +1,4 @@
-import type {
-  BasicProfile,
-  Project,
-  Task,
-  TaskStatus,
-} from "../types/Types";
+import type { BasicProfile, Project, Task, TaskStatus } from "../types/Types";
 import { saveAs } from "file-saver";
 
 const STATUS_ORDER: TaskStatus[] = [
@@ -46,9 +41,6 @@ const formatTimeRange = (start?: string | null, end?: string | null) => {
 
 const resolveAssigneeName = (assignee: Task["assignee"]) => {
   if (!assignee) return "Chưa set";
-  if (typeof assignee === "string") {
-    return assignee.trim() || "Chưa set";
-  }
   if (typeof assignee === "object" && "name" in assignee) {
     return assignee.name || "Chưa set";
   }
@@ -56,7 +48,7 @@ const resolveAssigneeName = (assignee: Task["assignee"]) => {
 };
 
 const extractAttachmentNames = (task: Task) => {
-  const files = (task.attachedFile ?? [])
+  const files = (task.attachments ?? [])
     .map((item) => {
       if (!item) return null;
       if (typeof item === "string") return item;
@@ -132,7 +124,7 @@ export const exportProjectBoardToExcel = async ({
   addFullWidthRow(`Leader: ${project.leader?.name ?? "Không xác định"}`);
 
   const memberNames = members
-    .filter((member) => member.$id !== project.leader?.$id)
+    .filter((member) => member._id !== project.leader?._id)
     .map((member) => member.name)
     .join(", ");
   addFullWidthRow(
@@ -198,7 +190,8 @@ export const exportProjectBoardToExcel = async ({
 
   const countRow = worksheet.addRow(
     STATUS_ORDER.map(
-      (status) => `${STATUS_LABELS[status]}: ${groupedTasks[status].length} task`
+      (status) =>
+        `${STATUS_LABELS[status]}: ${groupedTasks[status].length} task`
     )
   );
   countRow.eachCell((cell) => {

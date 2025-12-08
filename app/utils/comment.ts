@@ -1,15 +1,15 @@
 "use client";
 
-import { CommentAttachment, TaskComment } from "../components/comments/types";
+import { CommentAttachment, TaskComment } from "../types/Types";
 import { detectMediaTypeFromUrl } from "./media";
 
 export interface RawCommentDocument {
-  $id: string;
+  _id: string;
   $createdAt: string;
   content?: string;
   attachments?: unknown;
   isVisible?: boolean;
-  userProfile?: string | { $id?: string; name?: string } | null;
+  userProfile?: string | { _id?: string; name?: string } | null;
   userName?: string;
 }
 
@@ -52,7 +52,7 @@ export const mapCommentDocument = (doc: RawCommentDocument): TaskComment => {
   const userId =
     typeof doc.userProfile === "string"
       ? doc.userProfile
-      : doc.userProfile?.$id ?? "unknown";
+      : doc.userProfile?._id ?? "unknown";
   let userName = typeof doc.userName === "string" ? doc.userName : undefined;
   if (!userName || userName.trim().length === 0) {
     if (
@@ -68,7 +68,7 @@ export const mapCommentDocument = (doc: RawCommentDocument): TaskComment => {
   }
 
   return {
-    id: doc.$id,
+    id: doc._id,
     content: doc.content ?? "",
     createdAt: doc.$createdAt ?? new Date().toISOString(),
     isVisible: doc.isVisible ?? true,

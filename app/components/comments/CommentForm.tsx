@@ -6,9 +6,7 @@ import { v4 as uuidv4 } from "uuid";
 import toast from "react-hot-toast";
 import { useAuth } from "../../context/AuthContext";
 import PendingAttachmentPreview from "./PendingAttachmentPreview";
-import { PendingAttachment } from "./types";
-import type { TaskComment } from "./types";
-import type { CreateCommentParams } from "@/app/hooks/useComment";
+import type { Comment, PendingAttachment } from "@/app/types/Types";
 import {
   MAX_UPLOAD_SIZE_BYTES,
   MAX_UPLOAD_SIZE_LABEL,
@@ -17,7 +15,11 @@ import {
 
 interface CommentFormProps {
   taskId: string;
-  onSubmit: (params: CreateCommentParams) => Promise<TaskComment | null>;
+  onSubmit: (
+    taskId: string,
+    content: string,
+    attachments: PendingAttachment[]
+  ) => Promise<Comment | null>;
   isSubmitting: boolean;
   disabled?: boolean;
 }
@@ -160,13 +162,11 @@ const CommentForm: React.FC<CommentFormProps> = ({ taskId, onSubmit, isSubmittin
       return;
     }
 
-    const result = await onSubmit({
+    const result = await onSubmit(
       taskId,
-      userId: user.id,
-      userName: user.name,
-      content: commentText,
-      attachments: pendingAttachments,
-    });
+      commentText,
+      pendingAttachments
+    );
 
     if (!result) {
       return;

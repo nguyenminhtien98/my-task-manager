@@ -33,6 +33,8 @@ export default function Board({
   onMove,
   onTaskClick,
   isProjectClosed,
+  columnPagination,
+  onLoadMore,
 }: BoardProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [lastOverStatus, setLastOverStatus] = useState<TaskStatus | null>(null);
@@ -74,7 +76,7 @@ export default function Board({
   };
   tasks.forEach((t) => columns[t.status].push(t));
 
-  const findTask = (id: string) => tasks.find((t) => t.id === id) || null;
+  const findTask = (id: string) => tasks.find((t) => t._id === id) || null;
 
   return (
     <DndContext
@@ -119,11 +121,11 @@ export default function Board({
         setLastOverStatus(null);
       }}
     >
-      <div className="flex h-full min-h-0 gap-2 overflow-x-auto pb-[calc(var(--mobile-footer-height,72px)+0.1rem)] no-scrollbar md:grid md:grid-cols-2 md:gap-2 md:overflow-visible md:pb-0 lg:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-5">
+      <div className="flex h-full min-h-0 gap-2 overflow-x-auto pb-[calc(var(--mobile-footer-height,72px)+0.1rem)] no-scrollbar md:grid md:grid-cols-2 md:gap-2 md:pb-0 lg:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-5">
         {(Object.keys(columns) as TaskStatus[]).map((status) => (
           <div
             key={status}
-            className="flex-shrink-0 basis-[80%] md:basis-auto md:flex-shrink md:min-w-0 lg:basis-auto"
+            className="flex-shrink-0 basis-[80%] h-full md:basis-auto md:flex-shrink md:min-w-0 md:min-h-0 lg:basis-auto"
           >
             <Column
               status={status}
@@ -134,6 +136,9 @@ export default function Board({
               isLeader={isLeader}
               isProjectClosed={isProjectClosed}
               onTaskClick={onTaskClick}
+              onLoadMore={onLoadMore ? () => onLoadMore(status) : undefined}
+              hasMore={columnPagination?.[status]?.hasMore}
+              loading={columnPagination?.[status]?.loading}
             />
           </div>
         ))}

@@ -3,7 +3,7 @@
 
 import React, { useRef, useState } from "react";
 import { FiPause, FiPlay, FiX } from "react-icons/fi";
-import { PendingAttachment } from "./types";
+import type { PendingAttachment } from "@/app/types/Types";
 
 interface PendingAttachmentPreviewProps {
   attachment: PendingAttachment;

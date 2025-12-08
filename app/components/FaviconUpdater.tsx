@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect } from "react";
-import { useProject } from "@/app/context/ProjectContext";
+import { useEffect, useContext } from "react";
+import { ProjectContext } from "@/app/context/ProjectContext";
 import { createBrandOrbSvg, svgToDataUrl } from "@/app/utils/logoSvg";
 
 const FaviconUpdater = () => {
-  const { currentProject } = useProject();
+  const projectContext = useContext(ProjectContext);
+  const currentProject = projectContext?.currentProject ?? null;
 
   useEffect(() => {
     const svg = createBrandOrbSvg(currentProject?.themeColor);

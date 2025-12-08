@@ -19,12 +19,11 @@ import {
 import IssueTypeDropdown from "../../CustomDropdown/IssueTypeDropdown";
 import PriorityDropdown from "../../CustomDropdown/PriorityDropdown";
 import { useProjectOperations } from "@/app/hooks/useProjectOperations";
-import { database } from "@/lib/appwrite";
+import * as taskAPI from "@/app/services/taskService";
 import toast from "react-hot-toast";
 import Button from "../../common/Button";
 import { useAuth } from "@/app/context/AuthContext";
 import { useProject } from "@/app/context/ProjectContext";
-import { createNotification } from "@/app/services/notificationService";
 
 interface TaskModalLeftPanelProps {
   mode: "create" | "detail";
@@ -91,7 +90,9 @@ const TaskModalLeftPanel: React.FC<TaskModalLeftPanelProps> = ({
   isDeleting = false,
 }) => {
   const { members, isLoading: isMembersLoading } = useProjectOperations();
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { user } = useAuth();
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { currentProject } = useProject();
   const memberNames = React.useMemo(
     () => members.map((m) => m.name),
@@ -105,9 +106,9 @@ const TaskModalLeftPanel: React.FC<TaskModalLeftPanelProps> = ({
     if (typeof a === "string")
       return a.trim() !== "" && a.trim().toLowerCase() !== "null";
     if (typeof a === "object") {
-      const obj = a as { $id?: string; name?: string };
+      const obj = a as { _id?: string; name?: string };
       return Boolean(
-        (obj.$id && obj.$id.trim() !== "") ||
+        (obj._id && obj._id.trim() !== "") ||
         (obj.name && obj.name.trim() !== "")
       );
     }
@@ -291,31 +292,41 @@ const TaskModalLeftPanel: React.FC<TaskModalLeftPanelProps> = ({
                         const member = members.find((m) => m.name === name);
                         if (!member || !task) return;
                         try {
-                          await database.updateDocument(
-                            String(process.env.NEXT_PUBLIC_DATABASE_ID),
-                            String(process.env.NEXT_PUBLIC_COLLECTION_ID_TASKS),
-                            task.id,
-                            { assignee: member.$id }
-                          );
+                          await taskAPI.updateTask(task._id, {
+                            assignee: member._id,
+                          });
 
                           const enrichedTask: Task = {
                             ...task,
                             assignee: {
-                              $id: member.$id,
+                              _id: member._id,
                               name: member.name,
                               email: member.email,
                               avatarUrl: member.avatarUrl,
+                              role: "member",
+                              createdAt: new Date().toISOString(),
+                              updatedAt: new Date().toISOString(),
                             },
                           };
 
                           field.onChange(name);
 
                           if (typeof reset === "function") {
+                            const normalizedAttachments = enrichedTask.attachments?.map(att => ({
+                              url: att.url,
+                              name: att.name,
+                              createdAt: att.createdAt,
+                              type: (att.type === "image" || att.type === "video" || att.type === "file")
+                                ? att.type as "image" | "video" | "file"
+                                : "file" as const
+                            }));
+
                             reset({
                               ...enrichedTask,
                               startDate: enrichedTask?.startDate ?? "",
                               endDate: enrichedTask?.endDate ?? "",
-                              assignee: member.$id,
+                              assignee: member._id,
+                              attachments: normalizedAttachments,
                             });
                           }
 
@@ -323,31 +334,6 @@ const TaskModalLeftPanel: React.FC<TaskModalLeftPanelProps> = ({
                             onUpdate(enrichedTask);
                           } else {
                             console.warn("");
-                          }
-
-                          if (
-                            user &&
-                            currentProject &&
-                            task &&
-                            member.$id &&
-                            member.$id !== user.id
-                          ) {
-                            await Promise.allSettled([
-                              createNotification({
-                                recipientId: member.$id,
-                                actorId: user.id,
-                                type: "task.assigned",
-                                scope: "task",
-                                projectId: currentProject.$id,
-                                taskId: task.id,
-                                metadata: {
-                                  taskTitle: task.title,
-                                  actorName: user.name,
-                                  audience: "assignee",
-                                  targetMemberName: member.name,
-                                },
-                              }),
-                            ]);
                           }
 
                           toast.success("Đã gán thành viên cho task");
@@ -470,8 +456,8 @@ const TaskModalLeftPanel: React.FC<TaskModalLeftPanelProps> = ({
                 type="submit"
                 disabled={isSubmitting || !isValid}
                 className={`rounded px-4 py-2 text-white ${isSubmitting || !isValid
-                    ? "bg-gray-400 cursor-not-allowed"
-                    : "bg-black"
+                  ? "bg-gray-400 cursor-not-allowed"
+                  : "bg-black"
                   }`}
               >
                 {isSubmitting

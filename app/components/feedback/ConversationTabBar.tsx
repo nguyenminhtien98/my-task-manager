@@ -2,7 +2,7 @@
 
 import React from "react";
 import Button from "../common/Button";
-import { ConversationType } from "../../services/feedbackService";
+import type { ConversationType } from "../../types/Types";
 
 interface ConversationTabBarProps {
   activeTab: ConversationType;
@@ -19,11 +19,10 @@ const ConversationTabBar: React.FC<ConversationTabBarProps> = ({
     <Button
       variant="solid"
       onClick={() => onTabChange("member")}
-      className={`rounded-full !px-3 !py-1 !text-xs ${
-        activeTab === "member"
-          ? "border bg-black text-white"
-          : "border border-gray-300 bg-white text-[#111827]"
-      }`}
+      className={`rounded-full !px-3 !py-1 !text-xs ${activeTab === "member"
+        ? "border bg-black text-white"
+        : "border border-gray-300 bg-white text-[#111827]"
+        }`}
       disabled={!hasProject}
     >
       Thành viên
@@ -31,11 +30,10 @@ const ConversationTabBar: React.FC<ConversationTabBarProps> = ({
     <Button
       variant="solid"
       onClick={() => onTabChange("feedback")}
-      className={`rounded-full !px-3 !py-1 !text-xs ${
-        activeTab === "feedback"
-          ? "border bg-black text-white"
-          : "border border-gray-300 bg-white text-[#111827]"
-      }`}
+      className={`rounded-full !px-3 !py-1 !text-xs ${activeTab === "feedback"
+        ? "border bg-black text-white"
+        : "border border-gray-300 bg-white text-[#111827]"
+        }`}
     >
       Feedback
     </Button>

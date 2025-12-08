@@ -7,10 +7,10 @@ import React, {
   useCallback,
   useEffect,
 } from "react";
-import { account, database } from "../../lib/appwrite";
-import { AppwriteException } from "appwrite";
-import { ensureWelcomeNotification } from "../services/notificationService";
-import { updateUserPresence } from "../services/feedbackService";
+import { useRouter } from "next/navigation";
+import * as authService from "../services/authService";
+import * as profileService from "../services/profileService";
+import { Profile } from "../types/Types";
 
 export interface User {
   id: string;
@@ -18,22 +18,24 @@ export interface User {
   email?: string;
   avatarUrl?: string;
   createdAt?: string;
-  role?: string; // "leader" | "user"
+  role?: string;
 }
 
 export interface AuthContextType {
   user: User | null;
-  login: (id: string, name: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
+  loginWithGoogle: (credential: string) => Promise<void>;
   logout: () => Promise<void>;
   setUser: (user: User | null) => void;
   isAuthHydrated: boolean;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({
   children,
 }) => {
+  const router = useRouter();
   const [user, setUserState] = useState<User | null>(() => {
     if (typeof window === "undefined") return null;
     const stored = localStorage.getItem("userProfile");
@@ -47,6 +49,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
   });
   const [isAuthHydrated, setIsAuthHydrated] = useState(false);
 
+  const profileToUser = (profile: Profile): User => ({
+    id: profile._id,
+    name: profile.name,
+    email: profile.email,
+    avatarUrl: profile.avatarUrl,
+    createdAt: profile.createdAt,
+    role: profile.role || "user",
+  });
+
   const persistUser = useCallback((value: User | null) => {
     setUserState(value);
     if (typeof window === "undefined") return;
@@ -58,32 +69,33 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
   }, []);
 
   const login = useCallback(
-    async (id: string, name: string) => {
+    async (email: string, password: string) => {
       try {
-        const profile = await database.getDocument(
-          String(process.env.NEXT_PUBLIC_DATABASE_ID),
-          String(process.env.NEXT_PUBLIC_COLLECTION_ID_PROFILE),
-          id
-        );
-        const u: User = {
-          id,
-          name,
-          email: profile.email,
-          avatarUrl: profile.avatarUrl,
-          createdAt: profile.$createdAt,
-          role: profile.role,
-        };
-        persistUser(u);
-        await ensureWelcomeNotification(u.id, u.name);
-      } catch (err) {
-        if (err instanceof AppwriteException && err.code === 404) {
-          console.warn(
-            "Profile chưa được tạo, sẽ thử lại sau khi hoàn tất đăng ký."
-          );
-          return;
+        const { profile } = await authService.login({ email, password });
+        const user = profileToUser(profile);
+        persistUser(user);
+      } catch (error) {
+        console.error("Login error:", error);
+        throw error;
+      }
+    },
+    [persistUser]
+  );
+
+  const loginWithGoogle = useCallback(
+    async (credential: string) => {
+      try {
+        const response = await authService.googleLogin(credential);
+
+        if (!response || !response.profile) {
+          throw new Error("Invalid response from server");
         }
-        console.error("Login error fetching profile:", err);
-        throw err;
+
+        const user = profileToUser(response.profile);
+        persistUser(user);
+      } catch (error) {
+        console.error("Google login error:", error);
+        throw error;
       }
     },
     [persistUser]
@@ -91,44 +103,53 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
 
   const logout = useCallback(async () => {
     try {
-      if (user?.id) {
-        await updateUserPresence(user.id, false).catch(() => undefined);
-      }
-      await account.deleteSession("current");
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars
-    } catch (error: any) {
+      await authService.logout();
+    } catch (error) {
+      console.error("Logout error:", error);
     } finally {
       persistUser(null);
       if (typeof window !== "undefined") {
         window.sessionStorage.removeItem("activeProjectId");
       }
     }
-  }, [persistUser, user]);
+  }, [persistUser]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined") {
+      setIsAuthHydrated(true);
+      return;
+    }
+
+    if (window.location.pathname === '/server-error') {
+      console.log('[AuthContext] Skipping hydration on /server-error page');
+      setIsAuthHydrated(true);
+      return;
+    }
 
     let cancelled = false;
     const hydrateSession = async () => {
       try {
-        const accountInfo = await account.get();
+        console.log('[AuthContext] Starting session hydration...');
+        const { token: _token } = await authService.refreshToken();
+
         if (cancelled) return;
-        if (!user || user.id !== accountInfo.$id) {
-          await login(accountInfo.$id, accountInfo.name);
-        }
+
+        const profile = await profileService.getMe();
+        if (cancelled) return;
+
+        const user = profileToUser(profile);
+        persistUser(user);
+        if (!cancelled) setIsAuthHydrated(true);
       } catch (error) {
-        console.info(
-          "Session hydrate: unauthenticated (expected when not logged in)",
-          error
-        );
-        if (typeof window !== "undefined") {
-          window.sessionStorage.removeItem("activeProjectId");
-        }
-        if (!cancelled) {
-          persistUser(null);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const axiosError = error as any;
+        if (axiosError.response && axiosError.response.status >= 500) {
+          router.push("/server-error");
+        } else {
+          console.error("Session hydration failed:", error);
         }
       } finally {
-        if (!cancelled) setIsAuthHydrated(true);
+        setIsAuthHydrated(true);
       }
     };
 
@@ -136,58 +157,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
     return () => {
       cancelled = true;
     };
-  }, [login, persistUser, user]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const userId = user?.id;
-    if (!userId) return;
-
-    const markOnline = () => {
-      if (document.visibilityState !== "visible") return;
-      void updateUserPresence(userId, true).catch(() => undefined);
-    };
-
-    const markOffline = () => {
-      void updateUserPresence(userId, false).catch(() => undefined);
-    };
-
-    if (document.visibilityState === "visible") {
-      markOnline();
-    } else {
-      markOffline();
-    }
-
-    const interval = window.setInterval(() => {
-      if (document.visibilityState === "visible") {
-        markOnline();
-      }
-    }, 30000);
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        markOnline();
-      } else {
-        markOffline();
-      }
-    };
-
-    window.addEventListener("visibilitychange", handleVisibilityChange);
-    window.addEventListener("beforeunload", markOffline);
-    window.addEventListener("pagehide", markOffline);
-
-    return () => {
-      window.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("beforeunload", markOffline);
-      window.removeEventListener("pagehide", markOffline);
-      window.clearInterval(interval);
-      markOffline();
-    };
-  }, [user?.id]);
+  }, [persistUser, router]);
 
   return (
     <AuthContext.Provider
-      value={{ user, login, logout, setUser: persistUser, isAuthHydrated }}
+      value={{
+        user,
+        login,
+        loginWithGoogle,
+        logout,
+        setUser: persistUser,
+        isAuthHydrated,
+      }}
     >
       {children}
     </AuthContext.Provider>

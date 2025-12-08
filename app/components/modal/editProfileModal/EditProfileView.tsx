@@ -58,7 +58,6 @@ const EditProfileView: React.FC<EditProfileViewProps> = ({
 
   return (
     <div className="flex flex-col gap-6 p-2">
-      {/* Avatar Section */}
       <div className="flex justify-center">
         <div className="group cursor-pointer" onClick={onAvatarChangeClick}>
           <AvatarUser
@@ -74,7 +73,6 @@ const EditProfileView: React.FC<EditProfileViewProps> = ({
         </div>
       </div>
 
-      {/* User Info Section */}
       <div className="flex flex-col gap-4">
         <div className="flex items-center justify-between border-b border-gray-200 pb-2">
           {isEditingName ? (
@@ -124,7 +122,6 @@ const EditProfileView: React.FC<EditProfileViewProps> = ({
         </div>
       </div>
 
-      {/* Action Buttons */}
       <div className="mt-4 flex justify-end gap-3">
         <Button
           variant="solid"
